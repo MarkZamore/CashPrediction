@@ -213,6 +213,32 @@
           </execution>
 
           <!--
+            5a. Кодовая страница UTF-8 в манифесте трёх exe. Стандартный лаунчер Java ищет java.dll
+                ANSI-функциями Windows и не запускается из папки, в пути которой есть символы вне системной
+                кодовой страницы (кириллица на английской Windows, иероглифы на русской).
+                Скрипт дописывает activeCodePage=UTF-8 в встроенный манифест средствами Windows API.
+          -->
+          <execution>
+            <id>launcher-utf8</id>
+            <phase>package</phase>
+            <goals>
+              <goal>exec</goal>
+            </goals>
+            <configuration>
+              <executable>powershell.exe</executable>
+              <arguments>
+                <argument>-NoProfile</argument>
+                <argument>-ExecutionPolicy</argument>
+                <argument>Bypass</argument>
+                <argument>-File</argument>
+                <argument>${project.basedir}/scripts/Set-LauncherUtf8.ps1</argument>
+                <argument>-ImageDir</argument>
+                <argument>${dist.output}/CashPrediction</argument>
+              </arguments>
+            </configuration>
+          </execution>
+
+          <!--
             6. Zip портативной папки для удобной передачи.
                Антивирус Windows ненадолго блокирует только что созданные jpackage файлы
                (PermissionDenied на runtime/lib/*.jar), поэтому архивация повторяется до 5 раз.
