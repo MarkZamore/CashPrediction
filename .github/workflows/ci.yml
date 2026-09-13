@@ -1,0 +1,47 @@
+name: Проверка сборки
+
+# Любая ветка, кроме main, и любой pull request: собрать все модули и прогнать тесты.
+# main проверяет release.yml, который делает то же самое и вдобавок публикует релиз.
+on:
+  push:
+    branches-ignore:
+      - main
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Java
+        uses: actions/setup-java@v5
+        with:
+          # Та же сборка OpenJDK, что у разработчика: в ней есть папка jmods, нужная jlink.
+          distribution: microsoft
+          java-version: '25'
+          cache: maven
+
+      - name: Build and test
+        shell: pwsh
+        run: |
+          # Тесты ядра (включая реестр Windows) и web-сервера; окна приложения не открываются.
+          & mvn -B -ntp install
+          if ($LASTEXITCODE -ne 0) { throw "Сборка или тесты не прошли." }
+
+      - name: Test reports
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: surefire-reports
+          path: '**/target/surefire-reports/*.txt'
+          if-no-files-found: ignore

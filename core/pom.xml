@@ -27,6 +27,17 @@
     </dependency>
   </dependencies>
   <build>
+    <resources>
+      <!-- Обычные ресурсы (FORMAT.md) копируются как есть. -->
+      <resource>
+        <directory>src/main/resources</directory>
+      </resource>
+      <!-- app.properties получает номер релиза и хеш коммита из свойств app.release / app.commit. -->
+      <resource>
+        <directory>src/main/resources-filtered</directory>
+        <filtering>true</filtering>
+      </resource>
+    </resources>
     <plugins>
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>

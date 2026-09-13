@@ -1,0 +1,181 @@
+name: Сборка и публикация CashPrediction
+
+# Каждый push в main: тесты, портативная сборка с тремя exe, проверка готовой папки
+# и публикация zip в релиз latest. Пользователь всегда скачивает по одной и той же ссылке.
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+concurrency:
+  group: cashprediction-latest-release
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          # Номер релиза - это число коммитов, поэтому нужна вся история:
+          # неглубокий клон насчитал бы один.
+          fetch-depth: 0
+
+      - name: Setup Java
+        uses: actions/setup-java@v5
+        with:
+          # Сборка Microsoft содержит jmods, из которых jlink собирает встроенную Java.
+          distribution: microsoft
+          java-version: '25'
+          cache: maven
+
+      - name: Prepare
+        shell: pwsh
+        run: |
+          # Версия называется номером коммита: «Версия 12» в отчёте пользователя
+          # указывает ровно на одну строку истории.
+          $releaseNumber = [int](git rev-list --count HEAD)
+          if ($releaseNumber -lt 1) { throw "Не удалось определить число коммитов." }
+
+          # История изменений ведётся вручную. Сборку без записи о своей версии не публикуем:
+          # проверка стоит первой, чтобы забытая запись стоила секунды, а не всей сборки.
+          $changelog = Get-Content -LiteralPath (Join-Path $env:GITHUB_WORKSPACE 'CHANGELOG.md') -Raw -Encoding UTF8
+          $pattern = '(?ms)^## {0}\s*\r?\n\s*\r?\n?- (?<line>[^\r\n]+)' -f $releaseNumber
+          $match = [regex]::Match($changelog, $pattern)
+          if (-not $match.Success) {
+            throw ("В CHANGELOG.md нет записи для версии $releaseNumber. " +
+                   "Добавьте сверху раздел '## $releaseNumber' с одной строкой '- ...' о том, что изменилось, и отправьте снова.")
+          }
+
+          "RELEASE_NUMBER=$releaseNumber" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "RELEASE_NOTE=$($match.Groups['line'].Value.Trim())" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          Write-Host "Версия $releaseNumber: $($match.Groups['line'].Value.Trim())"
+
+      - name: Build and test
+        shell: pwsh
+        run: |
+          # Модули и тесты, затем портативная папка: jlink + jpackage + zip.
+          # Номер релиза и коммит попадают в окно «О программе» и в свойства exe.
+          $common = @('-B', '-ntp', "-Dapp.release=$env:RELEASE_NUMBER", "-Dapp.commit=${{ github.sha }}")
+          & mvn @common install
+          if ($LASTEXITCODE -ne 0) { throw "Сборка или тесты не прошли." }
+          & mvn @common -Pdist -pl dist package
+          if ($LASTEXITCODE -ne 0) { throw "Портативная сборка не собралась." }
+
+      - name: Verify portable build
+        shell: pwsh
+        run: |
+          # Запускаем готовые exe из копии папки с пробелами и кириллицей в пути:
+          # все три клиента должны стартовать и создать только CashMemory.
+          & "$env:GITHUB_WORKSPACE\.github\scripts\Test-Portable.ps1" `
+            -PortableDir "$env:GITHUB_WORKSPACE\dist\target\dist\CashPrediction" `
+            -WorkDir "$env:RUNNER_TEMP\portable test" `
+            -CleanRegistry
+          if ($LASTEXITCODE -ne 0) { throw "Проверка портативной сборки не прошла." }
+
+      - name: Package release
+        shell: pwsh
+        run: |
+          $source = Join-Path $env:GITHUB_WORKSPACE 'dist\target\dist\CashPrediction-portable.zip'
+          if (-not (Test-Path -LiteralPath $source -PathType Leaf)) { throw "Архив не найден: $source" }
+          $out = Join-Path $env:GITHUB_WORKSPACE 'artifacts'
+          New-Item -ItemType Directory -Force -Path $out | Out-Null
+          $zip = Join-Path $out 'CashPrediction-portable.zip'
+          Copy-Item -LiteralPath $source -Destination $zip -Force
+
+          $hash = (Get-FileHash -LiteralPath $zip -Algorithm SHA256).Hash.ToLowerInvariant()
+          $size = (Get-Item -LiteralPath $zip).Length
+          # Манифест описывает, что именно лежит в релизе: номер, коммит, контрольная сумма.
+          $manifest = [ordered]@{
+            schemaVersion = 1
+            releaseNumber = [int]$env:RELEASE_NUMBER
+            commitSha = '${{ github.sha }}'
+            publishedAtUtc = (Get-Date).ToUniversalTime().ToString('o')
+            assetName = 'CashPrediction-portable.zip'
+            sha256 = $hash
+            sizeBytes = $size
+            note = $env:RELEASE_NOTE
+          }
+          $manifest | ConvertTo-Json -Depth 3 | Set-Content -LiteralPath (Join-Path $out 'release.json') -Encoding UTF8
+
+          # Архив не должен содержать ничего, созданного запуском: только exe, app и runtime.
+          Add-Type -AssemblyName System.IO.Compression.FileSystem
+          $archive = [IO.Compression.ZipFile]::OpenRead($zip)
+          try {
+            $names = @($archive.Entries | ForEach-Object { $_.FullName -replace '\\', '/' })
+          } finally { $archive.Dispose() }
+          foreach ($required in 'CashPrediction/CashPrediction.exe', 'CashPrediction/CashPrediction-Swing.exe', 'CashPrediction/CashPrediction-Web.exe') {
+            if ($names -notcontains $required) { throw "В архиве нет $required" }
+          }
+          $stray = $names | Where-Object { $_ -match '(?i)/CashMemory/' }
+          if ($stray) { throw "В архив попали данные запуска: $($stray -join ', ')" }
+
+      - name: Publish latest release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          . "$env:GITHUB_WORKSPACE/.github/scripts/GhRetry.ps1"
+
+          $out = Join-Path $env:GITHUB_WORKSPACE 'artifacts'
+          $zip = Join-Path $out 'CashPrediction-portable.zip'
+          $manifest = Join-Path $out 'release.json'
+          $title = "CashPrediction, версия $env:RELEASE_NUMBER"
+          $notes = @"
+          $env:RELEASE_NOTE
+
+          Скачайте CashPrediction-portable.zip, распакуйте в любую папку и запустите CashPrediction.exe (JavaFX), CashPrediction-Swing.exe или CashPrediction-Web.exe (откроется браузер). Установка и Java не нужны.
+
+          Сборка из коммита ${{ github.sha }}.
+          "@
+
+          # Релиз обновляется на месте и никогда не удаляется заранее: ссылка на скачивание
+          # из README ведёт на latest, и неудачное пересоздание оставило бы её пустой.
+          $exists = $false
+          Invoke-Gh release view latest *> $null
+          if ($LASTEXITCODE -eq 0) { $exists = $true }
+
+          if (-not $exists) {
+            if (git ls-remote --exit-code --tags origin refs/tags/latest 2>$null) {
+              git push origin --delete latest
+            }
+            Invoke-Gh release create latest $zip $manifest `
+              --target "${{ github.sha }}" `
+              --latest `
+              --title $title `
+              --notes $notes
+            if ($LASTEXITCODE -ne 0) { throw "Не удалось создать релиз latest." }
+          }
+          else {
+            # Сначала архив, манифест последним: пока манифест называет прошлую сборку,
+            # его содержимое остаётся верным.
+            Invoke-Gh release upload latest $zip --clobber
+            if ($LASTEXITCODE -ne 0) { throw "Не удалось загрузить архив." }
+            Invoke-Gh release upload latest $manifest --clobber
+            if ($LASTEXITCODE -ne 0) { throw "Не удалось загрузить манифест." }
+
+            $keep = @('CashPrediction-portable.zip', 'release.json')
+            $stale = (Invoke-Gh release view latest --json assets | ConvertFrom-Json).assets |
+              Where-Object { $_.name -notin $keep }
+            foreach ($asset in $stale) {
+              Invoke-Gh release delete-asset latest $asset.name --yes
+              if ($LASTEXITCODE -ne 0) { throw "Не удалось удалить устаревший файл $($asset.name)." }
+            }
+
+            # Тег переносится на новый коммит, чтобы исходники релиза совпадали с архивом.
+            git tag -f latest "${{ github.sha }}"
+            git push -f origin refs/tags/latest
+            if ($LASTEXITCODE -ne 0) { throw "Не удалось перенести тег latest." }
+
+            Invoke-Gh release edit latest `
+              --title $title `
+              --notes $notes `
+              --latest
+            if ($LASTEXITCODE -ne 0) { throw "Не удалось обновить описание релиза." }
+          }

@@ -189,7 +189,8 @@
               <arguments>
                 <argument>--type</argument><argument>app-image</argument>
                 <argument>--name</argument><argument>CashPrediction</argument>
-                <argument>--app-version</argument><argument>${project.version}</argument>
+                <!-- Windows требует числовую версию exe: 1.0.<номер релиза>. -->
+                <argument>--app-version</argument><argument>1.0.${app.release}</argument>
                 <argument>--vendor</argument><argument>CashPrediction</argument>
                 <argument>--description</argument><argument>CashPrediction budget forecast (JavaFX)</argument>
                 <argument>--runtime-image</argument><argument>${dist.runtime}</argument>

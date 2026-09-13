@@ -40,6 +40,10 @@
     <!-- Версия JavaFX ОБЯЗАНА совпадать с версией jmods Gluon, которые скачивает модуль dist. -->
     <javafx.version>25.0.4</javafx.version>
     <junit.version>5.14.4</junit.version>
+    <!-- Номер релиза = число коммитов в main (задаёт CI); 0 означает локальную сборку разработчика. -->
+    <app.release>0</app.release>
+    <!-- Хеш коммита сборки (задаёт CI). -->
+    <app.commit>local</app.commit>
     <!-- Папка, рядом с которой в dev-режиме создаётся CashMemory (корень проекта). -->
     <cashprediction.dev.home>${maven.multiModuleProjectDirectory}</cashprediction.dev.home>
   </properties>
