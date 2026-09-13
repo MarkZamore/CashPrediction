@@ -45,7 +45,48 @@ jobs:
           & mvn -B -ntp -Pdist -pl dist package
           if ($LASTEXITCODE -ne 0) { throw "Портативная сборка не собралась." }
 
+      - name: Diagnose launchers
+        # Временный шаг: на раннере GitHub exe завершались сразу после запуска.
+        # Лимит времени сохраняет журнал, даже если что-то повиснет.
+        timeout-minutes: 8
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          $dir = "$env:GITHUB_WORKSPACE\dist\target\dist\CashPrediction"
+          Write-Host "Сессия процесса: $([System.Diagnostics.Process]::GetCurrentProcess().SessionId), UserInteractive: $([Environment]::UserInteractive)"
+          & "$dir\runtime\bin\java.exe" -version 2>&1 | Write-Host
+          foreach ($exe in 'CashPrediction-Web.exe', 'CashPrediction.exe', 'CashPrediction-Swing.exe') {
+            Write-Host "==== $exe"
+            $out = Join-Path $env:RUNNER_TEMP "$exe.out.txt"
+            $err = Join-Path $env:RUNNER_TEMP "$exe.err.txt"
+            $startArgs = @{ FilePath = "$dir\$exe"; PassThru = $true; RedirectStandardOutput = $out; RedirectStandardError = $err }
+            if ($exe -like '*Web*') { $startArgs.ArgumentList = @('--no-browser', '--no-window') }
+            $p = Start-Process @startArgs
+            Start-Sleep -Seconds 15
+            Write-Host "Лаунчер завершён: $($p.HasExited); код: $(if ($p.HasExited) { $p.ExitCode } else { '-' })"
+            Get-CimInstance Win32_Process | Where-Object { $_.ExecutablePath -like "$dir\*" } |
+              ForEach-Object { Write-Host "  процесс $($_.ProcessId) родитель $($_.ParentProcessId) $($_.CommandLine)" }
+            foreach ($f in $out, $err) { if ((Test-Path $f) -and (Get-Item $f).Length -gt 0) { Write-Host "--- $f"; Get-Content $f -Raw | Write-Host } }
+            Get-CimInstance Win32_Process | Where-Object { $_.ExecutablePath -like "$dir\*" } |
+              ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
+            Write-Host "CashMemory: $((Get-ChildItem "$dir\CashMemory" -ErrorAction SilentlyContinue | ForEach-Object Name) -join ', ')"
+          }
+          Write-Host "==== прямой запуск java (web)"
+          $home2 = Join-Path $env:RUNNER_TEMP 'direct-home'
+          New-Item -ItemType Directory -Force -Path $home2 | Out-Null
+          $out = Join-Path $env:RUNNER_TEMP 'direct.out.txt'; $err = Join-Path $env:RUNNER_TEMP 'direct.err.txt'
+          $p = Start-Process -FilePath "$dir\runtime\bin\java.exe" -ArgumentList "-Dcashprediction.home=$home2", '-m', 'ru.cashprediction.web/ru.cashprediction.web.WebMain', '--no-browser', '--no-window' -PassThru -RedirectStandardOutput $out -RedirectStandardError $err
+          Start-Sleep -Seconds 15
+          Write-Host "java завершён: $($p.HasExited); код: $(if ($p.HasExited) { $p.ExitCode } else { '-' })"
+          foreach ($f in $out, $err) { if ((Test-Path $f) -and (Get-Item $f).Length -gt 0) { Write-Host "--- $f"; Get-Content $f -Raw | Write-Host } }
+          Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue
+          Write-Host "==== события приложений за 10 минут"
+          Get-WinEvent -FilterHashtable @{ LogName = 'Application'; Level = 2; StartTime = (Get-Date).AddMinutes(-10) } -ErrorAction SilentlyContinue |
+            Select-Object -First 10 | ForEach-Object { Write-Host "$($_.TimeCreated) $($_.ProviderName): $($_.Message)" }
+          Remove-Item "$dir\CashMemory" -Recurse -Force -ErrorAction SilentlyContinue
+
       - name: Verify portable build
+        timeout-minutes: 20
         shell: pwsh
         run: |
           & "$env:GITHUB_WORKSPACE\.github\scripts\Test-Portable.ps1" `
