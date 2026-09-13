@@ -27,7 +27,8 @@ public record DocumentEvent(Set<EventKind> kinds) {
             copy.add(Objects.requireNonNull(kind, "kind"));
         }
         if (copy.isEmpty()) {
-            throw new IllegalArgumentException("Событие документа должно содержать хотя бы один вид изменения");
+            // Пустое событие может создать только ошибочный код ядра: сообщение для разработчика.
+            throw new IllegalArgumentException("Document event must contain at least one change kind");
         }
         kinds = Collections.unmodifiableSet(copy);
     }

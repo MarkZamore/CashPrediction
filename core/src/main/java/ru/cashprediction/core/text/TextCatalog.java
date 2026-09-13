@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.Reader;
+import java.nio.ByteBuffer;
 import java.nio.charset.CodingErrorAction;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
@@ -146,6 +147,55 @@ public final class TextCatalog {
             }
         }
         return new TextCatalog(lang, values, areaOf, files, duplicates, problems);
+    }
+
+    /**
+     * Имена файлов документа справки в порядке поиска.
+     *
+     * @param name      имя документа без суффикса языка, например {@code help-format}
+     * @param extension расширение без точки, например {@code md}
+     * @param language  код языка; пустая строка — только файл без суффикса
+     * @return например {@code [help-format_ru.md, help-format.md]}
+     */
+    public static List<String> documentCandidates(String name, String extension, String language) {
+        Objects.requireNonNull(name, "name");
+        Objects.requireNonNull(extension, "extension");
+        String lang = Objects.requireNonNullElse(language, "").strip();
+        String plain = name + "." + extension;
+        return lang.isEmpty() ? List.of(plain) : List.of(name + "_" + lang + "." + extension, plain);
+    }
+
+    /**
+     * Читает документ справки (длинный текст, которому не место в {@code .properties}) по тем же правилам, что и
+     * области каталога: сначала {@code <имя>_<язык>.<расширение>}, а если его нет — {@code <имя>.<расширение>}.
+     *
+     * <p>Файл читается строго в UTF-8; BOM в начале (его добавляет Блокнот) отбрасывается. Существующий, но
+     * нечитаемый файл языка не подменяется запасным: иначе ошибка кодировки скрылась бы.</p>
+     *
+     * @param name      имя документа без суффикса языка
+     * @param extension расширение без точки
+     * @param language  код языка; пустая строка — только файл без суффикса
+     * @param source    источник файлов
+     * @return текст документа или пусто, если ни одного файла нет
+     * @throws IOException если файл есть, но не читается или записан не в UTF-8
+     */
+    public static Optional<String> loadDocument(String name, String extension, String language, ResourceSource source)
+            throws IOException {
+        Objects.requireNonNull(source, "source");
+        for (String candidate : documentCandidates(name, extension, language)) {
+            try (InputStream in = source.open(candidate)) {
+                if (in == null) {
+                    continue;
+                }
+                String text = StandardCharsets.UTF_8.newDecoder()
+                        .onMalformedInput(CodingErrorAction.REPORT)
+                        .onUnmappableCharacter(CodingErrorAction.REPORT)
+                        .decode(ByteBuffer.wrap(in.readAllBytes()))
+                        .toString();
+                return Optional.of(text.startsWith("﻿") ? text.substring(1) : text);
+            }
+        }
+        return Optional.empty();
     }
 
     /**

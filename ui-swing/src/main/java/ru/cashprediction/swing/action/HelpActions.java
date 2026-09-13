@@ -15,8 +15,8 @@ final class HelpActions extends ActionSupport {
     /** Версия приложения для окна «О программе». */
     public static final String VERSION = "1.0.0";
 
-    /** Путь к руководству по формату плана внутри модуля core. */
-    private static final String FORMAT_RESOURCE = "ru/cashprediction/core/FORMAT.md";
+    /** Путь к руководству по формату плана внутри модуля core (справка каталога текстов, этап S0.5). */
+    private static final String FORMAT_RESOURCE = "ru/cashprediction/core/ui/text/help-format_ru.md";
 
     /** Текст окна «Горячие клавиши»: тот же набор, что в JavaFX-клиенте. */
     public static final String HOTKEYS = """

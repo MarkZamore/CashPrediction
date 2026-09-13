@@ -348,7 +348,7 @@ public final class RegistrySessionStore implements SessionStore {
 
     @Override
     public String title() {
-        return "Реестр Windows";
+        return Texts.get("session.store.title.registry");
     }
 
     @Override
@@ -365,7 +365,7 @@ public final class RegistrySessionStore implements SessionStore {
     public synchronized void markDirty(SessionMarker marker) {
         Objects.requireNonNull(marker, "marker");
         if (!backend.isAvailable()) {
-            lastError = "Реестр Windows недоступен: " + backend.unavailableReason();
+            lastError = Texts.get("session.registry.unavailable", backend.unavailableReason());
             return;
         }
         try {
@@ -387,7 +387,7 @@ public final class RegistrySessionStore implements SessionStore {
     @Override
     public synchronized void markClean() {
         if (!backend.isAvailable()) {
-            lastError = "Реестр Windows недоступен: " + backend.unavailableReason();
+            lastError = Texts.get("session.registry.unavailable", backend.unavailableReason());
             return;
         }
         try {
@@ -454,7 +454,7 @@ public final class RegistrySessionStore implements SessionStore {
             backend.put(KEY_SNAPSHOT_TIME, snapshot.savedAt().toString());
             backend.flush();
         } catch (RuntimeException e) {
-            throw new SessionStoreException("Не удалось записать снимок в реестр Windows: " + e.getMessage(), e);
+            throw new SessionStoreException(Texts.get("session.registry.writeFailed", e.getMessage()), e);
         }
         requireAvailable();
         verifyWritten(KEY_SNAPSHOT_TIME, snapshot.savedAt().toString());
@@ -472,31 +472,31 @@ public final class RegistrySessionStore implements SessionStore {
         int length = parseCount(KEY_SNAPSHOT_LENGTH);
         String crc = backend.get(KEY_SNAPSHOT_CRC);
         if (crc == null) {
-            throw corrupted("нет ключа " + KEY_SNAPSHOT_CRC);
+            throw corrupted(Texts.get("session.registry.corrupt.noKey", KEY_SNAPSHOT_CRC));
         }
         int expectedCount = (length + CHUNK_SIZE - 1) / CHUNK_SIZE;
         if (count != expectedCount) {
-            throw corrupted("число кусков " + count + " не соответствует длине " + length);
+            throw corrupted(Texts.get("session.registry.corrupt.chunkCount", count, length));
         }
         StringBuilder sb = new StringBuilder(length);
         for (int i = 0; i < count; i++) {
             String chunk = backend.get("snapshot." + i);
             if (chunk == null) {
-                throw corrupted("нет куска snapshot." + i);
+                throw corrupted(Texts.get("session.registry.corrupt.noChunk", "snapshot." + i));
             }
             sb.append(chunk);
         }
         String json = sb.toString();
         if (json.length() != length) {
-            throw corrupted("длина " + json.length() + " вместо " + length);
+            throw corrupted(Texts.get("session.registry.corrupt.length", json.length(), length));
         }
         if (!crc32(json).equalsIgnoreCase(crc.strip())) {
-            throw corrupted("контрольная сумма не совпадает");
+            throw corrupted(Texts.get("session.registry.corrupt.crc"));
         }
         try {
             return Optional.of(codec.decode(json));
         } catch (SnapshotFormatException e) {
-            throw new SessionStoreException("Снимок в реестре повреждён: " + e.getMessage(), e);
+            throw new SessionStoreException(Texts.get("session.registry.corrupted", e.getMessage()), e);
         }
     }
 
@@ -516,7 +516,7 @@ public final class RegistrySessionStore implements SessionStore {
     @Override
     public synchronized void clear() {
         if (!backend.isAvailable()) {
-            lastError = "Реестр Windows недоступен: " + backend.unavailableReason();
+            lastError = Texts.get("session.registry.unavailable", backend.unavailableReason());
             return;
         }
         try {
@@ -591,7 +591,7 @@ public final class RegistrySessionStore implements SessionStore {
     private int parseCount(String key) throws SessionStoreException {
         String value = backend.get(key);
         if (value == null) {
-            throw corrupted("нет ключа " + key);
+            throw corrupted(Texts.get("session.registry.corrupt.noKey", key));
         }
         try {
             int number = Integer.parseInt(value.strip());
@@ -600,13 +600,13 @@ public final class RegistrySessionStore implements SessionStore {
             }
             return number;
         } catch (NumberFormatException e) {
-            throw corrupted("некорректное значение " + key + "=" + value);
+            throw corrupted(Texts.get("session.registry.corrupt.badValue", key, value));
         }
     }
 
     private void requireAvailable() throws SessionStoreException {
         if (!backend.isAvailable()) {
-            throw new SessionStoreException("Реестр Windows недоступен: " + backend.unavailableReason());
+            throw new SessionStoreException(Texts.get("session.registry.unavailable", backend.unavailableReason()));
         }
     }
 
@@ -617,12 +617,17 @@ public final class RegistrySessionStore implements SessionStore {
      */
     private void verifyWritten(String key, String expected) throws SessionStoreException {
         if (!expected.equals(backend.get(key))) {
-            throw new SessionStoreException("Запись в реестр Windows не сохраняется (нет прав на раздел "
-                    + "HKCU\\Software\\JavaSoft\\Prefs?)");
+            throw new SessionStoreException(Texts.get("session.registry.notPersisted", "HKCU\\Software\\JavaSoft\\Prefs"));
         }
     }
 
+    /**
+     * Ошибка «снимок в реестре повреждён».
+     *
+     * @param detail что именно повреждено, на языке интерфейса
+     * @return исключение с готовым сообщением
+     */
     private static SessionStoreException corrupted(String detail) {
-        return new SessionStoreException("Снимок в реестре повреждён: " + detail);
+        return new SessionStoreException(Texts.get("session.registry.corrupted", detail));
     }
 }

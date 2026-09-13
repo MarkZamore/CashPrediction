@@ -55,7 +55,8 @@ public record Forecast(
         // Защитная копия: вызывающий код не должен иметь возможности поменять серию уже созданного прогноза.
         dailyBalance = Objects.requireNonNull(dailyBalance, "dailyBalance").clone();
         if (dailyBalance.length == 0) {
-            throw new IllegalArgumentException("Ежедневная серия баланса не может быть пустой");
+            // Движок всегда строит хотя бы один день: пустая серия — ошибка кода, сообщение для разработчика.
+            throw new IllegalArgumentException("Daily balance series must not be empty");
         }
     }
 

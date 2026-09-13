@@ -15,6 +15,7 @@ import ru.cashprediction.core.session.SnapshotSchema;
 import ru.cashprediction.core.session.codec.SessionDocument;
 import ru.cashprediction.core.session.codec.SnapshotFormatException;
 import ru.cashprediction.core.session.codec.XmlSnapshotCodec;
+import ru.cashprediction.core.text.Texts;
 
 /**
  * Хранилище снимка сессии в XML-файле {@code CashMemory/session-<клиент>.xml} (раздел 5.4 плана).
@@ -85,7 +86,7 @@ public final class XmlSessionStore implements SessionStore {
 
     @Override
     public String title() {
-        return "XML-файл";
+        return Texts.get("session.store.title.xml");
     }
 
     /**
@@ -136,8 +137,8 @@ public final class XmlSessionStore implements SessionStore {
             AtomicFiles.writeString(file, codec.encodeDocument(new SessionDocument(client, currentMarker(), snapshot)));
             lastError = null;
         } catch (IOException e) {
-            throw new SessionStoreException("Не удалось записать XML-файл сессии «" + file.getFileName() + "»: "
-                    + e.getMessage(), e);
+            throw new SessionStoreException(Texts.get("session.store.xml.writeFailed", file.getFileName(),
+                    e.getMessage()), e);
         }
     }
 
@@ -159,7 +160,7 @@ public final class XmlSessionStore implements SessionStore {
             markerKnown = true;
             lastError = null;
         } catch (IOException e) {
-            lastError = "Не удалось удалить XML-файл сессии «" + file.getFileName() + "»: " + e.getMessage();
+            lastError = Texts.get("session.store.xml.deleteFailed", file.getFileName(), e.getMessage());
         }
     }
 
@@ -177,8 +178,8 @@ public final class XmlSessionStore implements SessionStore {
         try {
             text = AtomicFiles.readString(file);
         } catch (IOException e) {
-            throw new SessionStoreException("Не удалось прочитать XML-файл сессии «" + file.getFileName() + "»: "
-                    + e.getMessage(), e);
+            throw new SessionStoreException(Texts.get("session.store.xml.readFailed", file.getFileName(),
+                    e.getMessage()), e);
         }
         try {
             return codec.decodeDocument(text);
@@ -209,7 +210,7 @@ public final class XmlSessionStore implements SessionStore {
             AtomicFiles.writeString(file, codec.encodeDocument(document));
             lastError = null;
         } catch (IOException e) {
-            lastError = "Не удалось записать XML-файл сессии «" + file.getFileName() + "»: " + e.getMessage();
+            lastError = Texts.get("session.store.xml.writeFailed", file.getFileName(), e.getMessage());
         }
     }
 }

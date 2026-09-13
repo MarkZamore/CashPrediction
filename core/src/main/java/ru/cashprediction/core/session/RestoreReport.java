@@ -7,7 +7,7 @@ import java.util.List;
  *
  * <p>Запись неизменяема и потокобезопасна.</p>
  *
- * @param warnings        предупреждения на русском в порядке возникновения
+ * @param warnings        предупреждения на языке интерфейса (из каталога текстов) в порядке возникновения
  * @param windowsRestored сколько окон показано
  */
 public record RestoreReport(List<String> warnings, int windowsRestored) {
@@ -16,7 +16,8 @@ public record RestoreReport(List<String> warnings, int windowsRestored) {
     public RestoreReport {
         warnings = warnings == null ? List.of() : List.copyOf(warnings);
         if (windowsRestored < 0) {
-            throw new IllegalArgumentException("Число окон не может быть отрицательным");
+            // Счётчик ведёт сам координатор: отрицательное значение — ошибка программы, сообщение для разработчика.
+            throw new IllegalArgumentException("Restored window count must not be negative");
         }
     }
 

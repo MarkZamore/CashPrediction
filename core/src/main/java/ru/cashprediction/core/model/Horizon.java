@@ -3,6 +3,8 @@ package ru.cashprediction.core.model;
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
 import java.util.Objects;
+import ru.cashprediction.core.format.FormatWords;
+import ru.cashprediction.core.text.Texts;
 import ru.cashprediction.core.util.DateFormats;
 import ru.cashprediction.core.util.RuText;
 
@@ -29,7 +31,9 @@ public sealed interface Horizon permits Horizon.Months, Horizon.Years, Horizon.U
     LocalDate endDate(LocalDate start);
 
     /**
-     * Текст для файла плана и интерфейса: «12 месяцев», «2 года», «до 2027-12-31».
+     * Текст для файла плана и прежних клиентов: «12 месяцев», «2 года», «до 2027-12-31». Слова берутся из грамматики
+     * формата ({@link FormatWords}), потому что именно этот текст пишет {@code PlanMarkdownWriter}; новый интерфейс
+     * подписывает горизонт через {@code UiFormats}.
      *
      * @return описание горизонта
      */
@@ -54,7 +58,7 @@ public sealed interface Horizon permits Horizon.Months, Horizon.Years, Horizon.U
         /** Проверяет диапазон. */
         public Months {
             if (count < 1 || count > MAX_MONTHS) {
-                throw new IllegalArgumentException("Горизонт должен быть от 1 до " + MAX_MONTHS + " месяцев");
+                throw new IllegalArgumentException(Texts.get("horizon.error.monthsRange", MAX_MONTHS));
             }
         }
 
@@ -65,7 +69,8 @@ public sealed interface Horizon permits Horizon.Months, Horizon.Years, Horizon.U
 
         @Override
         public String label() {
-            return RuText.count(count, "месяц", "месяца", "месяцев");
+            return RuText.count(count, FormatWords.get("plan.unit.month.one"), FormatWords.get("plan.unit.month.few"),
+                    FormatWords.get("plan.unit.month.many"));
         }
     }
 
@@ -78,7 +83,7 @@ public sealed interface Horizon permits Horizon.Months, Horizon.Years, Horizon.U
         /** Проверяет диапазон. */
         public Years {
             if (count < 1 || count > MAX_MONTHS / 12) {
-                throw new IllegalArgumentException("Горизонт должен быть от 1 до " + (MAX_MONTHS / 12) + " лет");
+                throw new IllegalArgumentException(Texts.get("horizon.error.yearsRange", MAX_MONTHS / 12));
             }
         }
 
@@ -89,7 +94,8 @@ public sealed interface Horizon permits Horizon.Months, Horizon.Years, Horizon.U
 
         @Override
         public String label() {
-            return RuText.count(count, "год", "года", "лет");
+            return RuText.count(count, FormatWords.get("plan.unit.year.one"), FormatWords.get("plan.unit.year.few"),
+                    FormatWords.get("plan.unit.year.many"));
         }
     }
 
@@ -112,7 +118,7 @@ public sealed interface Horizon permits Horizon.Months, Horizon.Years, Horizon.U
 
         @Override
         public String label() {
-            return "до " + DateFormats.iso(end);
+            return FormatWords.get("plan.horizon.until") + " " + DateFormats.iso(end);
         }
     }
 }

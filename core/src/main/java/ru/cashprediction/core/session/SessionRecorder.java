@@ -15,6 +15,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Consumer;
+import ru.cashprediction.core.text.Texts;
 
 /**
  * Записывает снимок сессии во все хранилища клиента по событиям и по таймеру (раздел 5.2 плана).
@@ -500,7 +501,7 @@ public final class SessionRecorder {
             List<StoreStatus> statuses = new ArrayList<>();
             for (SessionStore store : stores) {
                 statuses.add(new StoreStatus(store.id(), false, lastSuccessByStore.get(store.id()),
-                        "Не удалось снять состояние окон: " + reason));
+                        Texts.get("session.recorder.captureFailed", reason)));
             }
             fire(statuses);
             return null;
@@ -571,7 +572,7 @@ public final class SessionRecorder {
             for (SessionStore store : stores) {
                 if (!store.isAvailable()) {
                     statuses.add(new StoreStatus(store.id(), false, lastSuccessByStore.get(store.id()),
-                            store.title() + " недоступно: " + store.unavailableReason()));
+                            Texts.get("session.store.unavailable", store.title(), store.unavailableReason())));
                     continue;
                 }
                 if (!force && snapshot.sameContent(lastWrittenByStore.get(store.id()))) {
@@ -626,7 +627,7 @@ public final class SessionRecorder {
             Instant savedAt = lastSuccessByStore.get(store.id());
             if (!store.isAvailable()) {
                 statuses.add(new StoreStatus(store.id(), false, savedAt,
-                        store.title() + " недоступно: " + store.unavailableReason()));
+                        Texts.get("session.store.unavailable", store.title(), store.unavailableReason())));
                 continue;
             }
             try {
@@ -634,7 +635,7 @@ public final class SessionRecorder {
                 Optional<String> error = store.lastError();
                 if (!store.isAvailable()) {
                     statuses.add(new StoreStatus(store.id(), false, savedAt,
-                            store.title() + " недоступно: " + store.unavailableReason()));
+                            Texts.get("session.store.unavailable", store.title(), store.unavailableReason())));
                 } else if (error.isPresent()) {
                     statuses.add(new StoreStatus(store.id(), false, savedAt, error.get()));
                 } else {

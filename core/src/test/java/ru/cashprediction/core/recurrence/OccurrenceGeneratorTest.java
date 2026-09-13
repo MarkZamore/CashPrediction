@@ -182,7 +182,9 @@ class OccurrenceGeneratorTest {
         RecurringRule daily = rule(new Recurrence.EveryNDays(1), null, null);
         IllegalStateException e = assertThrows(IllegalStateException.class,
                 () -> OccurrenceGenerator.nominalDates(daily, d("2000-01-01"), d("2600-01-01")));
-        assertTrue(e.getMessage().contains("200 000"), e.getMessage());
+        // Этап S0.5: текст из каталога (occurrence.error.tooManyDates) совпадает с прежним буква в букву.
+        assertEquals("Правило r1 «Тест» даёт больше 200 000 дат; сократите горизонт плана или увеличьте период повтора",
+                e.getMessage());
         // Ровно на границе лимита ещё допустимо.
         LocalDate start = d("2000-01-01");
         assertEquals(OccurrenceGenerator.MAX_DATES_PER_RULE,

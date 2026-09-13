@@ -3,6 +3,7 @@ package ru.cashprediction.core.model;
 import java.time.LocalDate;
 import java.util.Objects;
 import java.util.Optional;
+import ru.cashprediction.core.format.FormatWords;
 
 /**
  * Корректировка одного конкретного события регулярной операции.
@@ -30,7 +31,7 @@ public record Adjustment(OccurrenceKey key, Action action, String note) {
      */
     public sealed interface Action permits Skip, ChangeAmount, MoveDate, Replace {
 
-        /** @return слово для файла плана: пропустить / изменить / перенести / заменить */
+        /** @return слово для файла плана из грамматики формата ({@link FormatWords}): пропустить / изменить / перенести / заменить */
         String label();
 
         /** @return новая сумма, если действие её задаёт */
@@ -48,7 +49,7 @@ public record Adjustment(OccurrenceKey key, Action action, String note) {
     public record Skip() implements Action {
         @Override
         public String label() {
-            return "пропустить";
+            return FormatWords.get("plan.action.skip");
         }
     }
 
@@ -65,7 +66,7 @@ public record Adjustment(OccurrenceKey key, Action action, String note) {
 
         @Override
         public String label() {
-            return "изменить";
+            return FormatWords.get("plan.action.change");
         }
 
         @Override
@@ -88,7 +89,7 @@ public record Adjustment(OccurrenceKey key, Action action, String note) {
 
         @Override
         public String label() {
-            return "перенести";
+            return FormatWords.get("plan.action.move");
         }
 
         @Override
@@ -112,7 +113,7 @@ public record Adjustment(OccurrenceKey key, Action action, String note) {
 
         @Override
         public String label() {
-            return "заменить";
+            return FormatWords.get("plan.action.replace");
         }
 
         @Override

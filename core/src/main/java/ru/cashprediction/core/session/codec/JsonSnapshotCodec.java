@@ -14,6 +14,7 @@ import ru.cashprediction.core.session.SessionSnapshot;
 import ru.cashprediction.core.session.WindowBounds;
 import ru.cashprediction.core.session.WindowState;
 import ru.cashprediction.core.session.WindowType;
+import ru.cashprediction.core.text.Texts;
 
 /**
  * JSON-представление снимка: используется реестром (текст режется на куски) и web-API.
@@ -59,7 +60,7 @@ public final class JsonSnapshotCodec implements SnapshotCodec<String> {
         try {
             root = JsonParser.parseObject(encoded);
         } catch (RuntimeException e) {
-            throw new SnapshotFormatException("Снимок в формате JSON повреждён: " + e.getMessage(), e);
+            throw new SnapshotFormatException(Texts.get("session.codec.json.corrupted", e.getMessage()), e);
         }
         return fromJsonObject(root);
     }
@@ -99,7 +100,7 @@ public final class JsonSnapshotCodec implements SnapshotCodec<String> {
         try {
             long schema = Json.requireLong(root, "schemaVersion");
             if (schema < 1 || schema > Integer.MAX_VALUE) {
-                throw new SnapshotFormatException("Некорректная версия схемы снимка: " + schema);
+                throw new SnapshotFormatException(Texts.get("session.codec.error.schemaVersion", schema));
             }
             int schemaVersion = CodecText.checkSchema((int) schema);
             var savedAt = CodecText.parseInstant(Json.requireString(root, "savedAt"), "savedAt");
@@ -118,7 +119,7 @@ public final class JsonSnapshotCodec implements SnapshotCodec<String> {
             throw e;
         } catch (RuntimeException e) {
             // Сюда попадают и неверные типы полей (JsonException), и нарушения инвариантов записей.
-            throw new SnapshotFormatException("Снимок в формате JSON повреждён: " + e.getMessage(), e);
+            throw new SnapshotFormatException(Texts.get("session.codec.json.corrupted", e.getMessage()), e);
         }
     }
 
@@ -152,7 +153,7 @@ public final class JsonSnapshotCodec implements SnapshotCodec<String> {
         } catch (SnapshotFormatException e) {
             throw e;
         } catch (RuntimeException e) {
-            throw new SnapshotFormatException("Маркер сеанса в формате JSON повреждён: " + e.getMessage(), e);
+            throw new SnapshotFormatException(Texts.get("session.codec.json.markerCorrupted", e.getMessage()), e);
         }
     }
 
@@ -177,7 +178,7 @@ public final class JsonSnapshotCodec implements SnapshotCodec<String> {
         Map<String, Boolean> filters = new LinkedHashMap<>();
         for (Map.Entry<String, Object> entry : Json.object(json, "filters").entrySet()) {
             if (!(entry.getValue() instanceof Boolean value)) {
-                throw new SnapshotFormatException("Фильтр «" + entry.getKey() + "» должен быть true или false");
+                throw new SnapshotFormatException(Texts.get("session.codec.json.filterNotBoolean", entry.getKey()));
             }
             filters.put(entry.getKey(), value);
         }
@@ -229,7 +230,7 @@ public final class JsonSnapshotCodec implements SnapshotCodec<String> {
         Map<String, String> result = new LinkedHashMap<>();
         for (Map.Entry<String, Object> entry : Json.object(owner, key).entrySet()) {
             if (!(entry.getValue() instanceof String value)) {
-                throw new SnapshotFormatException("Значение «" + key + "." + entry.getKey() + "» должно быть строкой");
+                throw new SnapshotFormatException(Texts.get("session.codec.json.valueNotString", key, entry.getKey()));
             }
             result.put(entry.getKey(), value);
         }

@@ -131,8 +131,9 @@ public record MainWindowState(WindowBounds bounds, boolean maximized, String vie
             return Map.of();
         }
         Map<String, Boolean> copy = new LinkedHashMap<>();
-        source.forEach((key, value) -> copy.put(Objects.requireNonNull(key, "ключ фильтра"),
-                Objects.requireNonNull(value, "значение фильтра")));
+        // null в карте фильтров — ошибка вызывающего кода, а не данных пользователя: сообщение для разработчика.
+        source.forEach((key, value) -> copy.put(Objects.requireNonNull(key, "filter key"),
+                Objects.requireNonNull(value, "filter value")));
         return Collections.unmodifiableMap(copy);
     }
 }

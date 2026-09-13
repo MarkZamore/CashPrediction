@@ -4,6 +4,8 @@ import java.time.DayOfWeek;
 import java.time.MonthDay;
 import java.time.format.DateTimeFormatter;
 import java.util.Objects;
+import ru.cashprediction.core.format.FormatWords;
+import ru.cashprediction.core.text.Texts;
 import ru.cashprediction.core.util.RuText;
 
 /**
@@ -22,8 +24,23 @@ public sealed interface Recurrence
     /** Формат дня года в файле: 03-15. */
     DateTimeFormatter MONTH_DAY = DateTimeFormatter.ofPattern("MM-dd");
 
+    /** Наибольший день месяца в {@link Monthly} (наименьший — 1); подставляется в сообщение об ошибке. */
+    int MAX_DAY_OF_MONTH = 31;
+
+    /** Наибольший период в месяцах в {@link Monthly} (наименьший — 1). */
+    int MAX_EVERY_MONTHS = 120;
+
+    /** Наибольший период в неделях в {@link Weekly} (наименьший — 1). */
+    int MAX_EVERY_WEEKS = 52;
+
+    /** Наибольший период в днях в {@link EveryNDays} (наименьший — 1). */
+    int MAX_EVERY_DAYS = 366;
+
     /**
-     * Канонический русский текст правила для файла и интерфейса.
+     * Канонический русский текст правила для файла и прежних клиентов.
+     *
+     * <p>Слова берутся из грамматики формата ({@link FormatWords}): этот текст пишет {@code PlanMarkdownWriter},
+     * поэтому он не зависит от языка интерфейса.</p>
      *
      * @return например «ежемесячно 5», «каждые 2 месяца 10», «еженедельно сб», «каждые 3 дня», «ежегодно 03-15»
      */
@@ -49,19 +66,21 @@ public sealed interface Recurrence
     record Monthly(int dayOfMonth, int everyMonths) implements Recurrence {
         /** Проверяет диапазоны. */
         public Monthly {
-            if (dayOfMonth < 1 || dayOfMonth > 31) {
-                throw new IllegalArgumentException("День месяца должен быть от 1 до 31");
+            if (dayOfMonth < 1 || dayOfMonth > MAX_DAY_OF_MONTH) {
+                throw new IllegalArgumentException(Texts.get("recurrence.error.dayOfMonth", MAX_DAY_OF_MONTH));
             }
-            if (everyMonths < 1 || everyMonths > 120) {
-                throw new IllegalArgumentException("Период должен быть от 1 до 120 месяцев");
+            if (everyMonths < 1 || everyMonths > MAX_EVERY_MONTHS) {
+                throw new IllegalArgumentException(Texts.get("recurrence.error.everyMonths", MAX_EVERY_MONTHS));
             }
         }
 
         @Override
         public String toRussian() {
             return everyMonths == 1
-                    ? "ежемесячно " + dayOfMonth
-                    : "каждые " + RuText.count(everyMonths, "месяц", "месяца", "месяцев") + " " + dayOfMonth;
+                    ? FormatWords.get("plan.recurrence.monthly") + " " + dayOfMonth
+                    : FormatWords.get("plan.recurrence.every") + " " + RuText.count(everyMonths,
+                            FormatWords.get("plan.unit.month.one"), FormatWords.get("plan.unit.month.few"),
+                            FormatWords.get("plan.unit.month.many")) + " " + dayOfMonth;
         }
 
         @Override
@@ -85,16 +104,20 @@ public sealed interface Recurrence
         /** Проверяет поля. */
         public Weekly {
             Objects.requireNonNull(weekday, "weekday");
-            if (everyWeeks < 1 || everyWeeks > 52) {
-                throw new IllegalArgumentException("Период должен быть от 1 до 52 недель");
+            if (everyWeeks < 1 || everyWeeks > MAX_EVERY_WEEKS) {
+                throw new IllegalArgumentException(Texts.get("recurrence.error.everyWeeks", MAX_EVERY_WEEKS));
             }
         }
 
         @Override
         public String toRussian() {
+            // День недели — слово формата, а не подпись интерфейса RuText.weekdayShort: этот текст пишется в файл.
+            String day = FormatWords.weekdayShort(weekday);
             return everyWeeks == 1
-                    ? "еженедельно " + RuText.weekdayShort(weekday)
-                    : "каждые " + RuText.count(everyWeeks, "неделю", "недели", "недель") + " " + RuText.weekdayShort(weekday);
+                    ? FormatWords.get("plan.recurrence.weekly") + " " + day
+                    : FormatWords.get("plan.recurrence.every") + " " + RuText.count(everyWeeks,
+                            FormatWords.get("plan.unit.week.one"), FormatWords.get("plan.unit.week.few"),
+                            FormatWords.get("plan.unit.week.many")) + " " + day;
         }
 
         @Override
@@ -116,14 +139,18 @@ public sealed interface Recurrence
     record EveryNDays(int days) implements Recurrence {
         /** Проверяет диапазон. */
         public EveryNDays {
-            if (days < 1 || days > 366) {
-                throw new IllegalArgumentException("Период должен быть от 1 до 366 дней");
+            if (days < 1 || days > MAX_EVERY_DAYS) {
+                throw new IllegalArgumentException(Texts.get("recurrence.error.everyDays", MAX_EVERY_DAYS));
             }
         }
 
         @Override
         public String toRussian() {
-            return days == 1 ? "ежедневно" : "каждые " + RuText.count(days, "день", "дня", "дней");
+            return days == 1
+                    ? FormatWords.get("plan.recurrence.daily")
+                    : FormatWords.get("plan.recurrence.every") + " " + RuText.count(days,
+                            FormatWords.get("plan.unit.day.one"), FormatWords.get("plan.unit.day.few"),
+                            FormatWords.get("plan.unit.day.many"));
         }
 
         @Override
@@ -150,7 +177,7 @@ public sealed interface Recurrence
 
         @Override
         public String toRussian() {
-            return "ежегодно " + MONTH_DAY.format(monthDay);
+            return FormatWords.get("plan.recurrence.yearly") + " " + MONTH_DAY.format(monthDay);
         }
 
         @Override

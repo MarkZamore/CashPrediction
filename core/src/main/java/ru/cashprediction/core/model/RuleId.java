@@ -1,6 +1,7 @@
 package ru.cashprediction.core.model;
 
 import java.util.Objects;
+import ru.cashprediction.core.text.Texts;
 
 /**
  * Идентификатор регулярной операции в пределах одного плана: {@code r1}, {@code r2} ...
@@ -17,7 +18,7 @@ public record RuleId(String value) {
         Objects.requireNonNull(value, "value");
         value = value.strip();
         if (value.isEmpty() || value.contains("|") || value.contains("@")) {
-            throw new IllegalArgumentException("Некорректный идентификатор правила: «" + value + "»");
+            throw new IllegalArgumentException(Texts.get("id.error.rule", value));
         }
     }
 

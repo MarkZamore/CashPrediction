@@ -7,12 +7,14 @@ import java.time.MonthDay;
 import java.util.Objects;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import ru.cashprediction.core.format.FormatWords;
 import ru.cashprediction.core.model.Adjustment;
 import ru.cashprediction.core.model.Horizon;
 import ru.cashprediction.core.model.Kind;
 import ru.cashprediction.core.model.Money;
 import ru.cashprediction.core.model.Recurrence;
 import ru.cashprediction.core.model.WeekendPolicy;
+import ru.cashprediction.core.text.Texts;
 import ru.cashprediction.core.util.DateFormats;
 import ru.cashprediction.core.util.RuText;
 
@@ -32,37 +34,54 @@ import ru.cashprediction.core.util.RuText;
  *   <li>{@code ежегодно ММ-ДД} или {@code ежегодно ДД.ММ}.</li>
  * </ul>
  *
- * <p>Методы разбора бросают {@link IllegalArgumentException} с понятным русским сообщением:
- * читатель плана показывает его пользователю в списке диагностики.</p>
+ * <p><b>Слова и сообщения (решение L13).</b> Русские слова грамматики берутся из нелокализуемого ресурса
+ * {@link FormatWords}; регулярные выражения собираются в коде из этих слов через {@link Pattern#quote(String)}, поэтому
+ * в ресурсе нет обратных косых. Методы разбора бросают {@link IllegalArgumentException} с понятным сообщением из
+ * каталога текстов ({@code markdown_ru.properties}); слова формата попадают в сообщение подстановками, а не
+ * вписываются в текст ключа. Читатель плана показывает сообщение пользователю в списке диагностики.</p>
  *
  * <p>Класс без состояния, потокобезопасен.</p>
  */
 public final class RuFormats {
 
+    /** Буква, которую нормализация заменяет ({@code ё}); объявлена до шаблонов, которые нормализуют слова. */
+    private static final int YO = FormatWords.get("common.char.yo").codePointAt(0);
+    /** Замена буквы {@link #YO} ({@code е}). */
+    private static final int YE = FormatWords.get("common.char.ye").codePointAt(0);
+
     /** Необязательное указание числа месяца после дня: «5-го», «5 числа». */
-    private static final String DAY_SUFFIX = "(?:-?го)?(?: числа)?";
+    private static final String DAY_SUFFIX = "(?:-?" + word("plan.recurrence.daySuffix.ordinal") + ")?(?: "
+            + word("plan.recurrence.daySuffix.word") + ")?";
+    /** Начало «каждые/каждый/каждую». */
+    private static final String EVERY = word("plan.recurrence.every.stem") + "\\S*";
+    /** Необязательный предлог перед днём недели: «по пт», «в сб». */
+    private static final String ON_WEEKDAY = "(?:" + word("plan.recurrence.weekdayPreposition.1") + " |"
+            + word("plan.recurrence.weekdayPreposition.2") + " )?";
 
-    private static final Pattern DAILY = Pattern.compile("ежедневно|каждый день");
-    private static final Pattern MONTHLY = Pattern.compile("ежемесячно (\\d{1,4})" + DAY_SUFFIX);
-    private static final Pattern EVERY_MONTHS = Pattern.compile(
-            "кажд\\S* (?:(\\d{1,4}) ?)?(?:месяц\\S*|мес\\.?) (\\d{1,4})" + DAY_SUFFIX);
-    private static final Pattern WEEKLY = Pattern.compile("еженедельно (?:по |в )?(\\S+)");
-    private static final Pattern EVERY_WEEKS = Pattern.compile(
-            "кажд\\S* (?:(\\d{1,4}) ?)?(?:недел\\S*|нед\\.?) (?:по |в )?(\\S+)");
-    private static final Pattern EVERY_DAYS = Pattern.compile("кажд\\S* (?:(\\d{1,4}) ?)?(?:день|дня|дней|дн\\.?)");
-    private static final Pattern YEARLY_ISO = Pattern.compile("ежегодно (\\d{1,2})-(\\d{1,2})");
-    private static final Pattern YEARLY_RU = Pattern.compile("ежегодно (\\d{1,2})\\.(\\d{1,2})\\.?");
+    private static final Pattern DAILY = Pattern.compile(
+            word("plan.recurrence.daily") + "|" + word("plan.recurrence.daily.alias"));
+    private static final Pattern MONTHLY = Pattern.compile(word("plan.recurrence.monthly") + " (\\d{1,4})" + DAY_SUFFIX);
+    private static final Pattern EVERY_MONTHS = Pattern.compile(EVERY + " (?:(\\d{1,4}) ?)?(?:"
+            + word("plan.unit.month.stem") + "\\S*|" + word("plan.unit.month.abbr") + "\\.?) (\\d{1,4})" + DAY_SUFFIX);
+    private static final Pattern WEEKLY = Pattern.compile(word("plan.recurrence.weekly") + " " + ON_WEEKDAY + "(\\S+)");
+    private static final Pattern EVERY_WEEKS = Pattern.compile(EVERY + " (?:(\\d{1,4}) ?)?(?:"
+            + word("plan.unit.week.stem") + "\\S*|" + word("plan.unit.week.abbr") + "\\.?) " + ON_WEEKDAY + "(\\S+)");
+    private static final Pattern EVERY_DAYS = Pattern.compile(EVERY + " (?:(\\d{1,4}) ?)?(?:"
+            + word("plan.unit.day.one") + "|" + word("plan.unit.day.few") + "|" + word("plan.unit.day.many") + "|"
+            + word("plan.unit.day.abbr") + "\\.?)");
+    private static final Pattern YEARLY_ISO = Pattern.compile(word("plan.recurrence.yearly") + " (\\d{1,2})-(\\d{1,2})");
+    private static final Pattern YEARLY_RU = Pattern.compile(
+            word("plan.recurrence.yearly") + " (\\d{1,2})\\.(\\d{1,2})\\.?");
 
-    private static final Pattern HORIZON_MONTHS = Pattern.compile("(\\d{1,4}) ?(?:месяц|месяца|месяцев|мес\\.?)");
-    private static final Pattern HORIZON_YEARS = Pattern.compile("(\\d{1,4}) ?(?:год|года|лет)");
-    private static final Pattern HORIZON_UNTIL = Pattern.compile("до (.+)");
+    private static final Pattern HORIZON_MONTHS = Pattern.compile("(\\d{1,4}) ?(?:" + word("plan.unit.month.one") + "|"
+            + word("plan.unit.month.few") + "|" + word("plan.unit.month.many") + "|" + word("plan.unit.month.abbr")
+            + "\\.?)");
+    private static final Pattern HORIZON_YEARS = Pattern.compile("(\\d{1,4}) ?(?:" + word("plan.unit.year.one") + "|"
+            + word("plan.unit.year.few") + "|" + word("plan.unit.year.many") + ")");
+    private static final Pattern HORIZON_UNTIL = Pattern.compile(word("plan.horizon.until") + " (.+)");
 
     private static final Pattern DATE_ISO = Pattern.compile("(\\d{4})-(\\d{1,2})-(\\d{1,2})");
     private static final Pattern DATE_RU = Pattern.compile("(\\d{1,2})\\.(\\d{1,2})\\.(\\d{4})");
-
-    /** Подсказка с примерами, добавляемая к сообщению о нераспознанном повторе. */
-    private static final String RECURRENCE_EXAMPLES = "примеры: «ежемесячно 5», «каждые 2 месяца 10», "
-            + "«еженедельно сб», «каждые 2 недели пт», «ежедневно», «каждые 3 дня», «ежегодно 03-15»";
 
     private RuFormats() {
     }
@@ -76,27 +95,40 @@ public final class RuFormats {
      */
     public enum ActionType {
         /** «пропустить»: событие не произойдёт. */
-        SKIP("пропустить", false, false),
+        SKIP(false, false),
         /** «изменить»: другая сумма, прежняя дата. */
-        CHANGE_AMOUNT("изменить", true, false),
+        CHANGE_AMOUNT(true, false),
         /** «перенести»: другая дата, прежняя сумма. */
-        MOVE_DATE("перенести", false, true),
+        MOVE_DATE(false, true),
         /** «заменить»: другая сумма и другая дата. */
-        REPLACE("заменить", true, true);
+        REPLACE(true, true);
 
-        private final String label;
         private final boolean requiresAmount;
         private final boolean requiresDate;
 
-        ActionType(String label, boolean requiresAmount, boolean requiresDate) {
-            this.label = label;
+        ActionType(boolean requiresAmount, boolean requiresDate) {
             this.requiresAmount = requiresAmount;
             this.requiresDate = requiresDate;
         }
 
-        /** @return слово для файла плана */
+        /** @return слово для файла плана из грамматики формата ({@link FormatWords}) */
         public String label() {
-            return label;
+            return switch (this) {
+                case SKIP -> FormatWords.get("plan.action.skip");
+                case CHANGE_AMOUNT -> FormatWords.get("plan.action.change");
+                case MOVE_DATE -> FormatWords.get("plan.action.move");
+                case REPLACE -> FormatWords.get("plan.action.replace");
+            };
+        }
+
+        /** @return начало однокоренных слов, по которому чтение узнаёт действие («пропуск», «перенос») */
+        private String stem() {
+            return switch (this) {
+                case SKIP -> FormatWords.get("plan.action.skip.stem");
+                case CHANGE_AMOUNT -> FormatWords.get("plan.action.change.stem");
+                case MOVE_DATE -> FormatWords.get("plan.action.move.stem");
+                case REPLACE -> FormatWords.get("plan.action.replace.stem");
+            };
         }
 
         /** @return нужна ли действию колонка «Новая сумма» */
@@ -137,7 +169,7 @@ public final class RuFormats {
             }
             pendingSpace = false;
             int lower = Character.toLowerCase(cp);
-            sb.appendCodePoint(lower == 'ё' ? 'е' : lower);
+            sb.appendCodePoint(lower == YO ? YE : lower);
         }
         return sb.toString();
     }
@@ -165,7 +197,7 @@ public final class RuFormats {
     public static Recurrence parseRecurrence(String text) {
         String t = normalize(text);
         if (t.isEmpty()) {
-            throw new IllegalArgumentException("Повтор не указан (" + RECURRENCE_EXAMPLES + ")");
+            throw new IllegalArgumentException(Texts.get("markdown.value.recurrenceMissing", recurrenceExamples()));
         }
         try {
             Matcher m;
@@ -195,9 +227,10 @@ public final class RuFormats {
             }
         } catch (IllegalArgumentException e) {
             // Сообщения конструкторов («День месяца должен быть от 1 до 31») дополняем исходным текстом.
-            throw new IllegalArgumentException("Повтор «" + text.strip() + "»: " + e.getMessage(), e);
+            throw new IllegalArgumentException(Texts.get("markdown.value.recurrenceInvalid", text.strip(), e.getMessage()), e);
         }
-        throw new IllegalArgumentException("Не удалось разобрать повтор «" + text.strip() + "» (" + RECURRENCE_EXAMPLES + ")");
+        throw new IllegalArgumentException(
+                Texts.get("markdown.value.recurrenceUnparsed", text.strip(), recurrenceExamples()));
     }
 
     /**
@@ -210,6 +243,22 @@ public final class RuFormats {
         return recurrence.toRussian();
     }
 
+    /**
+     * Подсказка с примерами, добавляемая к сообщению о нераспознанном повторе.
+     *
+     * <p>Примеры — канонические тексты настоящих правил, поэтому они всегда совпадают с грамматикой формата.</p>
+     */
+    private static String recurrenceExamples() {
+        return Texts.get("markdown.value.recurrenceExamples",
+                new Recurrence.Monthly(5, 1).toRussian(),
+                new Recurrence.Monthly(10, 2).toRussian(),
+                new Recurrence.Weekly(DayOfWeek.SATURDAY, 1).toRussian(),
+                new Recurrence.Weekly(DayOfWeek.FRIDAY, 2).toRussian(),
+                new Recurrence.EveryNDays(1).toRussian(),
+                new Recurrence.EveryNDays(3).toRussian(),
+                new Recurrence.Yearly(MonthDay.of(3, 15)).toRussian());
+    }
+
     private static int countOrOne(String group) {
         return group == null ? 1 : Integer.parseInt(group);
     }
@@ -217,7 +266,11 @@ public final class RuFormats {
     private static DayOfWeek weekday(String token) {
         DayOfWeek day = RuText.parseWeekday(token);
         if (day == null) {
-            throw new IllegalArgumentException("неизвестный день недели «" + token + "» (ожидается пн, вт, ср, чт, пт, сб или вс)");
+            throw new IllegalArgumentException(Texts.get("markdown.value.unknownWeekday", token,
+                    FormatWords.weekdayShort(DayOfWeek.MONDAY), FormatWords.weekdayShort(DayOfWeek.TUESDAY),
+                    FormatWords.weekdayShort(DayOfWeek.WEDNESDAY), FormatWords.weekdayShort(DayOfWeek.THURSDAY),
+                    FormatWords.weekdayShort(DayOfWeek.FRIDAY), FormatWords.weekdayShort(DayOfWeek.SATURDAY),
+                    FormatWords.weekdayShort(DayOfWeek.SUNDAY)));
         }
         return day;
     }
@@ -226,7 +279,7 @@ public final class RuFormats {
         try {
             return MonthDay.of(month, day);
         } catch (DateTimeException e) {
-            throw new IllegalArgumentException("некорректный день года «" + original.strip() + "» (ожидается ММ-ДД)", e);
+            throw new IllegalArgumentException(Texts.get("markdown.value.badMonthDay", original.strip()), e);
         }
     }
 
@@ -240,12 +293,15 @@ public final class RuFormats {
      * @throws IllegalArgumentException если слово не распознано
      */
     public static Kind parseKind(String text) {
-        return switch (normalize(text).replace('−', '-')) {
-            case "доход", "+", "income" -> Kind.INCOME;
-            case "расход", "-", "expense" -> Kind.EXPENSE;
-            default -> throw new IllegalArgumentException(
-                    "Неизвестный тип операции «" + safe(text) + "» (ожидается «доход» или «расход»)");
-        };
+        String t = normalize(text).replace('−', '-');
+        if (t.equals(normalize(Kind.INCOME.label())) || t.equals("+") || t.equals("income")) {
+            return Kind.INCOME;
+        }
+        if (t.equals(normalize(Kind.EXPENSE.label())) || t.equals("-") || t.equals("expense")) {
+            return Kind.EXPENSE;
+        }
+        throw new IllegalArgumentException(Texts.get("markdown.value.unknownKind", safe(text),
+                Kind.INCOME.label(), Kind.EXPENSE.label()));
     }
 
     /**
@@ -261,7 +317,8 @@ public final class RuFormats {
     /**
      * Разбирает правило сдвига с выходных. Пустое значение означает «не сдвигать».
      *
-     * @param text «нет», «раньше», «позже» (также английские none / previous / next)
+     * @param text «нет», «раньше», «позже» (также «не сдвигать», «на пятницу», «на понедельник» и английские
+     *             none / previous / next)
      * @return правило сдвига
      * @throws IllegalArgumentException если слово не распознано
      */
@@ -269,13 +326,22 @@ public final class RuFormats {
         if (isEmptyValue(text)) {
             return WeekendPolicy.NONE;
         }
-        return switch (normalize(text)) {
-            case "нет", "none", "не сдвигать" -> WeekendPolicy.NONE;
-            case "раньше", "previous", "на пятницу" -> WeekendPolicy.PREVIOUS_BUSINESS_DAY;
-            case "позже", "next", "на понедельник" -> WeekendPolicy.NEXT_BUSINESS_DAY;
-            default -> throw new IllegalArgumentException(
-                    "Неизвестное значение «Выходные»: «" + safe(text) + "» (ожидается «нет», «раньше» или «позже»)");
-        };
+        String t = normalize(text);
+        if (t.equals(normalize(WeekendPolicy.NONE.label())) || t.equals("none")
+                || t.equals(normalize(FormatWords.get("plan.weekend.none.alias")))) {
+            return WeekendPolicy.NONE;
+        }
+        if (t.equals(normalize(WeekendPolicy.PREVIOUS_BUSINESS_DAY.label())) || t.equals("previous")
+                || t.equals(normalize(FormatWords.get("plan.weekend.previous.alias")))) {
+            return WeekendPolicy.PREVIOUS_BUSINESS_DAY;
+        }
+        if (t.equals(normalize(WeekendPolicy.NEXT_BUSINESS_DAY.label())) || t.equals("next")
+                || t.equals(normalize(FormatWords.get("plan.weekend.next.alias")))) {
+            return WeekendPolicy.NEXT_BUSINESS_DAY;
+        }
+        throw new IllegalArgumentException(Texts.get("markdown.value.unknownWeekend", MarkdownFormat.COL_WEEKEND,
+                safe(text), WeekendPolicy.NONE.label(), WeekendPolicy.PREVIOUS_BUSINESS_DAY.label(),
+                WeekendPolicy.NEXT_BUSINESS_DAY.label()));
     }
 
     /**
@@ -296,11 +362,15 @@ public final class RuFormats {
      * @throws IllegalArgumentException если слово не распознано
      */
     public static boolean parseBoolean(String text) {
-        return switch (normalize(text)) {
-            case "да", "yes", "true", "1" -> true;
-            case "нет", "no", "false", "0" -> false;
-            default -> throw new IllegalArgumentException("Ожидается «да» или «нет», а указано «" + safe(text) + "»");
-        };
+        String t = normalize(text);
+        if (t.equals(normalize(FormatWords.get("plan.bool.yes"))) || t.equals("yes") || t.equals("true") || t.equals("1")) {
+            return true;
+        }
+        if (t.equals(normalize(FormatWords.get("plan.bool.no"))) || t.equals("no") || t.equals("false") || t.equals("0")) {
+            return false;
+        }
+        throw new IllegalArgumentException(Texts.get("markdown.value.expectedYesNo",
+                FormatWords.get("plan.bool.yes"), FormatWords.get("plan.bool.no"), safe(text)));
     }
 
     /**
@@ -310,7 +380,7 @@ public final class RuFormats {
      * @return «да» или «нет»
      */
     public static String formatBoolean(boolean value) {
-        return value ? "да" : "нет";
+        return value ? FormatWords.get("plan.bool.yes") : FormatWords.get("plan.bool.no");
     }
 
     // ------------------------------------------------------------------ действие корректировки
@@ -325,20 +395,21 @@ public final class RuFormats {
      */
     public static ActionType parseActionType(String text) {
         String t = normalize(text);
-        if (t.startsWith("пропус") || t.equals("skip")) {
+        if (t.startsWith(normalize(ActionType.SKIP.stem())) || t.equals("skip")) {
             return ActionType.SKIP;
         }
-        if (t.startsWith("измен") || t.equals("change")) {
+        if (t.startsWith(normalize(ActionType.CHANGE_AMOUNT.stem())) || t.equals("change")) {
             return ActionType.CHANGE_AMOUNT;
         }
-        if (t.startsWith("перен") || t.equals("move")) {
+        if (t.startsWith(normalize(ActionType.MOVE_DATE.stem())) || t.equals("move")) {
             return ActionType.MOVE_DATE;
         }
-        if (t.startsWith("замен") || t.equals("replace")) {
+        if (t.startsWith(normalize(ActionType.REPLACE.stem())) || t.equals("replace")) {
             return ActionType.REPLACE;
         }
-        throw new IllegalArgumentException("Неизвестное действие «" + safe(text)
-                + "» (ожидается «изменить», «перенести», «пропустить» или «заменить»)");
+        throw new IllegalArgumentException(Texts.get("markdown.value.unknownAction", safe(text),
+                ActionType.CHANGE_AMOUNT.label(), ActionType.MOVE_DATE.label(), ActionType.SKIP.label(),
+                ActionType.REPLACE.label()));
     }
 
     /**
@@ -353,10 +424,12 @@ public final class RuFormats {
     public static Adjustment.Action buildAction(ActionType type, Money amount, LocalDate date) {
         Objects.requireNonNull(type, "type");
         if (type.requiresAmount() && amount == null) {
-            throw new IllegalArgumentException("Для действия «" + type.label() + "» нужна «Новая сумма»");
+            throw new IllegalArgumentException(
+                    Texts.get("markdown.value.actionNeedsColumn", type.label(), MarkdownFormat.COL_NEW_AMOUNT));
         }
         if (type.requiresDate() && date == null) {
-            throw new IllegalArgumentException("Для действия «" + type.label() + "» нужна «Новая дата»");
+            throw new IllegalArgumentException(
+                    Texts.get("markdown.value.actionNeedsColumn", type.label(), MarkdownFormat.COL_NEW_DATE));
         }
         return switch (type) {
             case SKIP -> new Adjustment.Skip();
@@ -414,10 +487,12 @@ public final class RuFormats {
                 return new Horizon.Until(parseDate(m.group(1)));
             }
         } catch (IllegalArgumentException e) {
-            throw new IllegalArgumentException("Горизонт «" + safe(text) + "»: " + e.getMessage(), e);
+            throw new IllegalArgumentException(Texts.get("markdown.value.horizonInvalid", safe(text), e.getMessage()), e);
         }
-        throw new IllegalArgumentException("Не удалось разобрать горизонт «" + safe(text)
-                + "» (примеры: «12 месяцев», «2 года», «до 2027-12-31»)");
+        // Примеры — канонические тексты настоящих горизонтов: они совпадают с тем, что пишет программа.
+        throw new IllegalArgumentException(Texts.get("markdown.value.horizonUnparsed", safe(text),
+                new Horizon.Months(12).label(), new Horizon.Years(2).label(),
+                new Horizon.Until(LocalDate.of(2027, 12, 31)).label()));
     }
 
     /**
@@ -442,7 +517,7 @@ public final class RuFormats {
      */
     public static LocalDate parseDate(String text) {
         if (isEmptyValue(text)) {
-            throw new IllegalArgumentException("Дата не указана");
+            throw new IllegalArgumentException(Texts.get("date.error.empty"));
         }
         String t = normalize(text).replace(" ", "");
         Matcher iso = DATE_ISO.matcher(t);
@@ -455,7 +530,7 @@ public final class RuFormats {
                 return LocalDate.of(Integer.parseInt(ru.group(3)), Integer.parseInt(ru.group(2)), Integer.parseInt(ru.group(1)));
             }
         } catch (DateTimeException e) {
-            throw new IllegalArgumentException("Несуществующая дата: «" + text.strip() + "»", e);
+            throw new IllegalArgumentException(Texts.get("markdown.value.dateNonexistent", text.strip()), e);
         }
         // Остальное отдаём общему разборщику ради единообразного сообщения об ошибке.
         return DateFormats.parse(t);
@@ -491,7 +566,7 @@ public final class RuFormats {
      */
     public static Money parseMoney(String text) {
         if (isEmptyValue(text)) {
-            throw new IllegalArgumentException("Сумма не указана");
+            throw new IllegalArgumentException(Texts.get("money.error.empty"));
         }
         return Money.parse(text);
     }
@@ -520,5 +595,15 @@ public final class RuFormats {
 
     private static String safe(String text) {
         return text == null ? "" : text.strip();
+    }
+
+    /**
+     * Слово формата для регулярного выражения: нормализованное (как текст, с которым сравнивается) и экранированное.
+     *
+     * @param name имя слова в {@link FormatWords}
+     * @return фрагмент шаблона, совпадающий ровно с этим словом
+     */
+    private static String word(String name) {
+        return Pattern.quote(normalize(FormatWords.get(name)));
     }
 }

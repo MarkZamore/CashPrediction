@@ -45,6 +45,12 @@ class RuFormatsTest {
                 Arguments.of("каждый месяц 7", new Recurrence.Monthly(7, 1)),
                 Arguments.of("  КАЖДЫЕ 2 МЕСЯЦА   10 ", new Recurrence.Monthly(10, 2)),
                 Arguments.of("еженедельно сб", new Recurrence.Weekly(DayOfWeek.SATURDAY, 1)),
+                Arguments.of("еженедельно вс", new Recurrence.Weekly(DayOfWeek.SUNDAY, 1)),
+                Arguments.of("еженедельно в среду", new Recurrence.Weekly(DayOfWeek.WEDNESDAY, 1)),
+                Arguments.of("каждые 5 нед. чт", new Recurrence.Weekly(DayOfWeek.THURSDAY, 5)),
+                Arguments.of("каждые 2 нед пн", new Recurrence.Weekly(DayOfWeek.MONDAY, 2)),
+                Arguments.of("каждые 7 дн.", new Recurrence.EveryNDays(7)),
+                Arguments.of("каждые 4 дн", new Recurrence.EveryNDays(4)),
                 Arguments.of("еженедельно суббота", new Recurrence.Weekly(DayOfWeek.SATURDAY, 1)),
                 Arguments.of("Еженедельно  ПН", new Recurrence.Weekly(DayOfWeek.MONDAY, 1)),
                 Arguments.of("еженедельно по пятницам", null),
@@ -137,6 +143,10 @@ class RuFormatsTest {
         assertEquals(WeekendPolicy.NONE, RuFormats.parseWeekendPolicy(null));
         assertEquals(WeekendPolicy.PREVIOUS_BUSINESS_DAY, RuFormats.parseWeekendPolicy("Раньше"));
         assertEquals(WeekendPolicy.NEXT_BUSINESS_DAY, RuFormats.parseWeekendPolicy(" ПОЗЖЕ "));
+        // Синонимы из грамматики формата, которые пишут вручную (plan.weekend.*.alias).
+        assertEquals(WeekendPolicy.NONE, RuFormats.parseWeekendPolicy("Не сдвигать"));
+        assertEquals(WeekendPolicy.PREVIOUS_BUSINESS_DAY, RuFormats.parseWeekendPolicy("на пятницу"));
+        assertEquals(WeekendPolicy.NEXT_BUSINESS_DAY, RuFormats.parseWeekendPolicy("НА  ПОНЕДЕЛЬНИК"));
         assertThrows(IllegalArgumentException.class, () -> RuFormats.parseWeekendPolicy("вчера"));
         for (WeekendPolicy p : WeekendPolicy.values()) {
             assertEquals(p, RuFormats.parseWeekendPolicy(RuFormats.formatWeekendPolicy(p)));

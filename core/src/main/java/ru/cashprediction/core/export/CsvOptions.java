@@ -1,6 +1,7 @@
 package ru.cashprediction.core.export;
 
 import java.time.LocalDate;
+import ru.cashprediction.core.text.Texts;
 
 /**
  * Параметры экспорта прогноза в CSV (результат диалога «Экспорт CSV»).
@@ -17,13 +18,13 @@ public record CsvOptions(char separator, boolean bom, LocalDate from, LocalDate 
     /** Настройки по умолчанию: точка с запятой, BOM, весь прогноз. */
     public static final CsvOptions DEFAULT = new CsvOptions(';', true, null, null);
 
-    /** Проверяет разделитель и порядок дат. */
+    /** Проверяет разделитель и порядок дат; тексты ошибок — из каталога текстов ({@code csv.error.*}). */
     public CsvOptions {
         if (separator == '"' || separator == '\r' || separator == '\n') {
-            throw new IllegalArgumentException("Недопустимый разделитель CSV");
+            throw new IllegalArgumentException(Texts.get("csv.error.separator"));
         }
         if (from != null && to != null && to.isBefore(from)) {
-            throw new IllegalArgumentException("Конец диапазона экспорта раньше его начала");
+            throw new IllegalArgumentException(Texts.get("csv.error.rangeReversed"));
         }
     }
 

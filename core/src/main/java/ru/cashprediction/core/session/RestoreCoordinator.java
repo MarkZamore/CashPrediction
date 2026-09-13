@@ -9,6 +9,7 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
+import ru.cashprediction.core.text.Texts;
 
 /**
  * Восстанавливает сессию из снимка в строго определённом порядке (раздел 5.6 плана).
@@ -42,14 +43,20 @@ import java.util.function.Consumer;
  *       и предупреждением: введённые данные важнее исчезнувшего объекта.</li>
  * </ul>
  *
+ * <p>Тексты предупреждений отчёта берутся из каталога текстов (ключи {@code session.restore.*}).</p>
+ *
  * <p>Все методы вызываются в UI-потоке клиента; колбэки фабрики тоже приходят в UI-поток.
  * Экземпляр не хранит состояния между вызовами, потокобезопасен в этом смысле.</p>
  */
 public final class RestoreCoordinator {
 
-    /** Предупреждение отчёта, когда рекордер не запущен, чтобы не затереть несохранённый план в снимке. */
-    public static final String RECORDER_NOT_STARTED = "Запись сессии не начата: несохранённый план из снимка не открылся, "
-            + "а новый снимок затёр бы его. Снимок сохранён и будет предложен при следующем запуске";
+    /**
+     * Предупреждение отчёта, когда рекордер не запущен, чтобы не затереть несохранённый план в снимке.
+     *
+     * <p>Текст берётся из каталога ({@code session.restore.recorderNotStarted}) при загрузке класса и больше не
+     * является константой времени компиляции; прежние клиенты сравнивают строку отчёта с этим полем.</p>
+     */
+    public static final String RECORDER_NOT_STARTED = Texts.get("session.restore.recorderNotStarted");
 
     /** Создаёт координатор (состояния нет). */
     public RestoreCoordinator() {
@@ -74,10 +81,10 @@ public final class RestoreCoordinator {
         List<String> warnings = new ArrayList<>();
         MainWindowState main = snapshot.main();
 
-        boolean planLoaded = step(warnings, "Не удалось загрузить план",
+        boolean planLoaded = step(warnings, Texts.get("session.restore.planNotLoaded"),
                 () -> target.loadPlan(snapshot.plan(), main.planPath(), warnings::add));
-        step(warnings, "Не удалось применить состояние главного окна", () -> target.applyMain(main));
-        step(warnings, "Не удалось показать главное окно", target::showMainWindow);
+        step(warnings, Texts.get("session.restore.mainStateNotApplied"), () -> target.applyMain(main));
+        step(warnings, Texts.get("session.restore.mainNotShown"), target::showMainWindow);
 
         // Несохранённый текст плана существует только в снимке. Если он не открылся, первая же запись нового
         // сеанса (через 400 мс) заменила бы его во всех хранилищах текущим, пустым планом — и повторить
@@ -93,7 +100,7 @@ public final class RestoreCoordinator {
         try {
             existing = Set.copyOf(target.existingTargetIds());
         } catch (RuntimeException e) {
-            warnings.add("Не удалось получить список операций плана: " + e.getMessage());
+            warnings.add(Texts.get("session.restore.targetIdsFailed", e.getMessage()));
             existing = Set.of();
         }
 
@@ -122,6 +129,9 @@ public final class RestoreCoordinator {
     /**
      * Выполняет шаг восстановления; исключение превращается в предупреждение отчёта.
      *
+     * @param warnings предупреждения отчёта
+     * @param what     название шага на языке интерфейса
+     * @param action   шаг
      * @return {@code true}, если шаг прошёл без исключения
      */
     private static boolean step(List<String> warnings, String what, Runnable action) {
@@ -129,9 +139,14 @@ public final class RestoreCoordinator {
             action.run();
             return true;
         } catch (RuntimeException e) {
-            warnings.add(what + ": " + Objects.requireNonNullElse(e.getMessage(), e.getClass().getSimpleName()));
+            warnings.add(Texts.get("session.restore.stepFailed", what, reason(e)));
             return false;
         }
+    }
+
+    /** @return сообщение исключения или, если его нет, простое имя класса */
+    private static String reason(RuntimeException e) {
+        return Objects.requireNonNullElse(e.getMessage(), e.getClass().getSimpleName());
     }
 
     /** Последовательная цепочка открытия окон одного восстановления. */
@@ -167,7 +182,7 @@ public final class RestoreCoordinator {
             while (index < ordered.size()) {
                 WindowState original = ordered.get(index++);
                 if (original.type() == null) {
-                    warnings.add("Окно " + original.id() + " неизвестного типа пропущено");
+                    warnings.add(Texts.get("session.restore.unknownWindowType", original.id()));
                     continue;
                 }
                 String title = original.type().title();
@@ -191,13 +206,12 @@ public final class RestoreCoordinator {
                                 if (!answered.compareAndSet(false, true)) {
                                     return;
                                 }
-                                warnings.add("Окно «" + title + "» не восстановлено: " + reason);
+                                warnings.add(Texts.get("session.restore.windowNotRestored", title, reason));
                                 next();
                             });
                 } catch (RuntimeException e) {
                     if (answered.compareAndSet(false, true)) {
-                        warnings.add("Окно «" + title + "» не восстановлено: "
-                                + Objects.requireNonNullElse(e.getMessage(), e.getClass().getSimpleName()));
+                        warnings.add(Texts.get("session.restore.windowNotRestored", title, reason(e)));
                         continue;
                     }
                 }
@@ -216,7 +230,7 @@ public final class RestoreCoordinator {
             if (mapped != null) {
                 return mapped;
             }
-            warnings.add("Владелец окна «" + title + "» (" + oldOwner + ") не восстановлен: окно открыто поверх главного окна");
+            warnings.add(Texts.get("session.restore.ownerNotRestored", title, oldOwner));
             return WindowState.MAIN_OWNER;
         }
 
@@ -230,8 +244,7 @@ public final class RestoreCoordinator {
                 if (value != null && !value.isBlank() && !existingTargets.contains(value)) {
                     Map<String, String> changed = new LinkedHashMap<>(context);
                     changed.put(WindowType.CONTEXT_MODE, WindowType.MODE_CREATE);
-                    warnings.add("Операция «" + value + "» не найдена в восстановленном плане: окно «" + title
-                            + "» открыто в режиме создания с введёнными значениями");
+                    warnings.add(Texts.get("session.restore.targetNotFound", value, title));
                     return changed;
                 }
             }
@@ -244,7 +257,7 @@ public final class RestoreCoordinator {
             }
             finished = true;
             if (!selectedRowId.isBlank()) {
-                step(warnings, "Не удалось выделить строку", () -> target.selectRow(selectedRowId));
+                step(warnings, Texts.get("session.restore.rowNotSelected"), () -> target.selectRow(selectedRowId));
             }
             done.accept(new RestoreReport(warnings, restored));
         }

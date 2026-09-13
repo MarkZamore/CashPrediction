@@ -87,13 +87,14 @@ public final class JsonWriter {
             case Enum<?> e -> writeString(sb, e.name());
             case Map<?, ?> map -> writeObject(sb, map, pretty, level);
             case Iterable<?> iterable -> writeArray(sb, iterable, pretty, level);
-            default -> throw new JsonException("Тип " + value.getClass().getName() + " нельзя записать в JSON");
+            // Ошибка программиста (записывается только то, что строит сам код), поэтому сообщение не из каталога текстов.
+            default -> throw new JsonException("Type " + value.getClass().getName() + " cannot be written to JSON");
         }
     }
 
     private static void writeFloating(StringBuilder sb, double d) {
         if (Double.isNaN(d) || Double.isInfinite(d)) {
-            throw new JsonException("Значение " + d + " нельзя записать в JSON: допустимы только конечные числа");
+            throw new JsonException("Value " + d + " cannot be written to JSON: only finite numbers are allowed");
         }
         // Double.toString даёт формы вроде 1.0E10, которые грамматика JSON допускает.
         sb.append(d);
@@ -108,7 +109,7 @@ public final class JsonWriter {
         boolean first = true;
         for (Map.Entry<?, ?> entry : map.entrySet()) {
             if (!(entry.getKey() instanceof String key)) {
-                throw new JsonException("Имя поля JSON должно быть строкой, получено: " + entry.getKey());
+                throw new JsonException("JSON field name must be a string, got: " + entry.getKey());
             }
             if (!first) {
                 sb.append(',');

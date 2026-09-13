@@ -28,7 +28,7 @@
   </dependencies>
   <build>
     <resources>
-      <!-- Обычные ресурсы (FORMAT.md) копируются как есть. -->
+      <!-- Обычные ресурсы (каталог текстов, справка help-format_ru.md, слова формата) копируются как есть. -->
       <resource>
         <directory>src/main/resources</directory>
       </resource>

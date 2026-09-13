@@ -19,6 +19,7 @@ import java.util.function.Function;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import ru.cashprediction.core.diagnostics.Diagnostic;
+import ru.cashprediction.core.format.FormatWords;
 import ru.cashprediction.core.io.AtomicFiles;
 import ru.cashprediction.core.model.Adjustment;
 import ru.cashprediction.core.model.Goal;
@@ -34,6 +35,7 @@ import ru.cashprediction.core.model.RecurringRule;
 import ru.cashprediction.core.model.RuleId;
 import ru.cashprediction.core.model.TxId;
 import ru.cashprediction.core.model.WeekendPolicy;
+import ru.cashprediction.core.text.Texts;
 
 /**
  * Читатель файла плана {@code CashMemory/<имя>.md}.
@@ -69,9 +71,13 @@ import ru.cashprediction.core.model.WeekendPolicy;
  */
 public final class PlanMarkdownReader {
 
-    /** Заголовок плана: {@code # План: имя}, без учёта регистра и пробелов. */
+    /**
+     * Заголовок плана: {@code # План: имя}, без учёта регистра и пробелов. Слово заголовка — из грамматики формата
+     * ({@link FormatWords}); в шаблон оно попадает экранированным.
+     */
     private static final Pattern TITLE = Pattern.compile(
-            "#(?!#)\\s*план\\s*:\\s*(.*?)\\s*", Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
+            "#(?!#)\\s*" + Pattern.quote(MarkdownFormat.TITLE_WORD) + "\\s*:\\s*(.*?)\\s*",
+            Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
 
     /** Заголовок секции второго уровня: {@code ## Название} с необязательным двоеточием. */
     private static final Pattern HEADING = Pattern.compile("##(?!#)\\s*(.*?)\\s*:?\\s*");
@@ -84,9 +90,6 @@ public final class PlanMarkdownReader {
 
     /** Значение параметра «Формат»: {@code CashPrediction N}. */
     private static final Pattern FORMAT_VALUE = Pattern.compile("cashprediction\\s*(\\d{1,9})");
-
-    /** Имя плана, если его не удалось взять ни из заголовка, ни из имени файла. */
-    private static final String DEFAULT_NAME = "План";
 
     private PlanMarkdownReader() {
     }
@@ -297,7 +300,10 @@ public final class PlanMarkdownReader {
             // BOM добавляет Блокнот; CR/CRLF — любой редактор Windows.
             String t = text.startsWith("﻿") ? text.substring(1) : text;
             this.lines = t.split("\\r\\n|\\r|\\n", -1);
-            this.fallbackName = fallbackName == null || fallbackName.isBlank() ? DEFAULT_NAME : fallbackName.strip();
+            // Имя плана, если его не удалось взять ни из заголовка, ни из имени файла: текст интерфейса, а не формата.
+            // Только значение по умолчанию: по нему нельзя узнавать планы, при другом языке интерфейса оно другое.
+            this.fallbackName = fallbackName == null || fallbackName.isBlank()
+                    ? Texts.get("markdown.read.defaultPlanName") : fallbackName.strip();
             this.today = today;
         }
 
@@ -314,8 +320,8 @@ public final class PlanMarkdownReader {
                 Matcher otherLevel = ANY_LEVEL_HEADING.matcher(t);
                 if (otherLevel.matches() && Section.byTitle(otherLevel.group(2)) != null) {
                     Section known = Section.byTitle(otherLevel.group(2));
-                    diagnostics.add(Diagnostic.warning(lineNo, "Заголовок секции «" + known.title + "» записан с «"
-                            + otherLevel.group(1) + "» вместо «##»; секция распознана, при сохранении заголовок будет исправлен"));
+                    diagnostics.add(Diagnostic.warning(lineNo,
+                            Texts.get("markdown.read.headingLevel", known.title, otherLevel.group(1))));
                     startSection(otherLevel.group(2), line, lineNo);
                     continue;
                 }
@@ -329,8 +335,7 @@ public final class PlanMarkdownReader {
                             flushRaw();
                         } else {
                             // Внутри неизвестной секции сброс фрагмента оборвал бы её текст; строку заголовка просто не копируем.
-                            diagnostics.add(Diagnostic.warning(lineNo, "Заголовок плана стоит после другой секции; "
-                                    + "при сохранении он будет перенесён в начало файла"));
+                            diagnostics.add(Diagnostic.warning(lineNo, Texts.get("markdown.read.titleAfterSection")));
                         }
                         titleSeen = true;
                         titleLine = lineNo;
@@ -339,7 +344,7 @@ public final class PlanMarkdownReader {
                     }
                 }
                 switch (section) {
-                    case PREAMBLE -> looseLine(line, t, lineNo, "", "Текст вне секций сохранён без изменений");
+                    case PREAMBLE -> looseLine(line, t, lineNo, "", Texts.get("markdown.read.textOutsideSections"));
                     case UNKNOWN -> rawLines.add(line);
                     case PARAMETERS -> parameterLine(line, t, lineNo);
                     case NOTE -> currentNote.add(MarkdownFormat.unescapeNoteLine(line));
@@ -348,8 +353,7 @@ public final class PlanMarkdownReader {
             }
             flushRaw();
             if (!titleSeen && !knownSectionSeen) {
-                throw new MarkdownParseException("Файл не является планом CashPrediction: в нём нет заголовка «"
-                        + MarkdownFormat.TITLE_PREFIX.strip() + " …» и ни одной известной секции");
+                throw new MarkdownParseException(Texts.get("markdown.read.notAPlan", MarkdownFormat.TITLE_PREFIX.strip()));
             }
             return new ReadResult(buildPlan(), sortedDiagnostics());
         }
@@ -365,13 +369,12 @@ public final class PlanMarkdownReader {
                 section = Section.UNKNOWN;
                 openRaw(anchor);
                 rawLines.add(line);
-                diagnostics.add(Diagnostic.warning(lineNo, "Неизвестная секция «" + title + "» сохранена без изменений"));
+                diagnostics.add(Diagnostic.warning(lineNo, Texts.get("markdown.read.unknownSection", title)));
                 return;
             }
             knownSectionSeen = true;
             if (!seenSections.add(s)) {
-                diagnostics.add(Diagnostic.warning(lineNo,
-                        "Секция «" + s.title + "» встречается повторно; её содержимое объединено с первой"));
+                diagnostics.add(Diagnostic.warning(lineNo, Texts.get("markdown.read.repeatedSection", s.title)));
             }
             section = s;
             anchor = s.title;
@@ -421,7 +424,7 @@ public final class PlanMarkdownReader {
             Optional<ListItem> item = t.isEmpty() ? Optional.empty() : ListItem.parse(line);
             if (item.isEmpty()) {
                 looseLine(line, t, lineNo, MarkdownFormat.SECTION_PARAMETERS,
-                        "Строка в секции «Параметры» не похожа на «- Ключ: значение»; она сохранена без изменений");
+                        Texts.get("markdown.read.badParameterLine", MarkdownFormat.SECTION_PARAMETERS));
                 return;
             }
             flushRaw();
@@ -430,12 +433,12 @@ public final class PlanMarkdownReader {
             if (knownParameter(key)) {
                 Param previous = params.put(key, new Param(it.key(), it.value(), lineNo, line));
                 if (previous != null) {
-                    diagnostics.add(Diagnostic.warning(lineNo, "Параметр «" + it.key()
-                            + "» указан повторно (впервые в строке " + previous.line() + "); используется последнее значение"));
+                    diagnostics.add(Diagnostic.warning(lineNo,
+                            Texts.get("markdown.read.repeatedParameter", it.key(), previous.line())));
                 }
             } else {
                 parameterExtras.add(it.format());
-                diagnostics.add(Diagnostic.warning(lineNo, "Неизвестный параметр «" + it.key() + "» сохранён без изменений"));
+                diagnostics.add(Diagnostic.warning(lineNo, Texts.get("markdown.read.unknownParameter", it.key())));
             }
         }
 
@@ -459,14 +462,14 @@ public final class PlanMarkdownReader {
             Param p = param(key);
             if (p == null || RuFormats.isEmptyValue(p.value())) {
                 diagnostics.add(Diagnostic.warning(p == null ? 0 : p.line(),
-                        "Не указан параметр «" + key + "»; используется " + defaultText));
+                        Texts.get("markdown.read.missingParameter", key, defaultText)));
                 return defaultValue;
             }
             try {
                 return parser.apply(p.value());
             } catch (IllegalArgumentException e) {
                 unparsed(p.line(), p.originalLine(), MarkdownFormat.SECTION_PARAMETERS,
-                        e.getMessage() + "; используется " + defaultText);
+                        Texts.get("markdown.read.usingDefault", e.getMessage(), defaultText));
                 return defaultValue;
             }
         }
@@ -492,11 +495,10 @@ public final class PlanMarkdownReader {
             }
             Matcher m = FORMAT_VALUE.matcher(RuFormats.normalize(p.value()));
             if (!m.matches()) {
-                diagnostics.add(Diagnostic.warning(p.line(), "Неизвестное значение параметра «Формат»: «" + p.value()
-                        + "»; ожидается «" + MarkdownFormat.formatValue() + "»"));
+                diagnostics.add(Diagnostic.warning(p.line(), Texts.get("markdown.read.badFormatValue",
+                        MarkdownFormat.KEY_FORMAT, p.value(), MarkdownFormat.formatValue())));
             } else if (Long.parseLong(m.group(1)) > MarkdownFormat.FORMAT_VERSION) {
-                diagnostics.add(Diagnostic.warning(p.line(), "Файл создан более новой версией программы (формат "
-                        + m.group(1) + "); незнакомые ей данные могут быть потеряны при сохранении"));
+                diagnostics.add(Diagnostic.warning(p.line(), Texts.get("markdown.read.newerFormat", m.group(1))));
             }
         }
 
@@ -504,8 +506,7 @@ public final class PlanMarkdownReader {
 
         private void tableLine(int index, String line, String t, int lineNo) {
             if (!MarkdownTable.isTableRow(t)) {
-                looseLine(line, t, lineNo, anchor, "Текст в секции «" + anchor
-                        + "» не является строкой таблицы; он сохранён без изменений");
+                looseLine(line, t, lineNo, anchor, Texts.get("markdown.read.notTableRow", anchor));
                 return;
             }
             flushRaw();
@@ -529,7 +530,7 @@ public final class PlanMarkdownReader {
                     adoptHeader(candidate, cells, lineNo);
                     return;
                 }
-                unparsed(lineNo, t, anchor, "у таблицы нет строки заголовка с названиями колонок");
+                unparsed(lineNo, t, anchor, Texts.get("markdown.read.noTableHeader"));
                 return;
             }
             // Заголовок уже есть (продолжение таблицы или повторная секция). Новым заголовком строка становится,
@@ -545,7 +546,8 @@ public final class PlanMarkdownReader {
                     case RULES -> rules.add(parseRule(cells, lineNo, rowDiagnostics));
                     case ONE_TIME -> oneTimes.add(parseOneTime(cells, lineNo, rowDiagnostics));
                     case ADJUSTMENTS -> adjustments.add(parseAdjustment(cells, lineNo, rowDiagnostics));
-                    default -> throw new IllegalStateException("Не табличная секция: " + section);
+                    // Невозможная ветка: tableLine вызывается только для табличных секций; сообщение для разработчика.
+                    default -> throw new IllegalStateException("Not a table section: " + section);
                 }
                 // Предупреждения строки фиксируются только при успехе: у перенесённой в заметку строки
                 // достаточно одной ошибки.
@@ -600,8 +602,7 @@ public final class PlanMarkdownReader {
             columnsOfSection().forEach(c -> known.add(RuFormats.normalize(c)));
             for (String cell : cells) {
                 if (!cell.isBlank() && !known.contains(RuFormats.normalize(cell))) {
-                    diagnostics.add(Diagnostic.warning(lineNo, "Колонка «" + cell + "» в секции «" + anchor
-                            + "» не используется программой и не будет сохранена"));
+                    diagnostics.add(Diagnostic.warning(lineNo, Texts.get("markdown.read.unusedColumn", cell, anchor)));
                 }
             }
         }
@@ -609,7 +610,7 @@ public final class PlanMarkdownReader {
         private void requireColumns(List<String> required) {
             for (String column : required) {
                 if (!header.has(column)) {
-                    throw new IllegalArgumentException("в таблице нет обязательной колонки «" + column + "»");
+                    throw new IllegalArgumentException(Texts.get("markdown.read.missingColumn", column));
                 }
             }
         }
@@ -620,7 +621,7 @@ public final class PlanMarkdownReader {
             try {
                 return parser.apply(value);
             } catch (IllegalArgumentException e) {
-                throw new IllegalArgumentException("колонка «" + column + "»: " + e.getMessage(), e);
+                throw new IllegalArgumentException(Texts.get("markdown.read.columnError", column, e.getMessage()), e);
             }
         }
 
@@ -629,11 +630,11 @@ public final class PlanMarkdownReader {
             Money money = column(cells, column, RuFormats::parseMoney);
             if (RuFormats.hasExplicitSign(text)) {
                 money = money.abs();
-                rowDiagnostics.add(Diagnostic.warning(lineNo, "Знак у суммы «" + text + "» не нужен: доход или расход задаёт колонка «"
-                        + MarkdownFormat.COL_KIND + "»; используется " + money.format()));
+                rowDiagnostics.add(Diagnostic.warning(lineNo,
+                        Texts.get("markdown.read.signIgnored", text, MarkdownFormat.COL_KIND, money.format())));
             }
             if (Money.needsRounding(text)) {
-                rowDiagnostics.add(Diagnostic.warning(lineNo, "Сумма «" + text + "» округлена до копеек: " + money.format()));
+                rowDiagnostics.add(Diagnostic.warning(lineNo, Texts.get("markdown.read.roundedToKopecks", text, money.format())));
             }
             return money;
         }
@@ -669,7 +670,7 @@ public final class PlanMarkdownReader {
             requireColumns(MarkdownFormat.ADJUSTMENT_REQUIRED_COLUMNS);
             RuleId ruleId = column(cells, MarkdownFormat.COL_RULE, v -> {
                 if (RuFormats.isEmptyValue(v)) {
-                    throw new IllegalArgumentException("не указан ID правила");
+                    throw new IllegalArgumentException(Texts.get("markdown.read.noRuleId"));
                 }
                 return new RuleId(v);
             });
@@ -683,14 +684,14 @@ public final class PlanMarkdownReader {
             if (type.requiresAmount()) {
                 newAmount = amount(cells, MarkdownFormat.COL_NEW_AMOUNT, lineNo, rowDiagnostics);
             } else if (!RuFormats.isEmptyValue(amountText)) {
-                rowDiagnostics.add(Diagnostic.warning(lineNo, "«" + MarkdownFormat.COL_NEW_AMOUNT + "» не нужна для действия «"
-                        + type.label() + "» и не будет сохранена"));
+                rowDiagnostics.add(Diagnostic.warning(lineNo,
+                        Texts.get("markdown.read.columnNotNeeded", MarkdownFormat.COL_NEW_AMOUNT, type.label())));
             }
             if (type.requiresDate()) {
                 newDate = column(cells, MarkdownFormat.COL_NEW_DATE, RuFormats::parseDate);
             } else if (!RuFormats.isEmptyValue(dateText)) {
-                rowDiagnostics.add(Diagnostic.warning(lineNo, "«" + MarkdownFormat.COL_NEW_DATE + "» не нужна для действия «"
-                        + type.label() + "» и не будет сохранена"));
+                rowDiagnostics.add(Diagnostic.warning(lineNo,
+                        Texts.get("markdown.read.columnNotNeeded", MarkdownFormat.COL_NEW_DATE, type.label())));
             }
             Adjustment.Action action = RuFormats.buildAction(type, newAmount, newDate);
             return new Adjustment(new OccurrenceKey(ruleId, originalDate), action, header.cell(cells, MarkdownFormat.COL_NOTE));
@@ -698,8 +699,7 @@ public final class PlanMarkdownReader {
 
         private void unparsed(int lineNo, String originalLine, String sectionTitle, String message) {
             marks.add(new Mark(lineNo, MarkdownFormat.unparsedMark(lineNo, originalLine)));
-            diagnostics.add(Diagnostic.error(lineNo, "Секция «" + sectionTitle + "»: " + message
-                    + ". Строка не попала в план и перенесена в заметку"));
+            diagnostics.add(Diagnostic.error(lineNo, Texts.get("markdown.read.rowMovedToNote", sectionTitle, message)));
         }
 
         // -------------------------------------------------------------- сборка плана
@@ -708,17 +708,17 @@ public final class PlanMarkdownReader {
             String planName = name;
             if (!titleSeen) {
                 planName = fallbackName;
-                diagnostics.add(Diagnostic.info("Заголовок «" + MarkdownFormat.TITLE_PREFIX.strip()
-                        + " …» не найден; имя плана взято из имени файла: «" + fallbackName + "»"));
+                diagnostics.add(Diagnostic.info(Texts.get("markdown.read.titleMissingUsingFileName",
+                        MarkdownFormat.TITLE_PREFIX.strip(), fallbackName)));
             } else if (planName.isBlank()) {
                 planName = fallbackName;
-                diagnostics.add(Diagnostic.info(titleLine, "В заголовке не указано имя плана; используется «" + fallbackName + "»"));
+                diagnostics.add(Diagnostic.info(titleLine, Texts.get("markdown.read.titleNameEmpty", fallbackName)));
             }
 
             checkFormat();
             String currency = required(MarkdownFormat.KEY_CURRENCY, Plan.DEFAULT_CURRENCY, Plan.DEFAULT_CURRENCY, v -> v);
             LocalDate start = required(MarkdownFormat.KEY_START, today,
-                    "сегодняшняя дата " + RuFormats.formatDate(today), RuFormats::parseDate);
+                    Texts.get("markdown.read.todayDate", RuFormats.formatDate(today)), RuFormats::parseDate);
             Horizon defaultHorizon = new Horizon.Months(12);
             Horizon horizon = required(MarkdownFormat.KEY_HORIZON, defaultHorizon, defaultHorizon.label(), RuFormats::parseHorizon);
             Money startBalance = required(MarkdownFormat.KEY_START_BALANCE, Money.ZERO, Money.ZERO.format(), RuFormats::parseMoney);
@@ -726,12 +726,12 @@ public final class PlanMarkdownReader {
             Goal goal = buildGoal();
 
             List<RecurringRule> finalRules = new ArrayList<>();
-            List<String> ruleIds = assignIds(rules, "r", "правила");
+            List<String> ruleIds = assignIds(rules, "r", Texts.get("markdown.read.subject.rule"));
             for (int i = 0; i < rules.size(); i++) {
                 finalRules.add(rules.get(i).value().withId(new RuleId(ruleIds.get(i))));
             }
             List<OneTimeTransaction> finalOneTimes = new ArrayList<>();
-            List<String> txIds = assignIds(oneTimes, "t", "разовой операции");
+            List<String> txIds = assignIds(oneTimes, "t", Texts.get("markdown.read.subject.oneTime"));
             for (int i = 0; i < oneTimes.size(); i++) {
                 finalOneTimes.add(oneTimes.get(i).value().withId(new TxId(txIds.get(i))));
             }
@@ -759,8 +759,8 @@ public final class PlanMarkdownReader {
                 Param p = param(key);
                 if (p != null) {
                     parameterExtras.add(new ListItem(p.key(), p.value()).format());
-                    diagnostics.add(Diagnostic.warning(p.line(), "Параметр «" + p.key() + "» без параметра «"
-                            + MarkdownFormat.KEY_GOAL + "» не используется; строка сохранена без изменений"));
+                    diagnostics.add(Diagnostic.warning(p.line(),
+                            Texts.get("markdown.read.goalPartWithoutGoal", p.key(), MarkdownFormat.KEY_GOAL)));
                 }
             }
             return null;
@@ -799,15 +799,15 @@ public final class PlanMarkdownReader {
                 used.add(id);
                 result[i] = id;
                 Pending<T> item = items.get(i);
-                String subject = what + (item.title().isBlank() ? "" : " «" + item.title() + "»");
+                String subject = item.title().isBlank() ? what : Texts.get("markdown.read.subjectTitled", what, item.title());
                 if (RuFormats.isEmptyValue(item.rawId())) {
-                    diagnostics.add(Diagnostic.info(item.line(), "У " + subject + " не указан ID; назначен «" + id + "»"));
+                    diagnostics.add(Diagnostic.info(item.line(), Texts.get("markdown.read.idAssigned", subject, id)));
                 } else if (!valid[i]) {
-                    diagnostics.add(Diagnostic.warning(item.line(), "Некорректный ID «" + item.rawId() + "» у " + subject
-                            + "; назначен «" + id + "»"));
+                    diagnostics.add(Diagnostic.warning(item.line(),
+                            Texts.get("markdown.read.idInvalid", item.rawId(), subject, id)));
                 } else {
-                    diagnostics.add(Diagnostic.warning(item.line(), "ID «" + item.rawId() + "» уже занят; у " + subject
-                            + " он заменён на «" + id + "»"));
+                    diagnostics.add(Diagnostic.warning(item.line(),
+                            Texts.get("markdown.read.idTaken", item.rawId(), subject, id)));
                 }
             }
             return List.of(result);

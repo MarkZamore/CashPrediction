@@ -2,6 +2,8 @@ package ru.cashprediction.core.model;
 
 import java.time.DayOfWeek;
 import java.time.LocalDate;
+import ru.cashprediction.core.format.FormatWords;
+import ru.cashprediction.core.text.Texts;
 
 /**
  * Что делать, если плановая дата регулярной операции выпала на субботу или воскресенье.
@@ -9,31 +11,34 @@ import java.time.LocalDate;
  * <p>Пример: зарплату «5-го числа» бухгалтерия переводит в пятницу, если 5-е выпало на выходной.
  * Праздничные дни не учитываются: список праздников меняется каждый год, а план должен
  * оставаться переносимым текстовым файлом. Это ограничение показано в подсказке редактора.</p>
+ *
+ * <p>Слово для файла ({@link #label()}) берётся из грамматики формата ({@link FormatWords}), подпись для интерфейса
+ * ({@link #title()}) — из каталога текстов ({@link Texts}); оба лениво, при вызове.</p>
  */
 public enum WeekendPolicy {
     /** Дата не сдвигается. */
-    NONE("нет", "Не сдвигать"),
+    NONE,
     /** Суббота и воскресенье переносятся на предыдущую пятницу. */
-    PREVIOUS_BUSINESS_DAY("раньше", "На пятницу (раньше)"),
+    PREVIOUS_BUSINESS_DAY,
     /** Суббота и воскресенье переносятся на следующий понедельник. */
-    NEXT_BUSINESS_DAY("позже", "На понедельник (позже)");
-
-    private final String label;
-    private final String title;
-
-    WeekendPolicy(String label, String title) {
-        this.label = label;
-        this.title = title;
-    }
+    NEXT_BUSINESS_DAY;
 
     /** @return слово для файла плана: нет / раньше / позже */
     public String label() {
-        return label;
+        return switch (this) {
+            case NONE -> FormatWords.get("plan.weekend.none");
+            case PREVIOUS_BUSINESS_DAY -> FormatWords.get("plan.weekend.previous");
+            case NEXT_BUSINESS_DAY -> FormatWords.get("plan.weekend.next");
+        };
     }
 
     /** @return подпись для интерфейса */
     public String title() {
-        return title;
+        return switch (this) {
+            case NONE -> Texts.get("weekend.title.none");
+            case PREVIOUS_BUSINESS_DAY -> Texts.get("weekend.title.previous");
+            case NEXT_BUSINESS_DAY -> Texts.get("weekend.title.next");
+        };
     }
 
     /**

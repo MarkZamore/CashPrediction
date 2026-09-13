@@ -25,6 +25,7 @@ import ru.cashprediction.core.session.SnapshotSchema;
 import ru.cashprediction.core.session.WindowBounds;
 import ru.cashprediction.core.session.WindowState;
 import ru.cashprediction.core.session.WindowType;
+import ru.cashprediction.core.text.Texts;
 
 /**
  * XML-представление файла сессии {@code CashMemory/session-<клиент>.xml} (раздел 5.4 плана).
@@ -89,7 +90,7 @@ public final class XmlSnapshotCodec implements SnapshotCodec<String> {
     public SessionSnapshot decode(String encoded) throws SnapshotFormatException {
         SessionSnapshot snapshot = decodeDocument(encoded).snapshot();
         if (snapshot == null) {
-            throw new SnapshotFormatException("В XML-файле сессии нет снимка (элемент <main> отсутствует)");
+            throw new SnapshotFormatException(Texts.get("session.codec.xml.noSnapshot", "main"));
         }
         return snapshot;
     }
@@ -136,8 +137,7 @@ public final class XmlSnapshotCodec implements SnapshotCodec<String> {
     public SessionDocument decodeDocument(String text) throws SnapshotFormatException {
         Element root = parse(text).getDocumentElement();
         if (!"session".equals(root.getTagName())) {
-            throw new SnapshotFormatException("XML-файл сессии повреждён: корневой элемент <" + root.getTagName()
-                    + ">, ожидался <session>");
+            throw new SnapshotFormatException(Texts.get("session.codec.xml.badRoot", root.getTagName(), "session"));
         }
         try {
             int schema = CodecText.parseSchema(required(root, "schema"));
@@ -157,7 +157,7 @@ public final class XmlSnapshotCodec implements SnapshotCodec<String> {
             return new SessionDocument(client, marker, snapshot);
         } catch (IllegalArgumentException | NullPointerException e) {
             // Нарушение инвариантов записей (например, отрицательный размер окна).
-            throw new SnapshotFormatException("XML-файл сессии повреждён: " + e.getMessage(), e);
+            throw new SnapshotFormatException(Texts.get("session.codec.xml.corrupted", e.getMessage()), e);
         }
     }
 
@@ -322,7 +322,7 @@ public final class XmlSnapshotCodec implements SnapshotCodec<String> {
 
     private static Document parse(String text) throws SnapshotFormatException {
         if (text == null || text.isBlank()) {
-            throw new SnapshotFormatException("XML-файл сессии пуст");
+            throw new SnapshotFormatException(Texts.get("session.codec.xml.empty"));
         }
         try {
             DocumentBuilder builder = secureFactory().newDocumentBuilder();
@@ -345,12 +345,13 @@ public final class XmlSnapshotCodec implements SnapshotCodec<String> {
             });
             return builder.parse(new InputSource(new StringReader(text)));
         } catch (SAXParseException e) {
-            throw new SnapshotFormatException("XML-файл сессии повреждён (строка " + e.getLineNumber() + ", столбец "
-                    + e.getColumnNumber() + "): " + e.getMessage(), e);
+            throw new SnapshotFormatException(Texts.get("session.codec.xml.corruptedAt", e.getLineNumber(),
+                    e.getColumnNumber(), e.getMessage()), e);
         } catch (SAXException | IOException e) {
-            throw new SnapshotFormatException("XML-файл сессии повреждён: " + e.getMessage(), e);
+            throw new SnapshotFormatException(Texts.get("session.codec.xml.corrupted", e.getMessage()), e);
         } catch (ParserConfigurationException e) {
-            throw new IllegalStateException("XML-парсер JDK не поддерживает защищённый режим", e);
+            // Сборка JDK без защищённого режима — неисправность окружения, а не данных: сообщение для разработчика.
+            throw new IllegalStateException("JDK XML parser does not support secure processing", e);
         }
     }
 
@@ -443,8 +444,7 @@ public final class XmlSnapshotCodec implements SnapshotCodec<String> {
 
     private static String required(Element element, String name) throws SnapshotFormatException {
         if (!element.hasAttribute(name)) {
-            throw new SnapshotFormatException("XML-файл сессии повреждён: у элемента <" + element.getTagName()
-                    + "> нет атрибута «" + name + "»");
+            throw new SnapshotFormatException(Texts.get("session.codec.xml.missingAttribute", element.getTagName(), name));
         }
         return element.getAttribute(name);
     }

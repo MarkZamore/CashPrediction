@@ -78,6 +78,45 @@ class PlanMarkdownToleranceTest {
         assertEquals(new Recurrence.Weekly(DayOfWeek.THURSDAY, 2), plan.rules().get(2).recurrence());
     }
 
+    /**
+     * Синонимы, сокращения и однокоренные слова грамматики формата, которые писатель не выводит, но чтение понимает
+     * (format.properties: *.alias, *.abbr, *.stem): план, записанный вручную, читается так же, как до этапа S0.5.
+     */
+    @Test
+    void grammarAliasesAbbreviationsAndStems() {
+        String text = HEAD + """
+                ## Регулярные операции
+
+                | ID | Название | Тип | Сумма | Повтор | Выходные |
+                |----|----------|-----|-------|--------|----------|
+                | r1 | Спорт | расход | 500 | каждые 5 нед. чт | не сдвигать |
+                | r2 | Кофе | расход | 100 | каждые 7 дн. | на понедельник |
+                | r3 | Рынок | расход | 900 | еженедельно вс | На пятницу |
+
+                ## Корректировки
+
+                | Правило | Исходная дата | Действие | Новая сумма | Новая дата |
+                |---------|---------------|----------|-------------|------------|
+                | r1 | 2026-09-03 | изменение | 700 | |
+                | r3 | 2026-09-06 | Перенос | | 2026-09-07 |
+                """;
+        ReadResult result = PlanMarkdownReader.read(text, "x", TODAY);
+        assertEquals(List.of(), result.diagnostics().stream().filter(d -> d.severity() == Severity.ERROR).toList());
+        Plan plan = result.plan();
+        assertEquals(3, plan.rules().size(), plan.rules().toString());
+        assertEquals(new Recurrence.Weekly(DayOfWeek.THURSDAY, 5), plan.rules().get(0).recurrence());
+        assertEquals(WeekendPolicy.NONE, plan.rules().get(0).weekendPolicy());
+        assertEquals(new Recurrence.EveryNDays(7), plan.rules().get(1).recurrence());
+        assertEquals(WeekendPolicy.NEXT_BUSINESS_DAY, plan.rules().get(1).weekendPolicy());
+        assertEquals(new Recurrence.Weekly(DayOfWeek.SUNDAY, 1), plan.rules().get(2).recurrence());
+        assertEquals(WeekendPolicy.PREVIOUS_BUSINESS_DAY, plan.rules().get(2).weekendPolicy());
+        assertEquals(2, plan.adjustments().size(), plan.adjustments().toString());
+        assertEquals(new ru.cashprediction.core.model.Adjustment.ChangeAmount(Money.ofMajor(700)),
+                plan.adjustments().get(0).action());
+        assertEquals(new ru.cashprediction.core.model.Adjustment.MoveDate(LocalDate.of(2026, 9, 7)),
+                plan.adjustments().get(1).action());
+    }
+
     @Test
     void swappedColumnOrderAndExtraColumn() {
         String text = HEAD + """

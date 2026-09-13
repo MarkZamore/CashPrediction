@@ -15,6 +15,7 @@ import java.nio.file.StandardOpenOption;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.regex.Pattern;
+import ru.cashprediction.core.text.Texts;
 
 /**
  * Атомарная запись файлов CashMemory.
@@ -71,7 +72,7 @@ public final class AtomicFiles {
     public static void write(Path target, byte[] bytes) throws IOException {
         Path dir = target.toAbsolutePath().getParent();
         if (dir == null) {
-            throw new IOException("У файла нет родительской папки: " + target);
+            throw new IOException(Texts.get("io.error.noParentFolder", target));
         }
         Files.createDirectories(dir);
         Path tmp = dir.resolve(target.getFileName() + "." + ProcessHandle.current().pid() + "." + System.nanoTime() + ".tmp");

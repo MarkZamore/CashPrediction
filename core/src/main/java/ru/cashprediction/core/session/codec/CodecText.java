@@ -4,6 +4,7 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.format.DateTimeParseException;
 import ru.cashprediction.core.session.SnapshotSchema;
+import ru.cashprediction.core.text.Texts;
 
 /**
  * Общие для кодеков преобразования простых значений в текст и обратно.
@@ -64,7 +65,7 @@ final class CodecText {
             }
             return value;
         } catch (NumberFormatException e) {
-            throw new SnapshotFormatException("Некорректное число в «" + what + "»: «" + text + "»", e);
+            throw new SnapshotFormatException(Texts.get("session.codec.error.number", what, text), e);
         }
     }
 
@@ -80,7 +81,7 @@ final class CodecText {
         try {
             return Long.parseLong(text.strip());
         } catch (NumberFormatException e) {
-            throw new SnapshotFormatException("Некорректное целое число в «" + what + "»: «" + text + "»", e);
+            throw new SnapshotFormatException(Texts.get("session.codec.error.integer", what, text), e);
         }
     }
 
@@ -96,7 +97,7 @@ final class CodecText {
         return switch (text) {
             case "true" -> true;
             case "false" -> false;
-            default -> throw new SnapshotFormatException("Ожидалось true или false в «" + what + "»: «" + text + "»");
+            default -> throw new SnapshotFormatException(Texts.get("session.codec.error.boolean", what, text));
         };
     }
 
@@ -112,7 +113,7 @@ final class CodecText {
         try {
             return Instant.parse(text.strip());
         } catch (DateTimeParseException e) {
-            throw new SnapshotFormatException("Некорректный момент времени в «" + what + "»: «" + text + "»", e);
+            throw new SnapshotFormatException(Texts.get("session.codec.error.instant", what, text), e);
         }
     }
 
@@ -126,7 +127,7 @@ final class CodecText {
     static int parseSchema(String text) throws SnapshotFormatException {
         long value = parseLong(text, "schema");
         if (value < 1 || value > Integer.MAX_VALUE) {
-            throw new SnapshotFormatException("Некорректная версия схемы снимка: " + text);
+            throw new SnapshotFormatException(Texts.get("session.codec.error.schemaVersion", text));
         }
         return checkSchema((int) value);
     }

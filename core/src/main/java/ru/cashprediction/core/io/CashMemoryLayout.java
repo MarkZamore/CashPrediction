@@ -107,7 +107,8 @@ public final class CashMemoryLayout {
     public static String sessionXmlFileName(String client) {
         // Проверка не даёт составить путь вида «session-../x.xml» за пределами CashMemory.
         if (client == null || !CLIENT_ID.matcher(client).matches()) {
-            throw new IllegalArgumentException("Некорректный идентификатор клиента: «" + client + "»");
+            // Идентификатор клиента задаётся константой в коде клиента, а не пользователем: сообщение для разработчика.
+            throw new IllegalArgumentException("Invalid client id: '" + client + "'");
         }
         return SESSION_XML_PREFIX + client + SESSION_XML_SUFFIX;
     }

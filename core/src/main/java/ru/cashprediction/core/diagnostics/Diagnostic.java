@@ -1,6 +1,7 @@
 package ru.cashprediction.core.diagnostics;
 
 import java.util.Objects;
+import ru.cashprediction.core.text.Texts;
 
 /**
  * Одно диагностическое сообщение: что не так, где и насколько серьёзно.
@@ -11,7 +12,7 @@ import java.util.Objects;
  *
  * @param severity важность
  * @param line     номер строки файла, начиная с 1; 0 — сообщение не относится к конкретной строке
- * @param message  понятный человеку текст на русском
+ * @param message  понятный человеку текст (готовый текст из каталога текстов)
  */
 public record Diagnostic(Severity severity, int line, String message) {
 
@@ -20,7 +21,8 @@ public record Diagnostic(Severity severity, int line, String message) {
         Objects.requireNonNull(severity, "severity");
         Objects.requireNonNull(message, "message");
         if (line < 0) {
-            throw new IllegalArgumentException("Номер строки не может быть отрицательным");
+            // Отрицательный номер строки может передать только ошибочный код ядра: сообщение для разработчика.
+            throw new IllegalArgumentException("Line number must not be negative");
         }
     }
 
@@ -55,12 +57,14 @@ public record Diagnostic(Severity severity, int line, String message) {
     }
 
     /**
-     * Текст для списка в диалоге диагностики.
+     * Текст для списка в диалоге диагностики (шаблоны {@code diagnostic.format.*} каталога текстов).
      *
      * @return например «Ошибка, строка 27: Некорректная сумма: «8о 000»»
      */
     public String format() {
-        return severity.title() + (line > 0 ? ", строка " + line : "") + ": " + message;
+        return line > 0
+                ? Texts.get("diagnostic.format.withLine", severity.title(), line, message)
+                : Texts.get("diagnostic.format.noLine", severity.title(), message);
     }
 
     /** @return то же, что {@link #format()} */

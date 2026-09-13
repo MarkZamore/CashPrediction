@@ -3,6 +3,7 @@ package ru.cashprediction.core.forecast;
 import java.math.BigDecimal;
 import java.util.Objects;
 import ru.cashprediction.core.model.Money;
+import ru.cashprediction.core.text.Texts;
 
 /**
  * Параметры режима «что-если»: прогноз без изменения самого плана.
@@ -30,10 +31,10 @@ public record WhatIf(BigDecimal incomeFactor, BigDecimal expenseFactor, Money ex
         Objects.requireNonNull(expenseFactor, "expenseFactor");
         Objects.requireNonNull(extraMonthlySaving, "extraMonthlySaving");
         if (incomeFactor.signum() < 0 || expenseFactor.signum() < 0) {
-            throw new IllegalArgumentException("Коэффициент «что-если» не может быть отрицательным");
+            throw new IllegalArgumentException(Texts.get("forecast.whatIf.error.negativeFactor"));
         }
         if (extraMonthlySaving.isNegative()) {
-            throw new IllegalArgumentException("Дополнительная экономия не может быть отрицательной");
+            throw new IllegalArgumentException(Texts.get("forecast.whatIf.error.negativeExtra"));
         }
     }
 

@@ -46,6 +46,7 @@ import ru.cashprediction.core.model.RuleId;
 import ru.cashprediction.core.model.TxId;
 import ru.cashprediction.core.model.WeekendPolicy;
 import ru.cashprediction.core.util.DateFormats;
+import ru.cashprediction.core.text.Texts;
 import ru.cashprediction.core.util.RuText;
 
 /**
@@ -117,7 +118,7 @@ public final class PlanJson {
         String name = Json.requireString(map, "name");
         LocalDate startDate = requireDate(map, "startDate");
         Horizon horizon = horizonFrom(Json.optionalObject(map, "horizon")
-                .orElseThrow(() -> new JsonException("Отсутствует обязательное поле «horizon»")));
+                .orElseThrow(() -> Json.missing("horizon")));
         Goal goal = Json.optionalObject(map, "goal").map(PlanJson::goalFrom).orElse(null);
         return new Plan(name,
                 Json.string(map, "note", ""),
@@ -179,11 +180,10 @@ public final class PlanJson {
                 case "MONTHS" -> new Horizon.Months(requireInt(map, "count"));
                 case "YEARS" -> new Horizon.Years(requireInt(map, "count"));
                 case "UNTIL" -> new Horizon.Until(requireDate(map, "until"));
-                default -> throw new JsonException("Поле «kind»: неизвестный вид горизонта «" + kind
-                        + "» (ожидается MONTHS, YEARS или UNTIL)");
+                default -> throw new JsonException(Texts.get("json.plan.unknownHorizonKind", kind));
             };
         } catch (IllegalArgumentException e) {
-            throw new JsonException("Горизонт: " + e.getMessage());
+            throw new JsonException(Texts.get("json.plan.horizon", e.getMessage()));
         }
     }
 
@@ -268,7 +268,7 @@ public final class PlanJson {
             String idText = Json.string(map, "id", "");
             RuleId id = idText.isBlank() ? requireDefault(defaultId, "id") : new RuleId(idText);
             Recurrence recurrence = recurrenceFrom(Json.optionalObject(map, "recurrence")
-                    .orElseThrow(() -> new JsonException("Отсутствует обязательное поле «recurrence»")));
+                    .orElseThrow(() -> Json.missing("recurrence")));
             return new RecurringRule(id,
                     Json.string(map, "title", ""),
                     requireEnum(Kind.class, map, "kind"),
@@ -281,7 +281,7 @@ public final class PlanJson {
                     Json.bool(map, "enabled", true),
                     Json.string(map, "note", ""));
         } catch (IllegalArgumentException e) {
-            throw new JsonException("Регулярная операция: " + e.getMessage());
+            throw new JsonException(Texts.get("json.plan.rule", e.getMessage()));
         }
     }
 
@@ -340,7 +340,7 @@ public final class PlanJson {
                 case YEARLY -> new Recurrence.Yearly(monthDay(map, "monthDay"));
             };
         } catch (IllegalArgumentException e) {
-            throw new JsonException("Повтор: " + e.getMessage());
+            throw new JsonException(Texts.get("json.plan.recurrence", e.getMessage()));
         }
     }
 
@@ -397,7 +397,7 @@ public final class PlanJson {
                     Json.string(map, "category", ""),
                     Json.string(map, "note", ""));
         } catch (IllegalArgumentException e) {
-            throw new JsonException("Разовая операция: " + e.getMessage());
+            throw new JsonException(Texts.get("json.plan.oneTime", e.getMessage()));
         }
     }
 
@@ -441,7 +441,7 @@ public final class PlanJson {
             Adjustment.Action action = RuFormats.buildAction(type, optionalMoney(map, "amount"), optionalDate(map, "date"));
             return new Adjustment(key, action, Json.string(map, "note", ""));
         } catch (IllegalArgumentException e) {
-            throw new JsonException("Корректировка: " + e.getMessage());
+            throw new JsonException(Texts.get("json.plan.adjustment", e.getMessage()));
         }
     }
 
@@ -473,7 +473,7 @@ public final class PlanJson {
         List<Object> items = Json.list(map, "lines");
         for (int i = 0; i < items.size(); i++) {
             if (!(items.get(i) instanceof String line)) {
-                throw new JsonException("Элемент lines[" + i + "] должен быть строкой, получено: " + Json.typeName(items.get(i)));
+                throw new JsonException(Texts.get("json.plan.itemNotString", "lines", i, Json.typeName(items.get(i))));
             }
             lines.add(line);
         }
@@ -734,7 +734,7 @@ public final class PlanJson {
             return new WhatIf(decimal(map, "incomeFactor"), decimal(map, "expenseFactor"),
                     money(map, "extraMonthlySaving", Money.ZERO));
         } catch (IllegalArgumentException e) {
-            throw new JsonException("Что-если: " + e.getMessage());
+            throw new JsonException(Texts.get("json.plan.whatIf", e.getMessage()));
         }
     }
 
@@ -799,7 +799,7 @@ public final class PlanJson {
         List<Object> items = Json.list(map, "recentPlans");
         for (int i = 0; i < items.size(); i++) {
             if (!(items.get(i) instanceof String entry)) {
-                throw new JsonException("Элемент recentPlans[" + i + "] должен быть строкой, получено: " + Json.typeName(items.get(i)));
+                throw new JsonException(Texts.get("json.plan.itemNotString", "recentPlans", i, Json.typeName(items.get(i))));
             }
             recent.add(entry);
         }
@@ -854,7 +854,7 @@ public final class PlanJson {
             try {
                 result.add(reader.apply(Json.asObject(items.get(i), where)));
             } catch (JsonException e) {
-                throw new JsonException("Элемент " + where + ": " + e.getMessage());
+                throw new JsonException(Texts.get("json.plan.element", where, e.getMessage()));
             }
         }
         return result;
@@ -862,7 +862,7 @@ public final class PlanJson {
 
     private static <T> T requireDefault(T value, String key) {
         if (value == null) {
-            throw new JsonException("Отсутствует обязательное поле «" + key + "»");
+            throw Json.missing(key);
         }
         return value;
     }
@@ -876,8 +876,19 @@ public final class PlanJson {
         try {
             return DateFormats.parse(text);
         } catch (IllegalArgumentException e) {
-            throw new JsonException("Поле «" + key + "»: " + e.getMessage());
+            throw fieldInvalid(key, e.getMessage());
         }
+    }
+
+    /**
+     * Ошибка «Поле «ключ»: причина». Прежний web-клиент узнаёт такие ошибки по началу «Поле ».
+     *
+     * @param key    имя поля
+     * @param reason причина на языке интерфейса
+     * @return исключение с готовым сообщением
+     */
+    private static JsonException fieldInvalid(String key, String reason) {
+        return new JsonException(Texts.get("json.plan.fieldInvalid", key, reason));
     }
 
     private static LocalDate requireDate(Map<String, Object> map, String key) {
@@ -897,10 +908,10 @@ public final class PlanJson {
                 case String s -> Money.parse(s);
                 case Long l -> Money.ofMajor(l);
                 case BigDecimal bd -> Money.parse(bd.toPlainString());
-                default -> throw new JsonException("Поле «" + key + "» должно быть суммой (строкой), получено: " + Json.typeName(value));
+                default -> throw new JsonException(Texts.get("json.plan.moneyWrongType", key, Json.typeName(value)));
             };
         } catch (IllegalArgumentException | ArithmeticException e) {
-            throw new JsonException("Поле «" + key + "»: " + e.getMessage());
+            throw fieldInvalid(key, e.getMessage());
         }
     }
 
@@ -922,10 +933,10 @@ public final class PlanJson {
                 case String s -> new BigDecimal(s.strip().replace(',', '.'));
                 case Long l -> BigDecimal.valueOf(l);
                 case BigDecimal bd -> bd;
-                default -> throw new JsonException("Поле «" + key + "» должно быть числом, получено: " + Json.typeName(value));
+                default -> throw Json.wrongType(key, "json.expected.number", value);
             };
         } catch (NumberFormatException e) {
-            throw new JsonException("Поле «" + key + "»: некорректное число «" + value + "»");
+            throw new JsonException(Texts.get("json.plan.numberInvalid", key, value));
         }
     }
 
@@ -940,13 +951,13 @@ public final class PlanJson {
             try {
                 number = Long.parseLong(s.strip());
             } catch (NumberFormatException e) {
-                throw new JsonException("Поле «" + key + "» должно быть целым числом, получено: «" + s + "»");
+                throw new JsonException(Texts.get("json.plan.integerInvalid", key, s));
             }
         } else {
             number = Json.longValue(map, key, 0);
         }
         if (number < Integer.MIN_VALUE || number > Integer.MAX_VALUE) {
-            throw new JsonException("Поле «" + key + "»: число вне допустимого диапазона");
+            throw new JsonException(Texts.get("json.plan.integerOutOfRange", key));
         }
         return (int) number;
     }
@@ -972,8 +983,8 @@ public final class PlanJson {
                 return constant;
             }
         }
-        throw new JsonException("Поле «" + key + "»: неизвестное значение «" + text + "» (ожидается одно из: "
-                + String.join(", ", Arrays.stream(type.getEnumConstants()).map(Enum::name).toList()) + ")");
+        throw new JsonException(Texts.get("json.plan.unknownEnumValue", key, text,
+                String.join(", ", Arrays.stream(type.getEnumConstants()).map(Enum::name).toList())));
     }
 
     private static <E extends Enum<E>> E requireEnum(Class<E> type, Map<String, Object> map, String key) {
@@ -986,7 +997,7 @@ public final class PlanJson {
         if (text == null || text.isBlank()) {
             return defaultValue;
         }
-        return parser.apply(text).orElseThrow(() -> new JsonException("Поле «" + key + "»: неизвестное значение «" + text + "»"));
+        return parser.apply(text).orElseThrow(() -> new JsonException(Texts.get("json.plan.unknownValue", key, text)));
     }
 
     /** День недели: имя константы ({@code SATURDAY}) или русское название («сб», «суббота»). */
@@ -1001,7 +1012,7 @@ public final class PlanJson {
         // вылетел бы NullPointerException из конструктора повтора вместо понятного ответа 400.
         DayOfWeek day = RuText.parseWeekday(text);
         if (day == null) {
-            throw new JsonException("Поле «" + key + "»: неизвестный день недели «" + text + "»");
+            throw new JsonException(Texts.get("json.plan.unknownWeekday", key, text));
         }
         return day;
     }
@@ -1012,7 +1023,7 @@ public final class PlanJson {
         try {
             return MonthDay.parse(text.startsWith("--") ? text : "--" + text);
         } catch (DateTimeParseException e) {
-            throw new JsonException("Поле «" + key + "»: некорректный день года «" + text + "» (ожидается ММ-ДД)");
+            throw new JsonException(Texts.get("json.plan.badMonthDay", key, text));
         }
     }
 }

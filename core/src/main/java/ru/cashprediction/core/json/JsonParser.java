@@ -5,6 +5,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import ru.cashprediction.core.text.Texts;
 
 /**
  * Строгий разборщик JSON по RFC 8259 без внешних библиотек.
@@ -25,6 +26,9 @@ import java.util.Map;
  * повторяющиеся ключи (они почти всегда означают склейку двух документов), мусор после значения
  * и BOM. Глубина вложенности ограничена {@value #MAX_DEPTH}, чтобы злонамеренный запрос вида
  * {@code [[[[...} не переполнил стек сервера.</p>
+ *
+ * <p>Сообщения об ошибках доходят до пользователя (ответ web-API, отчёт восстановления), поэтому берутся из
+ * каталога текстов: общий вид {@code json.parse.position} и причина {@code json.parse.*}.</p>
  *
  * <p>Класс без состояния (каждый вызов создаёт свой внутренний курсор), потокобезопасен.</p>
  */
@@ -55,17 +59,17 @@ public final class JsonParser {
      */
     public static Object parse(String text) {
         if (text == null) {
-            throw new JsonException("Некорректный JSON: текст отсутствует (null)");
+            throw new JsonException(Texts.get("json.parse.null"));
         }
         JsonParser parser = new JsonParser(text);
         parser.skipWhitespace();
         if (parser.pos >= text.length()) {
-            throw parser.error("пустой текст, ожидалось значение");
+            throw parser.error(Texts.get("json.parse.empty"));
         }
         Object value = parser.readValue();
         parser.skipWhitespace();
         if (parser.pos < text.length()) {
-            throw parser.error("лишние символы после значения");
+            throw parser.error(Texts.get("json.parse.trailing"));
         }
         return value;
     }
@@ -78,13 +82,13 @@ public final class JsonParser {
      * @throws JsonException если текст некорректен или значение верхнего уровня не объект
      */
     public static Map<String, Object> parseObject(String text) {
-        return Json.asObject(parse(text), "документ");
+        return Json.asObject(parse(text), Texts.get("json.what.document"));
     }
 
     private Object readValue() {
         skipWhitespace();
         if (pos >= text.length()) {
-            throw error("неожиданный конец текста, ожидалось значение");
+            throw error(Texts.get("json.parse.unexpectedEnd"));
         }
         char c = text.charAt(pos);
         return switch (c) {
@@ -98,7 +102,7 @@ public final class JsonParser {
                 if (c == '-' || (c >= '0' && c <= '9')) {
                     yield readNumber();
                 }
-                throw error("неожиданный символ " + describe(c) + ", ожидалось значение");
+                throw error(Texts.get("json.parse.unexpectedChar", describe(c)));
             }
         };
     }
@@ -116,15 +120,18 @@ public final class JsonParser {
         while (true) {
             skipWhitespace();
             if (peek() != '"') {
-                throw error("ожидалось имя поля в двойных кавычках");
+                throw error(Texts.get("json.parse.expectedKey"));
             }
             int keyStart = pos;
             String key = readString();
             skipWhitespace();
-            expect(':', "ожидалось «:» после имени поля");
+            if (peek() != ':') {
+                throw error(Texts.get("json.parse.expectedColon"));
+            }
+            pos++;
             Object value = readValue();
             if (result.containsKey(key)) {
-                throw errorAt(keyStart, "повторяющееся имя поля «" + key + "»");
+                throw errorAt(keyStart, Texts.get("json.parse.duplicateKey", key));
             }
             result.put(key, value);
             skipWhitespace();
@@ -136,7 +143,7 @@ public final class JsonParser {
                 depth--;
                 return result;
             } else {
-                throw error("ожидалась «,» или «}»");
+                throw error(Texts.get("json.parse.expectedCommaOrBrace"));
             }
         }
     }
@@ -162,7 +169,7 @@ public final class JsonParser {
                 depth--;
                 return result;
             } else {
-                throw error("ожидалась «,» или «]»");
+                throw error(Texts.get("json.parse.expectedCommaOrBracket"));
             }
         }
     }
@@ -172,7 +179,7 @@ public final class JsonParser {
         StringBuilder sb = new StringBuilder();
         while (true) {
             if (pos >= text.length()) {
-                throw error("строка не закрыта кавычкой");
+                throw error(Texts.get("json.parse.unclosedString"));
             }
             char c = text.charAt(pos);
             if (c == '"') {
@@ -182,7 +189,7 @@ public final class JsonParser {
             if (c == '\\') {
                 pos++;
                 if (pos >= text.length()) {
-                    throw error("строка не закрыта кавычкой");
+                    throw error(Texts.get("json.parse.unclosedString"));
                 }
                 char e = text.charAt(pos);
                 switch (e) {
@@ -197,13 +204,13 @@ public final class JsonParser {
                     case 'u' -> {
                         // Нужны четыре символа после 'u': позиции pos+1..pos+4.
                         if (pos + 4 >= text.length()) {
-                            throw error("неполная escape-последовательность \\u");
+                            throw error(Texts.get("json.parse.incompleteUnicodeEscape"));
                         }
                         int code = 0;
                         for (int i = 1; i <= 4; i++) {
                             int digit = Character.digit(text.charAt(pos + i), 16);
                             if (digit < 0) {
-                                throw errorAt(pos + i, "в escape-последовательности \\u ожидалась шестнадцатеричная цифра");
+                                throw errorAt(pos + i, Texts.get("json.parse.badHexDigit"));
                             }
                             code = code * 16 + digit;
                         }
@@ -211,13 +218,13 @@ public final class JsonParser {
                         sb.append((char) code);
                         pos += 4;
                     }
-                    default -> throw error("недопустимая escape-последовательность \\" + e);
+                    default -> throw error(Texts.get("json.parse.badEscape", e));
                 }
                 pos++;
                 continue;
             }
             if (c < 0x20) {
-                throw error("управляющий символ " + describe(c) + " внутри строки должен быть экранирован");
+                throw error(Texts.get("json.parse.controlChar", describe(c)));
             }
             sb.append(c);
             pos++;
@@ -230,12 +237,12 @@ public final class JsonParser {
             pos++;
         }
         if (pos >= text.length() || !isDigit(text.charAt(pos))) {
-            throw error("после знака минус ожидалась цифра");
+            throw error(Texts.get("json.parse.digitAfterMinus"));
         }
         if (text.charAt(pos) == '0') {
             pos++;
             if (pos < text.length() && isDigit(text.charAt(pos))) {
-                throw error("ведущие нули в числе не допускаются");
+                throw error(Texts.get("json.parse.leadingZeros"));
             }
         } else {
             while (pos < text.length() && isDigit(text.charAt(pos))) {
@@ -247,7 +254,7 @@ public final class JsonParser {
             integer = false;
             pos++;
             if (pos >= text.length() || !isDigit(text.charAt(pos))) {
-                throw error("после десятичной точки ожидалась цифра");
+                throw error(Texts.get("json.parse.digitAfterPoint"));
             }
             while (pos < text.length() && isDigit(text.charAt(pos))) {
                 pos++;
@@ -260,7 +267,7 @@ public final class JsonParser {
                 pos++;
             }
             if (pos >= text.length() || !isDigit(text.charAt(pos))) {
-                throw error("в экспоненте числа ожидалась цифра");
+                throw error(Texts.get("json.parse.digitInExponent"));
             }
             while (pos < text.length() && isDigit(text.charAt(pos))) {
                 pos++;
@@ -279,13 +286,13 @@ public final class JsonParser {
             return new BigDecimal(literal);
         } catch (NumberFormatException | ArithmeticException e) {
             // Например, экспонента за пределами int: грамматически верно, но непредставимо.
-            throw errorAt(start, "число «" + literal + "» не удаётся представить");
+            throw errorAt(start, Texts.get("json.parse.numberUnrepresentable", literal));
         }
     }
 
     private Object readLiteral(String literal, Object value) {
         if (!text.startsWith(literal, pos)) {
-            throw error("неизвестное слово, ожидалось «" + literal + "»");
+            throw error(Texts.get("json.parse.unknownWord", literal));
         }
         pos += literal.length();
         return value;
@@ -294,15 +301,8 @@ public final class JsonParser {
     private void enter() {
         depth++;
         if (depth > MAX_DEPTH) {
-            throw error("слишком глубокая вложенность (больше " + MAX_DEPTH + ")");
+            throw error(Texts.get("json.parse.tooDeep", MAX_DEPTH));
         }
-    }
-
-    private void expect(char expected, String message) {
-        if (peek() != expected) {
-            throw error(message);
-        }
-        pos++;
     }
 
     /** @return текущий символ или {@code \0}, если текст закончился (такого символа в JSON вне строк не бывает) */
@@ -342,9 +342,7 @@ public final class JsonParser {
                 column++;
             }
         }
-        String message = "Некорректный JSON, строка " + line + ", столбец " + column
-                + " (позиция " + at + "): " + detail;
-        return new JsonException(message, at);
+        return new JsonException(Texts.get("json.parse.position", line, column, at, detail), at);
     }
 
     private static String describe(char c) {

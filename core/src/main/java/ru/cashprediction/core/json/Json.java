@@ -7,6 +7,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import ru.cashprediction.core.text.Texts;
 
 /**
  * Типизированные аксессоры для объектов, полученных из {@link JsonParser}.
@@ -14,8 +15,8 @@ import java.util.Optional;
  * <p>Зачем: разобранный JSON — это {@code Map<String, Object>}, и каждое чтение поля требует
  * проверки типа. Без этих методов код web-API и кодека снимка превратился бы в лес
  * {@code instanceof} с разными сообщениями об ошибках. Здесь правило одно: отсутствующее поле или
- * {@code null} → значение по умолчанию; поле неверного типа → {@link JsonException} с русским
- * сообщением вида «Поле «pid» должно быть целым числом».</p>
+ * {@code null} → значение по умолчанию; поле неверного типа → {@link JsonException} с сообщением из каталога
+ * текстов вида «Поле «pid» должно быть целым числом» (ключи {@code json.error.*}, область {@code json}).</p>
  *
  * <p>Класс без состояния, потокобезопасен.</p>
  */
@@ -37,12 +38,12 @@ public final class Json {
         if (value instanceof Map<?, ?> map) {
             for (Object key : map.keySet()) {
                 if (!(key instanceof String)) {
-                    throw new JsonException("Значение «" + what + "» содержит нестроковое имя поля");
+                    throw new JsonException(Texts.get("json.error.nonStringKey", what));
                 }
             }
             return (Map<String, Object>) map;
         }
-        throw new JsonException("Значение «" + what + "» должно быть JSON-объектом, получено: " + typeName(value));
+        throw new JsonException(Texts.get("json.error.notObject", what, typeName(value)));
     }
 
     /**
@@ -62,7 +63,7 @@ public final class Json {
         if (value instanceof String s) {
             return s;
         }
-        throw wrongType(key, "строкой", value);
+        throw wrongType(key, "json.expected.string", value);
     }
 
     /**
@@ -98,7 +99,7 @@ public final class Json {
         if (value instanceof Boolean b) {
             return b;
         }
-        throw wrongType(key, "логическим значением (true/false)", value);
+        throw wrongType(key, "json.expected.boolean", value);
     }
 
     /**
@@ -129,10 +130,10 @@ public final class Json {
                 try {
                     return bd.longValueExact();
                 } catch (ArithmeticException e) {
-                    throw wrongType(key, "целым числом", value);
+                    throw wrongType(key, "json.expected.integer", value);
                 }
             }
-            default -> throw wrongType(key, "целым числом", value);
+            default -> throw wrongType(key, "json.expected.integer", value);
         }
     }
 
@@ -168,7 +169,7 @@ public final class Json {
         if (value instanceof Number n) {
             return n.doubleValue();
         }
-        throw wrongType(key, "числом", value);
+        throw wrongType(key, "json.expected.number", value);
     }
 
     /**
@@ -188,7 +189,7 @@ public final class Json {
             // List.copyOf не принимает null-элементы, а JSON-массив может их содержать.
             return Collections.unmodifiableList(new ArrayList<Object>(items));
         }
-        throw wrongType(key, "массивом", value);
+        throw wrongType(key, "json.expected.array", value);
     }
 
     /**
@@ -219,31 +220,45 @@ public final class Json {
         if (value instanceof Map<?, ?>) {
             return Optional.of(asObject(value, key));
         }
-        throw wrongType(key, "объектом", value);
-    }
-
-    private static JsonException wrongType(String key, String expected, Object actual) {
-        return new JsonException("Поле «" + key + "» должно быть " + expected + ", получено: " + typeName(actual));
-    }
-
-    private static JsonException missing(String key) {
-        return new JsonException("Отсутствует обязательное поле «" + key + "»");
+        throw wrongType(key, "json.expected.object", value);
     }
 
     /**
-     * Название JSON-типа значения по-русски, для сообщений об ошибках.
+     * Ошибка «поле неверного типа».
+     *
+     * @param key         имя поля
+     * @param expectedKey ключ каталога с ожидаемым типом в творительном падеже ({@code json.expected.*})
+     * @param actual      фактическое значение
+     * @return исключение с готовым сообщением
+     */
+    static JsonException wrongType(String key, String expectedKey, Object actual) {
+        return new JsonException(Texts.get("json.error.wrongType", key, Texts.get(expectedKey), typeName(actual)));
+    }
+
+    /**
+     * Ошибка «нет обязательного поля».
+     *
+     * @param key имя поля
+     * @return исключение с готовым сообщением
+     */
+    static JsonException missing(String key) {
+        return new JsonException(Texts.get("json.error.missingField", key));
+    }
+
+    /**
+     * Название JSON-типа значения на языке интерфейса, для сообщений об ошибках.
      *
      * @param value значение из разборщика
-     * @return например «строка», «число», «массив»
+     * @return например «строка», «число», «массив»; для {@code null} — {@code null}, для чужого класса — его имя
      */
     public static String typeName(Object value) {
         return switch (value) {
             case null -> "null";
-            case String _ -> "строка";
-            case Boolean _ -> "логическое значение";
-            case Number _ -> "число";
-            case Map<?, ?> _ -> "объект";
-            case List<?> _ -> "массив";
+            case String _ -> Texts.get("json.type.string");
+            case Boolean _ -> Texts.get("json.type.boolean");
+            case Number _ -> Texts.get("json.type.number");
+            case Map<?, ?> _ -> Texts.get("json.type.object");
+            case List<?> _ -> Texts.get("json.type.array");
             default -> value.getClass().getSimpleName();
         };
     }

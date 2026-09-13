@@ -5,6 +5,7 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.util.Properties;
+import ru.cashprediction.core.text.Texts;
 
 /**
  * Версия приложения, одинаковая для всех трёх клиентов.
@@ -62,12 +63,13 @@ public final class AppInfo {
      * @return «Версия 12 (a1b2c3d)» для релиза или «Сборка разработчика» для локальной сборки
      */
     public static String displayVersion() {
+        // Тексты — из каталога (appinfo.version.*); номер релиза подставляется без разделителя разрядов.
         if (isDevelopmentBuild()) {
-            return "Сборка разработчика";
+            return Texts.get("appinfo.version.dev");
         }
         return COMMIT.isEmpty()
-                ? "Версия " + RELEASE
-                : "Версия " + RELEASE + " (" + COMMIT.substring(0, Math.min(7, COMMIT.length())) + ")";
+                ? Texts.get("appinfo.version.release", RELEASE)
+                : Texts.get("appinfo.version.releaseCommit", RELEASE, COMMIT.substring(0, Math.min(7, COMMIT.length())));
     }
 
     /**

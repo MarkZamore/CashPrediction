@@ -10,6 +10,7 @@ import ru.cashprediction.core.document.AppSettings;
 import ru.cashprediction.core.document.PeriodChoice;
 import ru.cashprediction.core.document.RecoveryStoreKind;
 import ru.cashprediction.core.document.ViewMode;
+import ru.cashprediction.core.format.FormatWords;
 import ru.cashprediction.core.io.AtomicFiles;
 
 /**
@@ -44,37 +45,40 @@ import ru.cashprediction.core.io.AtomicFiles;
  */
 public final class SettingsMarkdown {
 
+    // Значения ниже — грамматика settings.md из нелокализуемого ресурса FormatWords (решение L13): файл настроек
+    // читается при любом языке интерфейса. Константы заполняются при загрузке класса, а не при компиляции.
+
     /** Первая строка файла настроек. */
-    public static final String TITLE = "# Настройки CashPrediction";
+    public static final String TITLE = FormatWords.get("settings.title");
 
     /** Ключ последнего открытого плана. */
-    public static final String KEY_LAST_PLAN = "Последний план";
+    public static final String KEY_LAST_PLAN = FormatWords.get("settings.key.lastPlan");
     /** Ключ списка недавних планов (через «; »). */
-    public static final String KEY_RECENT_PLANS = "Недавние планы";
+    public static final String KEY_RECENT_PLANS = FormatWords.get("settings.key.recentPlans");
     /** Ключ хранилища восстановления по умолчанию. */
-    public static final String KEY_RECOVERY_STORE = "Хранилище восстановления";
+    public static final String KEY_RECOVERY_STORE = FormatWords.get("settings.key.recoveryStore");
     /** Ключ автосохранения плана. */
-    public static final String KEY_AUTOSAVE = "Автосохранение плана";
+    public static final String KEY_AUTOSAVE = FormatWords.get("settings.key.autosave");
     /** Ключ режима отображения. */
-    public static final String KEY_VIEW = "Вид";
+    public static final String KEY_VIEW = FormatWords.get("settings.key.view");
     /** Ключ периода отображения. */
-    public static final String KEY_PERIOD = "Период";
+    public static final String KEY_PERIOD = FormatWords.get("settings.key.period");
     /** Ключ фильтра доходов. */
-    public static final String KEY_SHOW_INCOME = "Показывать доходы";
+    public static final String KEY_SHOW_INCOME = FormatWords.get("settings.key.showIncome");
     /** Ключ фильтра расходов. */
-    public static final String KEY_SHOW_EXPENSE = "Показывать расходы";
+    public static final String KEY_SHOW_EXPENSE = FormatWords.get("settings.key.showExpense");
     /** Ключ фильтра разовых операций. */
-    public static final String KEY_SHOW_ONE_TIME = "Показывать разовые";
+    public static final String KEY_SHOW_ONE_TIME = FormatWords.get("settings.key.showOneTime");
     /** Ключ фильтра пропущенных событий. */
-    public static final String KEY_SHOW_SKIPPED = "Показывать пропущенные";
+    public static final String KEY_SHOW_SKIPPED = FormatWords.get("settings.key.showSkipped");
     /** Ключ итогов по месяцам. */
-    public static final String KEY_MONTH_TOTALS = "Итоги по месяцам";
+    public static final String KEY_MONTH_TOTALS = FormatWords.get("settings.key.monthTotals");
     /** Ключ маркеров на графике. */
-    public static final String KEY_CHART_MARKERS = "Маркеры на графике";
+    public static final String KEY_CHART_MARKERS = FormatWords.get("settings.key.chartMarkers");
     /** Ключ столбцов по месяцам на графике. */
-    public static final String KEY_CHART_BARS = "Столбцы по месяцам";
+    public static final String KEY_CHART_BARS = FormatWords.get("settings.key.chartBars");
     /** Ключ панели сводки. */
-    public static final String KEY_SUMMARY_PANEL = "Панель сводки";
+    public static final String KEY_SUMMARY_PANEL = FormatWords.get("settings.key.summaryPanel");
 
     /** Разделитель недавних планов при записи. */
     private static final String RECENT_SEPARATOR = "; ";

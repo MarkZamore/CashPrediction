@@ -6,6 +6,7 @@ import java.util.Objects;
 import java.util.prefs.BackingStoreException;
 import java.util.prefs.Preferences;
 import ru.cashprediction.core.session.SessionStoreException;
+import ru.cashprediction.core.text.Texts;
 
 /**
  * {@link RegistryBackend} поверх {@code java.util.prefs}: на Windows узел
@@ -119,13 +120,13 @@ public final class PreferencesRegistryBackend implements RegistryBackend {
     @Override
     public void flush() throws SessionStoreException {
         if (!isAvailable()) {
-            throw new SessionStoreException("Реестр Windows недоступен: " + failure);
+            throw new SessionStoreException(Texts.get("session.registry.unavailable", failure));
         }
         try {
             node.flush();
         } catch (BackingStoreException | IllegalStateException | SecurityException e) {
             markUnavailable(e);
-            throw new SessionStoreException("Реестр Windows недоступен: " + failure, e);
+            throw new SessionStoreException(Texts.get("session.registry.unavailable", failure), e);
         }
     }
 
@@ -147,7 +148,7 @@ public final class PreferencesRegistryBackend implements RegistryBackend {
      */
     public void removeNode() throws SessionStoreException {
         if (!isAvailable()) {
-            throw new SessionStoreException("Реестр Windows недоступен: " + failure);
+            throw new SessionStoreException(Texts.get("session.registry.unavailable", failure));
         }
         try {
             Preferences parent = node.parent();
@@ -157,7 +158,7 @@ public final class PreferencesRegistryBackend implements RegistryBackend {
             }
         } catch (BackingStoreException | IllegalStateException | SecurityException e) {
             markUnavailable(e);
-            throw new SessionStoreException("Реестр Windows недоступен: " + failure, e);
+            throw new SessionStoreException(Texts.get("session.registry.unavailable", failure), e);
         }
     }
 
@@ -167,10 +168,10 @@ public final class PreferencesRegistryBackend implements RegistryBackend {
 
     private static String describe(Exception e) {
         return switch (e) {
-            case SecurityException _ -> "доступ к реестру запрещён политикой безопасности";
-            case BackingStoreException be -> "ошибка хранилища реестра (" + be.getMessage() + ")";
-            case IllegalStateException _ -> "раздел реестра удалён другой программой";
-            default -> "раздел реестра не открывается (" + e.getMessage() + ")";
+            case SecurityException _ -> Texts.get("session.registry.reason.security");
+            case BackingStoreException be -> Texts.get("session.registry.reason.backingStore", be.getMessage());
+            case IllegalStateException _ -> Texts.get("session.registry.reason.removed");
+            default -> Texts.get("session.registry.reason.cannotOpen", e.getMessage());
         };
     }
 }

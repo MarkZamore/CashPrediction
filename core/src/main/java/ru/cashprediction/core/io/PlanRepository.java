@@ -21,6 +21,7 @@ import ru.cashprediction.core.markdown.PlanMarkdownReader;
 import ru.cashprediction.core.markdown.PlanMarkdownWriter;
 import ru.cashprediction.core.markdown.ReadResult;
 import ru.cashprediction.core.model.Plan;
+import ru.cashprediction.core.text.Texts;
 
 /**
  * Файлы планов в папке CashMemory: список, загрузка, сохранение, переименование.
@@ -38,8 +39,14 @@ public final class PlanRepository {
     /** Расширение файлов планов. */
     public static final String EXTENSION = ".md";
 
-    /** Имя файла для плана с пустым или полностью недопустимым именем. */
-    public static final String DEFAULT_FILE_NAME = "План";
+    /**
+     * Имя файла для плана с пустым или полностью недопустимым именем (ключ {@code io.plan.defaultFileName}).
+     * Заполняется из каталога текстов при загрузке класса, поэтому не является константой времени компиляции.
+     *
+     * <p><b>Только значение по умолчанию при создании файла.</b> Это текст интерфейса на текущем языке; по нему нельзя
+     * узнавать уже существующие файлы CashMemory: файл, созданный при другом языке интерфейса, называется иначе.</p>
+     */
+    public static final String DEFAULT_FILE_NAME = Texts.get("io.plan.defaultFileName");
 
     /** Наибольшая длина имени файла без расширения. */
     public static final int MAX_FILE_NAME_LENGTH = 80;
@@ -95,7 +102,7 @@ public final class PlanRepository {
                 }
             }
         } catch (IOException e) {
-            throw new UncheckedIOException("Не удалось прочитать папку планов: " + dir, e);
+            throw new UncheckedIOException(Texts.get("io.error.readPlansFolder", dir), e);
         }
         result.sort(Comparator.comparing(PlanFileInfo::name, String.CASE_INSENSITIVE_ORDER)
                 .thenComparing(PlanFileInfo::name));
@@ -118,8 +125,7 @@ public final class PlanRepository {
         Plan plan = result.plan();
         if (!fileBaseName(plan.name()).equals(fileBase)) {
             List<Diagnostic> diagnostics = new ArrayList<>(result.diagnostics());
-            diagnostics.add(Diagnostic.info("Имя плана в заголовке («" + plan.name()
-                    + "») не совпадает с именем файла; используется имя файла «" + fileBase + "»"));
+            diagnostics.add(Diagnostic.info(Texts.get("io.plan.nameMismatch", plan.name(), fileBase)));
             return new ReadResult(plan.withName(fileBase), diagnostics);
         }
         return result;
@@ -226,7 +232,7 @@ public final class PlanRepository {
         boolean targetExists = Files.exists(target);
         boolean sameFile = targetExists && Files.isSameFile(from, target);
         if (targetExists && !sameFile) {
-            throw new FileAlreadyExistsException(target.toString(), null, "План с таким именем уже существует");
+            throw new FileAlreadyExistsException(target.toString(), null, Texts.get("io.error.planExists"));
         }
         if (sameFile) {
             AtomicFiles.writeString(from, updated);

@@ -2,6 +2,7 @@ package ru.cashprediction.core.session;
 
 import java.time.Instant;
 import java.util.Objects;
+import ru.cashprediction.core.text.Texts;
 
 /**
  * Маркер сеанса: «программа работает» или «программа закрыта корректно».
@@ -10,6 +11,9 @@ import java.util.Objects;
  * явном выходе пользователя (меню «Выход», закрытие главного окна) — {@link #CLOSED}. Если при
  * следующем запуске в хранилище остался {@code running}, а процесса с этим pid уже нет, значит
  * прошлый сеанс завершился аварийно и можно предложить восстановление.</p>
+ *
+ * <p>Сообщения проверок берутся из каталога текстов: маркер читается из файлов и реестра, и повреждённое значение
+ * попадает в сообщение пользователю.</p>
  *
  * <p>Запись неизменяема и потокобезопасна.</p>
  *
@@ -32,10 +36,10 @@ public record SessionMarker(String state, long pid, Instant startedAt, String cl
         Objects.requireNonNull(startedAt, "startedAt");
         SnapshotSchema.requireClient(client);
         if (!RUNNING.equals(state) && !CLOSED.equals(state)) {
-            throw new IllegalArgumentException("Некорректное состояние сеанса: «" + state + "»");
+            throw new IllegalArgumentException(Texts.get("session.marker.error.state", state));
         }
         if (pid < 0) {
-            throw new IllegalArgumentException("Некорректный идентификатор процесса: " + pid);
+            throw new IllegalArgumentException(Texts.get("session.marker.error.pid", pid));
         }
     }
 

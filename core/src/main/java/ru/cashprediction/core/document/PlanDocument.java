@@ -34,6 +34,7 @@ import ru.cashprediction.core.model.RecurringRule;
 import ru.cashprediction.core.model.RuleId;
 import ru.cashprediction.core.model.WeekendPolicy;
 import ru.cashprediction.core.recurrence.OccurrenceGenerator;
+import ru.cashprediction.core.text.Texts;
 import ru.cashprediction.core.util.DateFormats;
 
 /**
@@ -57,11 +58,26 @@ public final class PlanDocument {
     /** Глубина истории отмены. */
     public static final int UNDO_LIMIT = 100;
 
-    /** Название разовой операции, которую создаёт {@link #reconcile}. */
-    public static final String RECONCILE_TITLE = "Сверка баланса";
+    /**
+     * Название разовой операции, которую создаёт {@link #reconcile} (ключ {@code document.reconcile.title}).
+     * Заполняется из каталога текстов при загрузке класса, поэтому не является константой времени компиляции.
+     *
+     * <p><b>Только значение по умолчанию при создании.</b> Это текст интерфейса на текущем языке, который попадает в
+     * файл плана как обычное название операции (пользователь может его изменить). Его нельзя использовать, чтобы
+     * узнавать уже существующие строки сверки: файл, записанный при другом языке или после правки, содержит другое
+     * название. Если такое распознавание понадобится, нужен признак, не зависящий от языка (например, код категории
+     * или заметки в грамматике формата {@code FormatWords}), а не название.</p>
+     */
+    public static final String RECONCILE_TITLE = Texts.get("document.reconcile.title");
 
-    /** Название регулярной операции, которую создаёт {@link #applyWhatIfToPlan()}. */
-    public static final String EXTRA_SAVING_TITLE = "Доп. экономия";
+    /**
+     * Название регулярной операции, которую создаёт {@link #applyWhatIfToPlan()} (ключ {@code document.extraSaving.title}).
+     * Заполняется из каталога текстов при загрузке класса.
+     *
+     * <p><b>Только значение по умолчанию при создании</b>, как и {@link #RECONCILE_TITLE}: по этому названию нельзя
+     * узнавать существующие правила «доп. экономии» — при другом языке интерфейса или после правки оно другое.</p>
+     */
+    public static final String EXTRA_SAVING_TITLE = Texts.get("document.extraSaving.title");
 
     /**
      * Запись истории: план до изменения и описание изменения для пунктов «Отменить …»/«Повторить …».
@@ -143,7 +159,8 @@ public final class PlanDocument {
      * @return сегодня
      */
     public LocalDate today() {
-        return Objects.requireNonNull(today.get(), "Источник даты вернул null");
+        // Источник даты передаёт код, а не пользователь: сообщение для разработчика.
+        return Objects.requireNonNull(today.get(), "Today supplier returned null");
     }
 
     // ------------------------------------------------------------------ правка и история
@@ -163,7 +180,8 @@ public final class PlanDocument {
     public void edit(String description, UnaryOperator<Plan> change) {
         Objects.requireNonNull(description, "description");
         Objects.requireNonNull(change, "change");
-        Plan next = Objects.requireNonNull(change.apply(plan), "Изменение плана вернуло null");
+        // Функцию изменения передаёт код ядра или клиента: сообщение для разработчика.
+        Plan next = Objects.requireNonNull(change.apply(plan), "Plan change returned null");
         if (next.equals(plan)) {
             return;
         }
@@ -336,7 +354,7 @@ public final class PlanDocument {
         Objects.requireNonNull(today, "today");
         LocalDate oldStart = plan.startDate();
         Money balance = balanceOverride != null ? balanceOverride : plainForecast().balanceAt(today.minusDays(1));
-        edit("Актуализация на " + DateFormats.ru(today), p -> {
+        edit(Texts.get("document.edit.actualize", DateFormats.ru(today)), p -> {
             List<RecurringRule> rules = new ArrayList<>();
             for (RecurringRule rule : p.rules()) {
                 boolean pinPhase = rule.from() == null && rule.recurrence().needsAnchor() && !today.equals(oldStart);
@@ -361,8 +379,8 @@ public final class PlanDocument {
         Objects.requireNonNull(today, "today");
         Objects.requireNonNull(actualBalance, "actualBalance");
         if (today.isBefore(plan.startDate()) || today.isAfter(plan.endDate())) {
-            throw new IllegalArgumentException("Сверить баланс можно только на дату внутри горизонта прогноза ("
-                    + DateFormats.ru(plan.startDate()) + " – " + DateFormats.ru(plan.endDate()) + ")");
+            throw new IllegalArgumentException(Texts.get("document.error.reconcileOutsideHorizon",
+                    DateFormats.ru(plan.startDate()), DateFormats.ru(plan.endDate())));
         }
         Money expected = plainForecast().balanceAt(today);
         Money difference = actualBalance.minus(expected);
@@ -371,7 +389,8 @@ public final class PlanDocument {
         }
         Kind kind = difference.isPositive() ? Kind.INCOME : Kind.EXPENSE;
         edit(RECONCILE_TITLE, p -> p.withOneTimeAdded(new OneTimeTransaction(p.nextTxId(), today, RECONCILE_TITLE, kind,
-                difference.abs(), "", "Прогноз: " + expected.format(p.currency()) + ", факт: " + actualBalance.format(p.currency()))));
+                difference.abs(), "", Texts.get("document.reconcile.note", expected.format(p.currency()),
+                        actualBalance.format(p.currency())))));
     }
 
     /**
@@ -398,7 +417,7 @@ public final class PlanDocument {
             return;
         }
         LocalDate now = today();
-        edit("Применение «что-если» к плану", p -> {
+        edit(Texts.get("document.edit.applyWhatIf"), p -> {
             List<RecurringRule> rules = new ArrayList<>();
             Set<RuleId> switchedOff = new HashSet<>();
             for (RecurringRule rule : p.rules()) {
@@ -467,7 +486,7 @@ public final class PlanDocument {
         if (count == 0) {
             return 0;
         }
-        edit("Удаление неиспользуемых корректировок: " + count,
+        edit(Texts.get("document.edit.removeUnusedAdjustments", count),
                 current -> current.withAdjustments(current.adjustments().stream().filter(a -> !orphans.contains(a.key())).toList()));
         return count;
     }
@@ -578,10 +597,12 @@ public final class PlanDocument {
         if (switchedOff.contains(rule.id())) {
             boolean keepsMoney = adjustment.action().newAmount().map(a -> scale(a, factor).isPositive()).orElse(false);
             if (rule.enabled() && keepsMoney) {
-                throw new IllegalArgumentException("Нельзя применить «что-если»: сумма правила " + rule.id()
-                        + (rule.title().isEmpty() ? "" : " «" + rule.title() + "»")
-                        + " округляется до нуля, а у его корректировки от " + DateFormats.ru(adjustment.key().originalDate())
-                        + " сумма остаётся. Выберите другой процент изменения");
+                // Правило в тексте: идентификатор и, если есть, название в кавычках (тот же шаблон, что в прогнозе).
+                String ruleText = rule.title().isEmpty()
+                        ? String.valueOf(rule.id())
+                        : Texts.get("forecast.item.titled", rule.id(), rule.title());
+                throw new IllegalArgumentException(Texts.get("document.error.whatIfRuleRoundsToZero", ruleText,
+                        DateFormats.ru(adjustment.key().originalDate())));
             }
             return adjustment;
         }

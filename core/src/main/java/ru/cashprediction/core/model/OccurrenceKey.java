@@ -2,6 +2,7 @@ package ru.cashprediction.core.model;
 
 import java.time.LocalDate;
 import java.util.Objects;
+import ru.cashprediction.core.text.Texts;
 
 /**
  * Ключ конкретного события регулярной операции: правило плюс его НОМИНАЛЬНАЯ дата.
@@ -40,7 +41,7 @@ public record OccurrenceKey(RuleId ruleId, LocalDate originalDate) {
     public static OccurrenceKey parseRowId(String rowId) {
         int at = rowId == null ? -1 : rowId.lastIndexOf('@');
         if (at <= 0 || at == rowId.length() - 1) {
-            throw new IllegalArgumentException("Некорректный идентификатор события: «" + rowId + "»");
+            throw new IllegalArgumentException(Texts.get("id.error.occurrence", rowId));
         }
         return new OccurrenceKey(new RuleId(rowId.substring(0, at)), LocalDate.parse(rowId.substring(at + 1)));
     }

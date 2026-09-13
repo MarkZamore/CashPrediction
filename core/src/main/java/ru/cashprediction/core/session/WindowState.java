@@ -4,6 +4,7 @@ import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
+import ru.cashprediction.core.text.Texts;
 
 /**
  * Состояние одного открытого окна (диалога, всплывающего окна) в снимке.
@@ -39,7 +40,7 @@ public record WindowState(String id, WindowType type, boolean modal, String owne
     public WindowState {
         Objects.requireNonNull(id, "id");
         if (id.isBlank()) {
-            throw new IllegalArgumentException("Идентификатор окна не может быть пустым");
+            throw new IllegalArgumentException(Texts.get("session.window.error.emptyId"));
         }
         ownerId = ownerId == null || ownerId.isBlank() ? MAIN_OWNER : ownerId;
         context = copy(context, "context");
@@ -103,7 +104,8 @@ public record WindowState(String id, WindowType type, boolean modal, String owne
             return Map.of();
         }
         Map<String, String> result = new LinkedHashMap<>();
-        source.forEach((key, value) -> result.put(Objects.requireNonNull(key, what + ": ключ"),
+        // null-ключ — ошибка вызывающего кода (кодеки его не создают): сообщение для разработчика.
+        source.forEach((key, value) -> result.put(Objects.requireNonNull(key, what + ": key"),
                 Objects.requireNonNullElse(value, "")));
         return Collections.unmodifiableMap(result);
     }

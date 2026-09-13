@@ -2,6 +2,7 @@ package ru.cashprediction.core.session;
 
 import java.util.List;
 import java.util.Optional;
+import ru.cashprediction.core.text.Texts;
 
 /**
  * Словарь восстанавливаемых окон — общий контракт трёх клиентов (JavaFX, Swing, Web).
@@ -9,6 +10,10 @@ import java.util.Optional;
  * <p>Для каждого типа окна зафиксированы ключи контекста (что это за окно) и идентификаторы полей
  * (что пользователь ввёл). Благодаря единому словарю снимок, сделанный одним клиентом, понятен
  * любому другому, а тесты ядра проверяют восстановление без UI.</p>
+ *
+ * <p>Заголовки окон — текст интерфейса: {@link #title()} ищет их в каталоге текстов (ключи
+ * {@code window.title.*}) при каждом вызове, а не хранит в поле константы. Так отсутствующий ключ в строгом
+ * режиме тестов не ломает загрузку перечисления, а ключи видны проверке каталога как литералы.</p>
  *
  * <p>Нативные {@code FileChooser}/{@code DirectoryChooser}/{@code JFileChooser} в словарь
  * намеренно не входят: их состояние недоступно программе, поэтому они не восстанавливаются.</p>
@@ -18,26 +23,26 @@ import java.util.Optional;
 public enum WindowType {
 
     /** Мастер создания плана; контекст {@code page} — номер страницы мастера. */
-    NEW_PLAN_WIZARD("Новый план", true,
+    NEW_PLAN_WIZARD(true,
             List.of(WindowType.CONTEXT_PAGE),
             List.of("name", "currency", "startDate", "startBalance", "horizonKind", "horizonValue", "horizonUntil",
                     "cushion", "quickIncomeTitle", "quickIncomeAmount", "quickIncomeDay",
                     "quickExpenseTitle", "quickExpenseAmount", "quickExpenseDay")),
 
     /** Параметры плана: те же поля, что у мастера, без быстрых операций, плюс заметка и цель. */
-    PLAN_SETTINGS("Параметры плана", true,
+    PLAN_SETTINGS(true,
             List.of(),
             List.of("name", "currency", "startDate", "startBalance", "horizonKind", "horizonValue", "horizonUntil",
                     "cushion", "note", "goalTitle", "goalTarget", "goalDate")),
 
     /** Редактор регулярной операции; контекст {@code mode=create|edit}, {@code ruleId}. */
-    RULE_EDITOR("Регулярная операция", true,
+    RULE_EDITOR(true,
             List.of(WindowType.CONTEXT_MODE, WindowType.CONTEXT_RULE_ID),
             List.of("title", "kind", "amount", "category", "recurrenceKind", "dayOfMonth", "everyN", "weekday",
                     "monthDay", "fromEnabled", "from", "untilEnabled", "until", "weekendPolicy", "enabled", "note")),
 
     /** Редактор разовой операции; контекст {@code mode}, {@code txId}. */
-    ONE_TIME_EDITOR("Разовая операция", true,
+    ONE_TIME_EDITOR(true,
             List.of(WindowType.CONTEXT_MODE, WindowType.CONTEXT_TX_ID),
             List.of("date", "title", "kind", "amount", "category", "note")),
 
@@ -46,37 +51,37 @@ public enum WindowType {
      * Заголовок «Корректировка события» — по спецификации интерфейса v2 (§6.5); заголовки в снимок не пишутся,
      * поэтому смена текста не затрагивает сохранённые снимки.
      */
-    ADJUSTMENT_EDITOR("Корректировка события", true,
+    ADJUSTMENT_EDITOR(true,
             List.of(WindowType.CONTEXT_RULE_ID, WindowType.CONTEXT_ORIGINAL_DATE),
             List.of("action", "amount", "date", "note")),
 
     /** Калькулятор цели — единственный немодальный диалог: с ним удобно смотреть на таблицу. */
-    GOAL_CALCULATOR("Калькулятор цели", false,
+    GOAL_CALCULATOR(false,
             List.of(),
             List.of("target", "byDateEnabled", "byDate", "extraSaving")),
 
     /** Ввод строки; контекст {@code purpose=rename|reconcile|customMonths|customCurrency}. */
-    TEXT_INPUT("Ввод значения", true,
+    TEXT_INPUT(true,
             List.of(WindowType.CONTEXT_PURPOSE),
             List.of("value")),
 
     /** Выбор из списка; контекст {@code purpose=currency|openPlan}. */
-    CHOICE("Выбор значения", true,
+    CHOICE(true,
             List.of(WindowType.CONTEXT_PURPOSE),
             List.of("value")),
 
     /** Подтверждение или сообщение; контекст {@code purpose}, {@code targetId}; полей нет, текст восстанавливается из контекста. */
-    ALERT("Подтверждение", true,
+    ALERT(true,
             List.of(WindowType.CONTEXT_PURPOSE, WindowType.CONTEXT_TARGET_ID),
             List.of()),
 
     /** Параметры экспорта в CSV. */
-    CSV_EXPORT("Экспорт в CSV", true,
+    CSV_EXPORT(true,
             List.of(),
             List.of("separator", "bom", "range")),
 
     /** Всплывающее окно быстрой правки суммы повторения; немодальное; контекст {@code ruleId}, {@code originalDate}. */
-    QUICK_EDIT_POPUP("Быстрая правка суммы", false,
+    QUICK_EDIT_POPUP(false,
             List.of(WindowType.CONTEXT_RULE_ID, WindowType.CONTEXT_ORIGINAL_DATE),
             List.of("amount"));
 
@@ -105,25 +110,45 @@ public enum WindowType {
      */
     public static final List<String> TARGET_CONTEXT_KEYS = List.of(CONTEXT_RULE_ID, CONTEXT_TX_ID, CONTEXT_TARGET_ID);
 
-    private final String title;
     private final boolean defaultModal;
     private final List<String> contextKeys;
     private final List<String> fieldIds;
 
-    WindowType(String title, boolean defaultModal, List<String> contextKeys, List<String> fieldIds) {
-        this.title = title;
+    WindowType(boolean defaultModal, List<String> contextKeys, List<String> fieldIds) {
         this.defaultModal = defaultModal;
         this.contextKeys = contextKeys;
         this.fieldIds = fieldIds;
     }
 
     /**
-     * Заголовок окна по-русски (используется и в сообщениях восстановления).
+     * Заголовок окна на языке интерфейса (используется и в сообщениях восстановления).
      *
      * @return например «Регулярная операция»
      */
     public String title() {
-        return title;
+        return Texts.get(titleKey());
+    }
+
+    /**
+     * Ключ заголовка окна в каталоге текстов.
+     *
+     * @return например {@code window.title.ruleEditor}
+     */
+    public String titleKey() {
+        // Полные ключи литералами: проверка каталога видит каждый ключ, а новая константа без ключа не скомпилируется.
+        return switch (this) {
+            case NEW_PLAN_WIZARD -> "window.title.newPlanWizard";
+            case PLAN_SETTINGS -> "window.title.planSettings";
+            case RULE_EDITOR -> "window.title.ruleEditor";
+            case ONE_TIME_EDITOR -> "window.title.oneTimeEditor";
+            case ADJUSTMENT_EDITOR -> "window.title.adjustmentEditor";
+            case GOAL_CALCULATOR -> "window.title.goalCalculator";
+            case TEXT_INPUT -> "window.title.textInput";
+            case CHOICE -> "window.title.choice";
+            case ALERT -> "window.title.alert";
+            case CSV_EXPORT -> "window.title.csvExport";
+            case QUICK_EDIT_POPUP -> "window.title.quickEditPopup";
+        };
     }
 
     /**

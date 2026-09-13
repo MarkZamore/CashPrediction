@@ -4,6 +4,7 @@ import java.time.LocalDate;
 import java.time.YearMonth;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
+import ru.cashprediction.core.text.Texts;
 
 /**
  * Форматы дат приложения.
@@ -47,13 +48,13 @@ public final class DateFormats {
      */
     public static LocalDate parse(String text) {
         if (text == null || text.isBlank()) {
-            throw new IllegalArgumentException("Дата не указана");
+            throw new IllegalArgumentException(Texts.get("date.error.empty"));
         }
         String t = text.strip();
         try {
             return t.contains(".") ? LocalDate.parse(t, RU) : LocalDate.parse(t, ISO);
         } catch (DateTimeParseException e) {
-            throw new IllegalArgumentException("Некорректная дата: «" + t + "» (ожидается ГГГГ-ММ-ДД или ДД.ММ.ГГГГ)", e);
+            throw new IllegalArgumentException(Texts.get("date.error.invalid", t), e);
         }
     }
 

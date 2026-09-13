@@ -9,6 +9,7 @@ import ru.cashprediction.core.forecast.Forecast;
 import ru.cashprediction.core.forecast.ForecastRow;
 import ru.cashprediction.core.forecast.Origin;
 import ru.cashprediction.core.model.Kind;
+import ru.cashprediction.core.text.Texts;
 import ru.cashprediction.core.util.DateFormats;
 import ru.cashprediction.core.util.RuText;
 
@@ -33,8 +34,16 @@ import ru.cashprediction.core.util.RuText;
  */
 public final class CsvExporter {
 
-    /** Названия столбцов по порядку. */
-    public static final List<String> HEADER = List.of("Дата", "День", "Операция", "Категория", "Доход", "Расход", "Баланс", "Отметки", "Заметка");
+    /**
+     * Названия столбцов по порядку (ключи {@code csv.header.*} каталога текстов).
+     *
+     * <p>Список заполняется из каталога при загрузке класса, поэтому это больше не константа времени компиляции;
+     * значения те же, что и прежде.</p>
+     */
+    public static final List<String> HEADER = List.of(Texts.get("csv.header.date"), Texts.get("csv.header.day"),
+            Texts.get("csv.header.operation"), Texts.get("csv.header.category"), Texts.get("csv.header.income"),
+            Texts.get("csv.header.expense"), Texts.get("csv.header.balance"), Texts.get("csv.header.marks"),
+            Texts.get("csv.header.note"));
 
     /** Конец строки CSV по RFC 4180. */
     private static final String CRLF = "\r\n";
@@ -88,23 +97,24 @@ public final class CsvExporter {
     public static List<String> marks(ForecastRow row) {
         Flags f = row.flags();
         List<String> marks = new ArrayList<>(6);
+        // Слова отметок — текст для человека (ключи csv.mark.*), CSV программа обратно не читает.
         if (f.amountChanged()) {
-            marks.add("изменена сумма");
+            marks.add(Texts.get("csv.mark.amountChanged"));
         }
         if (f.moved()) {
-            marks.add("перенесено");
+            marks.add(Texts.get("csv.mark.moved"));
         }
         if (f.shifted()) {
-            marks.add("сдвиг с выходного");
+            marks.add(Texts.get("csv.mark.shifted"));
         }
         if (row.origin() == Origin.ONE_TIME) {
-            marks.add("разовая");
+            marks.add(Texts.get("csv.mark.oneTime"));
         }
         if (f.skipped()) {
-            marks.add("пропущено");
+            marks.add(Texts.get("csv.mark.skipped"));
         }
         if (f.whatIf()) {
-            marks.add("что-если");
+            marks.add(Texts.get("csv.mark.whatIf"));
         }
         return List.copyOf(marks);
     }

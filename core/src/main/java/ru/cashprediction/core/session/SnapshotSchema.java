@@ -3,6 +3,7 @@ package ru.cashprediction.core.session;
 import java.util.List;
 import java.util.Objects;
 import java.util.regex.Pattern;
+import ru.cashprediction.core.text.Texts;
 
 /**
  * Версия схемы снимка сессии и допустимые идентификаторы клиентов.
@@ -51,7 +52,8 @@ public final class SnapshotSchema {
     public static String requireClient(String client) {
         Objects.requireNonNull(client, "client");
         if (!CLIENT_ID.matcher(client).matches()) {
-            throw new IllegalArgumentException("Некорректный идентификатор клиента: «" + client + "»");
+            // Идентификатор читается и из файлов снимков, поэтому сообщение — текст интерфейса, а не разработчика.
+            throw new IllegalArgumentException(Texts.get("session.schema.error.client", client));
         }
         return client;
     }
@@ -65,11 +67,10 @@ public final class SnapshotSchema {
      */
     public static int requireSupported(int schemaVersion) {
         if (schemaVersion < 1) {
-            throw new IllegalArgumentException("Некорректная версия схемы снимка: " + schemaVersion);
+            throw new IllegalArgumentException(Texts.get("session.codec.error.schemaVersion", schemaVersion));
         }
         if (schemaVersion > CURRENT) {
-            throw new IllegalArgumentException("Снимок создан более новой версией программы (схема "
-                    + schemaVersion + ", поддерживается " + CURRENT + ")");
+            throw new IllegalArgumentException(Texts.get("session.schema.newer", schemaVersion, CURRENT));
         }
         return schemaVersion;
     }

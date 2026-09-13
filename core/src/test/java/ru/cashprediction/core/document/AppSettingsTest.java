@@ -112,4 +112,26 @@ class AppSettingsTest {
         assertEquals(Optional.of(RecoveryStoreKind.REGISTRY), RecoveryStoreKind.parse("Реестр"));
         assertEquals(Optional.empty(), RecoveryStoreKind.parse("облако"));
     }
+
+    /**
+     * Слова {@code settings.md} читаются обратно из собственной подписи при любом регистре и «ё»: разбор нормализует
+     * и текст файла, и слово из грамматики формата.
+     */
+    @Test
+    void settingsWordsRoundTripInAnyCase() {
+        for (ViewMode mode : ViewMode.values()) {
+            assertEquals(Optional.of(mode), ViewMode.parse(mode.label()), mode.name());
+            assertEquals(Optional.of(mode), ViewMode.parse(" " + mode.label().toUpperCase(java.util.Locale.ROOT) + " "));
+        }
+        for (PeriodChoice p : PeriodChoice.values()) {
+            assertEquals(Optional.of(p), PeriodChoice.parse(p.label().toUpperCase(java.util.Locale.ROOT)), p.name());
+        }
+        for (RecoveryStoreKind kind : RecoveryStoreKind.values()) {
+            assertEquals(Optional.of(kind), RecoveryStoreKind.parse(kind.label()), kind.name());
+            assertEquals(Optional.of(kind), RecoveryStoreKind.parse(kind.label().toLowerCase(java.util.Locale.ROOT)));
+        }
+        assertEquals(Optional.of(PeriodChoice.ALL), PeriodChoice.parse("ВСЁ"));
+        assertEquals(Optional.of(PeriodChoice.ALL), PeriodChoice.parse("Весь"));
+        assertEquals(Optional.of(PeriodChoice.ALL), PeriodChoice.parse("весь  ГОРИЗОНТ"));
+    }
 }

@@ -5,7 +5,7 @@ import java.nio.file.Path;
 
 /**
  * Папка модуля {@code core} для тестов, которые читают исходники и документы репозитория
- * ({@code NoCyrillicLiteralsInNewCodeTest}, {@code UiTextCatalogTest}, {@code UiSpecCopyTest}).
+ * ({@code NoCyrillicLiteralsTest},{@code UiTextCatalogTest}, {@code UiSpecCopyTest}).
  *
  * <p>Surefire передаёт свойство {@value #PROPERTY} ({@code core/pom.xml}). Без него (запуск из IDE) папка ищется от
  * рабочей папки: сама папка модуля или её подпапка {@code core} в корне репозитория. Так проверка не становится

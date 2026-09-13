@@ -47,7 +47,8 @@ public final class ChartSeries {
         Objects.requireNonNull(from, "from");
         Objects.requireNonNull(to, "to");
         if (maxPoints < 2) {
-            throw new IllegalArgumentException("Число точек графика должно быть не меньше 2");
+            // Число точек задаёт код клиента, а не пользователь: сообщение для разработчика.
+            throw new IllegalArgumentException("Chart point count must be at least 2");
         }
         LocalDate start = forecast.startDate();
         LocalDate lo = from.isBefore(start) ? start : from;

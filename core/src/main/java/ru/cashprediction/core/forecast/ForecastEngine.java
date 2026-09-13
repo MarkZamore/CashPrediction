@@ -26,6 +26,7 @@ import ru.cashprediction.core.model.RecurringRule;
 import ru.cashprediction.core.model.RuleId;
 import ru.cashprediction.core.model.TxId;
 import ru.cashprediction.core.recurrence.OccurrenceGenerator;
+import ru.cashprediction.core.text.Texts;
 import ru.cashprediction.core.util.DateFormats;
 
 /**
@@ -60,11 +61,17 @@ import ru.cashprediction.core.util.DateFormats;
  */
 public final class ForecastEngine {
 
-    /** Название строки начального баланса. */
-    public static final String START_TITLE = "Начальный баланс";
+    /**
+     * Название строки начального баланса (ключ {@code forecast.row.startBalance}).
+     * Заполняется из каталога текстов при загрузке класса, поэтому не является константой времени компиляции.
+     */
+    public static final String START_TITLE = Texts.get("forecast.row.startBalance");
 
-    /** Название синтетической строки дополнительной экономии. */
-    public static final String WHAT_IF_TITLE = "Доп. экономия (что-если)";
+    /**
+     * Название синтетической строки дополнительной экономии (ключ {@code forecast.row.whatIfSaving}).
+     * Заполняется из каталога текстов при загрузке класса.
+     */
+    public static final String WHAT_IF_TITLE = Texts.get("forecast.row.whatIfSaving");
 
     /**
      * Максимальная длина горизонта в днях. Горизонт «до даты» можно задать сколь угодно далёким,
@@ -104,8 +111,8 @@ public final class ForecastEngine {
         LocalDate anchor = today.isAfter(start) ? today : start;
         long dayCount = ChronoUnit.DAYS.between(start, end) + 1;
         if (dayCount > MAX_DAYS) {
-            throw new IllegalStateException("Горизонт прогноза слишком длинный: " + dayCount + " дней (допустимо не больше "
-                    + MAX_DAYS + ")");
+            // Тип исключения прежний, но текст видит пользователь (в web — как ошибку прогноза): он из каталога.
+            throw new IllegalStateException(Texts.get("forecast.error.horizonTooLong", dayCount, MAX_DAYS));
         }
 
         Context ctx = new Context(plan, wi, today, start, end, includeSkipped);
@@ -186,8 +193,8 @@ public final class ForecastEngine {
             counts.forEach((key, count) -> {
                 if (count > 1) {
                     warn(Severity.WARNING, key.originalDate(), WarningType.DUPLICATE_ADJUSTMENT,
-                            "Для события " + key.ruleId() + " от " + DateFormats.ru(key.originalDate()) + " задано корректировок: "
-                                    + count + "; действует последняя");
+                            Texts.get("warning.forecast.duplicateAdjustment", key.ruleId(),
+                                    DateFormats.ru(key.originalDate()), count));
                 }
             });
         }
@@ -226,8 +233,8 @@ public final class ForecastEngine {
                 // предупреждать о нём было бы неправдой.
                 if (lo.isAfter(hi) && !landed) {
                     warn(Severity.WARNING, null, WarningType.RULE_OUTSIDE_HORIZON,
-                            "Правило " + describe(rule) + " не действует в пределах горизонта прогноза ("
-                                    + DateFormats.ru(start) + " – " + DateFormats.ru(end) + ")");
+                            Texts.get("warning.forecast.ruleOutsideHorizon", describe(rule),
+                                    DateFormats.ru(start), DateFormats.ru(end)));
                 }
             }
         }
@@ -312,8 +319,8 @@ public final class ForecastEngine {
                 // Для событий, номинальная дата которых и так вне горизонта, перенос «наружу» ничего не меняет.
                 if (moved && inHorizon) {
                     warn(Severity.WARNING, nominal, WarningType.MOVED_OUT_OF_HORIZON,
-                            "Событие " + describe(rule) + " от " + DateFormats.ru(nominal) + " перенесено на "
-                                    + DateFormats.ru(date) + " — за пределы горизонта, в прогноз не попало");
+                            Texts.get("warning.forecast.movedOutOfHorizon", describe(rule),
+                                    DateFormats.ru(nominal), DateFormats.ru(date)));
                 }
                 return false;
             }
@@ -345,8 +352,7 @@ public final class ForecastEngine {
                 Optional<RecurringRule> rule = plan.findRule(key.ruleId());
                 if (rule.isEmpty()) {
                     warn(Severity.WARNING, date, WarningType.ORPHAN_ADJUSTMENT,
-                            "Корректировка события " + key.ruleId() + " от " + DateFormats.ru(date)
-                                    + " ни к чему не относится: правила " + key.ruleId() + " нет в плане");
+                            Texts.get("warning.forecast.orphanNoRule", key.ruleId(), DateFormats.ru(date)));
                     continue;
                 }
                 RecurringRule r = rule.get();
@@ -357,8 +363,7 @@ public final class ForecastEngine {
                 LocalDate hi = OccurrenceGenerator.windowEnd(r, end);
                 if (!date.isBefore(lo) && !date.isAfter(hi)) {
                     warn(Severity.WARNING, date, WarningType.ORPHAN_ADJUSTMENT,
-                            "Корректировка события " + key.ruleId() + " от " + DateFormats.ru(date)
-                                    + " ни к чему не относится: правило " + describe(r) + " не создаёт событие в эту дату");
+                            Texts.get("warning.forecast.orphanNoEvent", key.ruleId(), DateFormats.ru(date), describe(r)));
                 }
             }
         }
@@ -368,8 +373,7 @@ public final class ForecastEngine {
             for (OneTimeTransaction tx : plan.oneTimes()) {
                 if (tx.date().isBefore(start) || tx.date().isAfter(end)) {
                     warn(Severity.WARNING, tx.date(), WarningType.ONE_TIME_OUTSIDE_HORIZON,
-                            "Разовая операция " + tx.id() + " «" + tx.title() + "» от " + DateFormats.ru(tx.date())
-                                    + " вне горизонта прогноза и не учитывается");
+                            Texts.get("warning.forecast.oneTimeOutsideHorizon", tx.id(), tx.title(), DateFormats.ru(tx.date())));
                     continue;
                 }
                 BigDecimal factor = factorFor(tx.kind());
@@ -479,15 +483,16 @@ public final class ForecastEngine {
 
             Optional<LocalDate> firstNegative = BalanceSeries.firstMatch(start, daily, anchor, v -> v < 0);
             firstNegative.ifPresent(date -> warn(Severity.WARNING, date, WarningType.NEGATIVE_BALANCE,
-                    "Баланс уходит в минус: " + BalanceSeries.balanceAt(start, daily, startBalance, date).format(currency)));
+                    Texts.get("warning.forecast.negativeBalance",
+                            BalanceSeries.balanceAt(start, daily, startBalance, date).format(currency))));
 
             long cushion = plan.cushion().minor();
             Optional<LocalDate> firstBelowCushion = cushion > 0
                     ? BalanceSeries.firstMatch(start, daily, anchor, v -> v < cushion)
                     : Optional.empty();
             firstBelowCushion.ifPresent(date -> warn(Severity.WARNING, date, WarningType.BELOW_CUSHION,
-                    "Баланс опускается ниже подушки безопасности (" + plan.cushion().format(currency) + "): "
-                            + BalanceSeries.balanceAt(start, daily, startBalance, date).format(currency)));
+                    Texts.get("warning.forecast.belowCushion", plan.cushion().format(currency),
+                            BalanceSeries.balanceAt(start, daily, startBalance, date).format(currency))));
 
             Optional<LocalDate> goalReach = Optional.empty();
             Goal goal = plan.goal();
@@ -503,14 +508,16 @@ public final class ForecastEngine {
 
         /** Предупреждение, если цель не достигается или достигается позже желаемой даты. */
         private void warnGoal(Goal goal, Optional<LocalDate> reach) {
-            String name = "Цель" + (goal.title().isEmpty() ? "" : " «" + goal.title() + "»") + " (" + goal.target().format(currency) + ")";
+            String target = goal.target().format(currency);
+            String name = goal.title().isEmpty()
+                    ? Texts.get("warning.forecast.goalName", target)
+                    : Texts.get("warning.forecast.goalNameTitled", goal.title(), target);
             if (reach.isEmpty()) {
                 warn(Severity.WARNING, goal.wishDate(), WarningType.GOAL_NOT_REACHED,
-                        name + " не достигается до конца прогноза (" + DateFormats.ru(end) + ")");
+                        Texts.get("warning.forecast.goalNotReached", name, DateFormats.ru(end)));
             } else if (goal.wishDate() != null && reach.get().isAfter(goal.wishDate())) {
                 warn(Severity.WARNING, goal.wishDate(), WarningType.GOAL_NOT_REACHED,
-                        name + " достигается только " + DateFormats.ru(reach.get()) + ", позже желаемой даты "
-                                + DateFormats.ru(goal.wishDate()));
+                        Texts.get("warning.forecast.goalLate", name, DateFormats.ru(reach.get()), DateFormats.ru(goal.wishDate())));
             }
         }
 
@@ -539,7 +546,8 @@ public final class ForecastEngine {
 
         /** @return «r1 «Зарплата»» или просто «r1», если название пустое */
         private static String describe(RecurringRule rule) {
-            return rule.title().isEmpty() ? rule.id().value() : rule.id() + " «" + rule.title() + "»";
+            // Кавычки вокруг названия — типографика языка, поэтому шаблон тоже в каталоге текстов.
+            return rule.title().isEmpty() ? rule.id().value() : Texts.get("forecast.item.titled", rule.id(), rule.title());
         }
     }
 }

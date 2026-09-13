@@ -16,7 +16,9 @@ import ru.cashprediction.core.model.OneTimeTransaction;
 import ru.cashprediction.core.model.Plan;
 import ru.cashprediction.core.model.Recurrence;
 import ru.cashprediction.core.model.RecurringRule;
+import ru.cashprediction.core.text.Texts;
 import ru.cashprediction.core.util.DateFormats;
+import ru.cashprediction.core.util.RuText;
 
 /**
  * Проверка плана перед прогнозом и перед сохранением: команда «Инструменты → Проверить план»,
@@ -28,6 +30,10 @@ import ru.cashprediction.core.util.DateFormats;
  * <p>Уровни: {@link Severity#ERROR} — данные не попадут в прогноз или прогноз не построится;
  * {@link Severity#WARNING} — план работает, но, вероятно, не так, как задумано;
  * {@link Severity#INFO} — программа сама подставила разумное значение.</p>
+ *
+ * <p>Все тексты сообщений берутся из общего каталога текстов (область {@code diagnostics},
+ * ключи {@code diagnostic.*}); сообщение об элементе плана собирается из «о чём речь» и «что не так»
+ * по шаблону {@code diagnostic.item.message}.</p>
  *
  * <p>Класс без состояния, потокобезопасен.</p>
  */
@@ -75,17 +81,17 @@ public final class PlanValidator {
         validateHorizon(plan, out);
         long rows = estimateRowCount(plan);
         if (rows > MAX_ROWS) {
-            out.add(Diagnostic.error("План даёт около " + rows + " строк прогноза (допустимо не больше 200 000): "
-                    + "сократите горизонт или период частых операций"));
+            // Предел подставляется из константы с разделением разрядов («200 000»), а не повторяется в тексте каталога.
+            out.add(Diagnostic.error(Texts.get("diagnostic.plan.tooManyRows", rows, RuText.groupDigits(MAX_ROWS))));
         }
         if (plan.cushion().isNegative()) {
-            out.add(Diagnostic.warning("Подушка безопасности не может быть отрицательной"));
+            out.add(Diagnostic.warning(Texts.get("diagnostic.plan.cushionNegative")));
         }
         validateRules(plan, out);
         validateOneTimes(plan, out);
         validateAdjustments(plan, out);
         if (plan.goal() != null && !plan.goal().target().isPositive()) {
-            out.add(Diagnostic.warning("Сумма цели должна быть больше нуля"));
+            out.add(Diagnostic.warning(Texts.get("diagnostic.plan.goalNotPositive")));
         }
         return List.copyOf(out);
     }
@@ -94,35 +100,35 @@ public final class PlanValidator {
      * Проверяет имя плана (оно же имя файла {@code CashMemory/<имя>.md}).
      *
      * @param name имя
-     * @return текст ошибки на русском или пусто, если имя допустимо
+     * @return текст ошибки для пользователя или пусто, если имя допустимо
      */
     public static Optional<String> checkPlanName(String name) {
         if (name == null || name.isBlank()) {
-            return Optional.of("Имя плана не может быть пустым");
+            return Optional.of(Texts.get("diagnostic.name.empty"));
         }
         String n = name.strip();
         if (n.codePointCount(0, n.length()) > MAX_NAME_LENGTH) {
-            return Optional.of("Имя плана длиннее " + MAX_NAME_LENGTH + " символов");
+            return Optional.of(Texts.get("diagnostic.name.tooLong", MAX_NAME_LENGTH));
         }
         for (int i = 0; i < n.length(); i++) {
             char c = n.charAt(i);
             if (FORBIDDEN_CHARS.indexOf(c) >= 0) {
-                return Optional.of("Имя плана не может содержать символы \\ / : * ? \" < > |");
+                return Optional.of(Texts.get("diagnostic.name.forbiddenChars"));
             }
             if (Character.isISOControl(c)) {
-                return Optional.of("Имя плана не может содержать управляющие символы");
+                return Optional.of(Texts.get("diagnostic.name.controlChars"));
             }
         }
         if (n.endsWith(".")) {
             // Windows молча отбрасывает точку в конце имени файла, и файл не нашёлся бы по имени плана.
-            return Optional.of("Имя плана не может заканчиваться точкой");
+            return Optional.of(Texts.get("diagnostic.name.endsWithDot"));
         }
         String lower = n.toLowerCase(Locale.ROOT);
         if (RESERVED_NAMES.contains(lower)) {
-            return Optional.of("Имя «" + n + "» зарезервировано программой для служебного файла");
+            return Optional.of(Texts.get("diagnostic.name.reservedByApp", n));
         }
         if (WINDOWS_DEVICE_NAMES.contains(lower)) {
-            return Optional.of("Имя «" + n + "» зарезервировано Windows");
+            return Optional.of(Texts.get("diagnostic.name.reservedByWindows", n));
         }
         return Optional.empty();
     }
@@ -163,20 +169,23 @@ public final class PlanValidator {
         return total;
     }
 
-    /** Горизонт: «до даты» не раньше начала, не длиннее 600 месяцев, длиннее 240 — предупреждение. */
+    /**
+     * Горизонт: «до даты» не раньше начала, не длиннее {@link Horizon#MAX_MONTHS} месяцев, длиннее
+     * {@link #LONG_HORIZON_MONTHS} — предупреждение. Пределы подставляются в тексты из этих констант.
+     */
     private static void validateHorizon(Plan plan, List<Diagnostic> out) {
         LocalDate start = plan.startDate();
         if (plan.horizon() instanceof Horizon.Until until && until.end().isBefore(start)) {
-            out.add(Diagnostic.error("Дата окончания горизонта (" + DateFormats.ru(until.end())
-                    + ") раньше даты начала плана (" + DateFormats.ru(start) + ")"));
+            out.add(Diagnostic.error(Texts.get("diagnostic.plan.horizonEndBeforeStart",
+                    DateFormats.ru(until.end()), DateFormats.ru(start))));
             return;
         }
         long months = plan.horizon().approximateMonths(start);
         if (months > Horizon.MAX_MONTHS) {
-            out.add(Diagnostic.error("Горизонт прогноза длиннее 50 лет (600 месяцев)"));
+            out.add(Diagnostic.error(Texts.get("diagnostic.plan.horizonTooLong", Horizon.MAX_MONTHS / 12,
+                    Horizon.MAX_MONTHS)));
         } else if (months > LONG_HORIZON_MONTHS) {
-            out.add(Diagnostic.warning("Горизонт прогноза длиннее 20 лет (" + months
-                    + " мес.): на такой срок прогноз малоточен, а график строится медленнее"));
+            out.add(Diagnostic.warning(Texts.get("diagnostic.plan.horizonLong", LONG_HORIZON_MONTHS / 12, months)));
         }
     }
 
@@ -186,28 +195,29 @@ public final class PlanValidator {
         LocalDate end = plan.endDate();
         Set<String> ids = new HashSet<>();
         for (RecurringRule rule : plan.rules()) {
-            String prefix = "Правило " + rule.id() + (rule.title().isEmpty() ? "" : " «" + rule.title() + "»") + ": ";
+            String subject = rule.title().isEmpty()
+                    ? Texts.get("diagnostic.rule.subject", rule.id())
+                    : Texts.get("diagnostic.rule.subjectTitled", rule.id(), rule.title());
             if (!ids.add(rule.id().value())) {
-                out.add(Diagnostic.error(prefix + "идентификатор " + rule.id() + " повторяется"));
+                out.add(Diagnostic.error(item(subject, Texts.get("diagnostic.item.duplicateId", rule.id()))));
             }
             if (rule.title().isBlank()) {
-                out.add(Diagnostic.warning(prefix + "не указано название"));
+                out.add(Diagnostic.warning(item(subject, Texts.get("diagnostic.item.noTitle"))));
             }
-            checkAmount(rule.amount(), prefix, out);
+            checkAmount(rule.amount(), subject, out);
             if (rule.from() != null && rule.until() != null && rule.until().isBefore(rule.from())) {
-                out.add(Diagnostic.error(prefix + "дата окончания (" + DateFormats.ru(rule.until())
-                        + ") раньше даты начала (" + DateFormats.ru(rule.from()) + ")"));
+                out.add(Diagnostic.error(item(subject, Texts.get("diagnostic.rule.untilBeforeFrom",
+                        DateFormats.ru(rule.until()), DateFormats.ru(rule.from())))));
             } else if (rule.enabled()) {
                 LocalDate lo = rule.from() != null && rule.from().isAfter(start) ? rule.from() : start;
                 LocalDate hi = rule.until() != null && rule.until().isBefore(end) ? rule.until() : end;
                 if (lo.isAfter(hi)) {
-                    out.add(Diagnostic.warning(prefix + "не действует в пределах горизонта прогноза ("
-                            + DateFormats.ru(start) + " – " + DateFormats.ru(end) + ")"));
+                    out.add(Diagnostic.warning(item(subject, Texts.get("diagnostic.rule.outsideHorizon",
+                            DateFormats.ru(start), DateFormats.ru(end)))));
                 }
             }
             if (rule.recurrence().needsAnchor() && rule.from() == null) {
-                out.add(Diagnostic.info(prefix + "дата «С» не задана, отсчёт от даты начала плана ("
-                        + DateFormats.ru(start) + ")"));
+                out.add(Diagnostic.info(item(subject, Texts.get("diagnostic.rule.fromMissing", DateFormats.ru(start)))));
             }
         }
     }
@@ -216,14 +226,16 @@ public final class PlanValidator {
     private static void validateOneTimes(Plan plan, List<Diagnostic> out) {
         Set<String> ids = new HashSet<>();
         for (OneTimeTransaction tx : plan.oneTimes()) {
-            String prefix = "Разовая операция " + tx.id() + (tx.title().isEmpty() ? "" : " «" + tx.title() + "»") + ": ";
+            String subject = tx.title().isEmpty()
+                    ? Texts.get("diagnostic.oneTime.subject", tx.id())
+                    : Texts.get("diagnostic.oneTime.subjectTitled", tx.id(), tx.title());
             if (!ids.add(tx.id().value())) {
-                out.add(Diagnostic.error(prefix + "идентификатор " + tx.id() + " повторяется"));
+                out.add(Diagnostic.error(item(subject, Texts.get("diagnostic.item.duplicateId", tx.id()))));
             }
             if (tx.title().isBlank()) {
-                out.add(Diagnostic.warning(prefix + "не указано название"));
+                out.add(Diagnostic.warning(item(subject, Texts.get("diagnostic.item.noTitle"))));
             }
-            checkAmount(tx.amount(), prefix, out);
+            checkAmount(tx.amount(), subject, out);
         }
     }
 
@@ -238,21 +250,33 @@ public final class PlanValidator {
             if (amount.isEmpty()) {
                 continue;
             }
-            String prefix = "Корректировка " + adjustment.key().ruleId() + " от "
-                    + DateFormats.ru(adjustment.key().originalDate()) + ": ";
+            String subject = Texts.get("diagnostic.adjustment.subject", adjustment.key().ruleId(),
+                    DateFormats.ru(adjustment.key().originalDate()));
             if (!amount.get().isPositive()) {
-                out.add(Diagnostic.error(prefix + "новая сумма должна быть больше нуля"));
+                out.add(Diagnostic.error(item(subject, Texts.get("diagnostic.adjustment.amountNotPositive"))));
             } else if (amount.get().compareTo(MAX_AMOUNT) > 0) {
-                out.add(Diagnostic.error(prefix + "новая сумма больше " + MAX_AMOUNT.format()));
+                out.add(Diagnostic.error(item(subject, Texts.get("diagnostic.adjustment.amountTooLarge", MAX_AMOUNT.format()))));
             }
         }
     }
 
-    private static void checkAmount(Money amount, String prefix, List<Diagnostic> out) {
+    /** Проверка суммы правила или разовой операции. */
+    private static void checkAmount(Money amount, String subject, List<Diagnostic> out) {
         if (!amount.isPositive()) {
-            out.add(Diagnostic.error(prefix + "сумма должна быть больше нуля"));
+            out.add(Diagnostic.error(item(subject, Texts.get("diagnostic.item.amountNotPositive"))));
         } else if (amount.compareTo(MAX_AMOUNT) > 0) {
-            out.add(Diagnostic.error(prefix + "сумма больше " + MAX_AMOUNT.format()));
+            out.add(Diagnostic.error(item(subject, Texts.get("diagnostic.item.amountTooLarge", MAX_AMOUNT.format()))));
         }
+    }
+
+    /**
+     * Сообщение об элементе плана.
+     *
+     * @param subject о чём речь, например «Правило r1 «Зарплата»»
+     * @param problem что не так, например «сумма должна быть больше нуля»
+     * @return «Правило r1 «Зарплата»: сумма должна быть больше нуля»
+     */
+    private static String item(String subject, String problem) {
+        return Texts.get("diagnostic.item.message", subject, problem);
     }
 }

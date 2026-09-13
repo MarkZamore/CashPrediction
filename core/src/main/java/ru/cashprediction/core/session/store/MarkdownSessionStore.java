@@ -16,6 +16,7 @@ import ru.cashprediction.core.session.SnapshotSchema;
 import ru.cashprediction.core.session.codec.MarkdownSnapshotCodec;
 import ru.cashprediction.core.session.codec.SessionDocument;
 import ru.cashprediction.core.session.codec.SnapshotFormatException;
+import ru.cashprediction.core.text.Texts;
 
 /**
  * Хранилище сессии web-сервера: {@code CashMemory/web-session.md} и, при несохранённых изменениях
@@ -101,7 +102,7 @@ public final class MarkdownSessionStore implements SessionStore {
 
     @Override
     public String title() {
-        return "Сервер";
+        return Texts.get("session.store.title.server");
     }
 
     /**
@@ -158,8 +159,8 @@ public final class MarkdownSessionStore implements SessionStore {
             }
             lastError = null;
         } catch (IOException e) {
-            throw new SessionStoreException("Не удалось записать файл сессии «" + sessionFile.getFileName() + "»: "
-                    + e.getMessage(), e);
+            throw new SessionStoreException(Texts.get("session.store.md.writeFailed", sessionFile.getFileName(),
+                    e.getMessage()), e);
         }
     }
 
@@ -176,15 +177,15 @@ public final class MarkdownSessionStore implements SessionStore {
         }
         // Текст плана вынесен в отдельный файл: подставляем его в снимок.
         if (!Files.exists(planFile)) {
-            throw new SessionStoreException("Файл несохранённого плана «" + planFile.getFileName() + "» не найден");
+            throw new SessionStoreException(Texts.get("session.store.md.planFileMissing", planFile.getFileName()));
         }
         try {
             String markdown = AtomicFiles.readString(planFile);
             return Optional.of(new SessionSnapshot(snapshot.schemaVersion(), snapshot.savedAt(), snapshot.client(),
                     snapshot.main(), PlanState.dirty(markdown), snapshot.windows()));
         } catch (IOException e) {
-            throw new SessionStoreException("Не удалось прочитать файл несохранённого плана «" + planFile.getFileName()
-                    + "»: " + e.getMessage(), e);
+            throw new SessionStoreException(Texts.get("session.store.md.planFileReadFailed", planFile.getFileName(),
+                    e.getMessage()), e);
         }
     }
 
@@ -202,7 +203,7 @@ public final class MarkdownSessionStore implements SessionStore {
             markerKnown = true;
             lastError = null;
         } catch (IOException e) {
-            lastError = "Не удалось удалить файлы сессии: " + e.getMessage();
+            lastError = Texts.get("session.store.md.deleteFailed", e.getMessage());
         }
     }
 
@@ -232,7 +233,7 @@ public final class MarkdownSessionStore implements SessionStore {
             AtomicFiles.writeString(sessionFile, codec.encodeDocument(new SessionDocument(client, newMarker, keep), external));
             lastError = null;
         } catch (IOException e) {
-            lastError = "Не удалось записать файл сессии «" + sessionFile.getFileName() + "»: " + e.getMessage();
+            lastError = Texts.get("session.store.md.writeFailed", sessionFile.getFileName(), e.getMessage());
         }
     }
 
@@ -243,8 +244,8 @@ public final class MarkdownSessionStore implements SessionStore {
         try {
             return AtomicFiles.readString(sessionFile);
         } catch (IOException e) {
-            throw new SessionStoreException("Не удалось прочитать файл сессии «" + sessionFile.getFileName() + "»: "
-                    + e.getMessage(), e);
+            throw new SessionStoreException(Texts.get("session.store.md.readFailed", sessionFile.getFileName(),
+                    e.getMessage()), e);
         }
     }
 

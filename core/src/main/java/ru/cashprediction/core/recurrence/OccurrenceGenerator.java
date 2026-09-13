@@ -9,6 +9,8 @@ import java.util.List;
 import java.util.Objects;
 import ru.cashprediction.core.model.Recurrence;
 import ru.cashprediction.core.model.RecurringRule;
+import ru.cashprediction.core.text.Texts;
+import ru.cashprediction.core.util.RuText;
 
 /**
  * Генератор дат регулярных операций.
@@ -182,7 +184,8 @@ public final class OccurrenceGenerator {
         Objects.requireNonNull(planStart, "planStart");
         Objects.requireNonNull(fromInclusive, "fromInclusive");
         if (count < 0) {
-            throw new IllegalArgumentException("Число дат не может быть отрицательным");
+            // Число дат задаёт код, а не пользователь: сообщение для разработчика.
+            throw new IllegalArgumentException("Date count must not be negative");
         }
         if (count == 0) {
             return List.of();
@@ -338,8 +341,10 @@ public final class OccurrenceGenerator {
         boolean add(LocalDate date) {
             if (out.size() >= limit) {
                 if (throwOnLimit) {
-                    throw new IllegalStateException("Правило " + rule.id() + " «" + rule.title() + "» даёт больше "
-                            + "200 000 дат; сократите горизонт плана или увеличьте период повтора");
+                    // Тип исключения прежний, но текст видит пользователь (в web — как ошибку прогноза): он из каталога.
+                    // Предел — из лимита сборщика (с исключением он всегда MAX_DATES_PER_RULE), с разделением разрядов.
+                    throw new IllegalStateException(Texts.get("occurrence.error.tooManyDates", rule.id(), rule.title(),
+                            RuText.groupDigits(limit)));
                 }
                 return false;
             }

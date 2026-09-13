@@ -10,6 +10,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import ru.cashprediction.core.text.Texts;
 
 /**
  * Определяет при запуске, как завершился предыдущий сеанс клиента (раздел 5.6 плана).
@@ -267,7 +268,8 @@ public final class CrashDetector {
 
     private static StoreInfo describe(SessionStore store, boolean inspectSnapshot) {
         if (!store.isAvailable()) {
-            return new StoreInfo(false, Optional.empty(), store.title() + " недоступно: " + store.unavailableReason());
+            return new StoreInfo(false, Optional.empty(),
+                    Texts.get("session.store.unavailable", store.title(), store.unavailableReason()));
         }
         if (!inspectSnapshot) {
             return new StoreInfo(true, store.lastSavedAt(), "");
@@ -275,13 +277,13 @@ public final class CrashDetector {
         try {
             Optional<SessionSnapshot> snapshot = store.load();
             if (snapshot.isEmpty()) {
-                return new StoreInfo(true, Optional.empty(), "Снимок не найден");
+                return new StoreInfo(true, Optional.empty(), Texts.get("session.crash.snapshotNotFound"));
             }
             return new StoreInfo(true, Optional.of(snapshot.get().savedAt()), "");
         } catch (SessionStoreException e) {
             return new StoreInfo(true, Optional.empty(), e.getMessage());
         } catch (RuntimeException e) {
-            return new StoreInfo(true, Optional.empty(), "Снимок не читается: " + e.getMessage());
+            return new StoreInfo(true, Optional.empty(), Texts.get("session.crash.snapshotUnreadable", e.getMessage()));
         }
     }
 }

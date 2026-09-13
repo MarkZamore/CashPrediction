@@ -36,7 +36,7 @@ public record Money(long minor) implements Comparable<Money> {
      */
     public Money {
         if (minor == Long.MIN_VALUE) {
-            throw new IllegalArgumentException("Сумма вне допустимого диапазона");
+            throw new IllegalArgumentException(Texts.get("money.error.outOfRange"));
         }
     }
 
@@ -86,7 +86,7 @@ public record Money(long minor) implements Comparable<Money> {
      */
     public static Money parse(String text) {
         if (text == null) {
-            throw new IllegalArgumentException("Сумма не указана");
+            throw new IllegalArgumentException(Texts.get("money.error.empty"));
         }
         // Шаг 1: выбрасываем символы валют и нормализуем типографский минус; пробелы пока сохраняем,
         // потому что внутри числа они разделяют разряды и участвуют в строгой проверке групп.
@@ -106,7 +106,7 @@ public record Money(long minor) implements Comparable<Money> {
             s = s.substring(1).strip();
         }
         if (s.isEmpty()) {
-            throw new IllegalArgumentException("Сумма не указана");
+            throw new IllegalArgumentException(Texts.get("money.error.empty"));
         }
 
         // Шаг 2: определяем десятичный разделитель и знак препинания, разделяющий разряды.
@@ -144,7 +144,7 @@ public record Money(long minor) implements Comparable<Money> {
             long minor = value.setScale(2, RoundingMode.HALF_UP).movePointRight(2).longValueExact();
             return new Money(negative ? -minor : minor);
         } catch (ArithmeticException e) {
-            throw new IllegalArgumentException("Слишком большая сумма: «" + text.strip() + "»", e);
+            throw new IllegalArgumentException(Texts.get("money.error.tooLarge", text.strip()), e);
         }
     }
 
@@ -199,14 +199,14 @@ public record Money(long minor) implements Comparable<Money> {
     }
 
     private static IllegalArgumentException invalid(String text) {
-        return new IllegalArgumentException("Некорректная сумма: «" + text.strip() + "»");
+        return new IllegalArgumentException(Texts.get("money.error.invalid", text.strip()));
     }
 
     /**
      * Ошибка неверной группировки разрядов (решение L1).
      *
-     * <p>Текст берётся из общего каталога ({@code money.error.grouping}): новое сообщение модели не пишется
-     * литералом (решение L13); остальные сообщения {@code parse} переезжают в каталог на этапе S0.5.</p>
+     * <p>Текст берётся из общего каталога ({@code money.error.grouping}), как и все сообщения {@code parse}: сообщения
+     * модели не пишутся литералами (решение L13).</p>
      */
     private static IllegalArgumentException invalidGrouping(String text) {
         return new IllegalArgumentException(Texts.get("money.error.grouping", text.strip()));
@@ -272,7 +272,8 @@ public record Money(long minor) implements Comparable<Money> {
      */
     public Money divideCeilToMajor(long divisor) {
         if (divisor <= 0) {
-            throw new IllegalArgumentException("Делитель должен быть положительным");
+            // Сообщение для разработчика: делитель передаёт код, а не пользователь.
+            throw new IllegalArgumentException("Divisor must be positive: " + divisor);
         }
         BigDecimal rubles = BigDecimal.valueOf(minor)
                 .divide(BigDecimal.valueOf(divisor * 100L), 0, RoundingMode.CEILING);

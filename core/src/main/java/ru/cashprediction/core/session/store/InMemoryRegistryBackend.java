@@ -5,6 +5,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import ru.cashprediction.core.session.SessionStoreException;
+import ru.cashprediction.core.text.Texts;
 
 /**
  * {@link RegistryBackend} в памяти — для модульных тестов и для запуска без реестра.
@@ -71,7 +72,7 @@ public final class InMemoryRegistryBackend implements RegistryBackend {
     public synchronized void flush() throws SessionStoreException {
         flushCount++;
         if (failure != null) {
-            throw new SessionStoreException("Реестр Windows недоступен: " + failure);
+            throw new SessionStoreException(Texts.get("session.registry.unavailable", failure));
         }
     }
 

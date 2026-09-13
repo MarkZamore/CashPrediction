@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import ru.cashprediction.core.format.FormatWords;
 import ru.cashprediction.core.session.MainWindowState;
 import ru.cashprediction.core.session.PlanState;
 import ru.cashprediction.core.session.SessionMarker;
@@ -15,6 +16,7 @@ import ru.cashprediction.core.session.SnapshotSchema;
 import ru.cashprediction.core.session.WindowBounds;
 import ru.cashprediction.core.session.WindowState;
 import ru.cashprediction.core.session.WindowType;
+import ru.cashprediction.core.text.Texts;
 
 /**
  * Markdown-представление файла сессии web-сервера {@code CashMemory/web-session.md} (раздел 5.5 плана).
@@ -53,6 +55,12 @@ import ru.cashprediction.core.session.WindowType;
  * - amount: 45000,00
  * </pre>
  *
+ * <p><b>Грамматика и тексты.</b> Заголовок, названия разделов, ключи строк, «да/нет», «модальное/немодальное» и
+ * «владелец» — грамматика файла: они берутся из нелокализуемого ресурса {@link FormatWords} ({@code session.md.*})
+ * и не зависят от языка интерфейса, иначе снимок, записанный при одном языке, не прочитался бы при другом. Сообщения
+ * об ошибках разбора — текст интерфейса из каталога {@link Texts} ({@code session.codec.md.*}); слова формата
+ * подставляются в них аргументами.</p>
+ *
  * <p><b>Экранирование значений.</b> Файл должен оставаться читаемым, но значения полей — это
  * произвольный ввод пользователя. Поэтому в значениях обратная косая черта пишется как {@code \\},
  * перевод строки — {@code \n}, CR — {@code \r}, табуляция — {@code \t}, пробел в начале или в конце
@@ -74,39 +82,45 @@ import ru.cashprediction.core.session.WindowType;
  */
 public final class MarkdownSnapshotCodec implements SnapshotCodec<String> {
 
-    private static final String TITLE_PREFIX = "# Сессия CashPrediction (";
-    private static final String SECTION_MAIN = "## Главное окно";
-    private static final String SECTION_WINDOWS = "## Открытые окна";
-    private static final String SECTION_PLAN = "## Несохранённый план";
+    /** Начало первой строки файла до имени клиента, вместе с «# ». */
+    private static final String TITLE_PREFIX = FormatWords.get("session.md.title.prefix");
+    /** Заголовок раздела главного окна, вместе с «## ». */
+    private static final String SECTION_MAIN = FormatWords.get("session.md.section.main");
+    /** Заголовок раздела открытых окон, вместе с «## ». */
+    private static final String SECTION_WINDOWS = FormatWords.get("session.md.section.windows");
+    /** Заголовок раздела встроенного текста плана, вместе с «## ». */
+    private static final String SECTION_PLAN = FormatWords.get("session.md.section.plan");
 
-    private static final String KEY_STATE = "Состояние";
-    private static final String KEY_PID = "PID сервера";
-    private static final String KEY_STARTED = "Начата";
-    private static final String KEY_SAVED = "Сохранено";
-    private static final String KEY_SCHEMA = "Схема";
-    private static final String KEY_VIEW = "Вид";
-    private static final String KEY_PLAN = "План";
-    private static final String KEY_DIRTY = "Несохранённые изменения";
-    private static final String KEY_PERIOD = "Период";
-    private static final String KEY_FILTERS = "Фильтры";
-    private static final String KEY_FILTER_TEXT = "Строка поиска";
-    private static final String KEY_SELECTED = "Выделено";
-    private static final String KEY_BOUNDS = "Границы";
-    private static final String KEY_MAXIMIZED = "Развёрнуто";
+    private static final String KEY_STATE = FormatWords.get("session.md.key.state");
+    private static final String KEY_PID = FormatWords.get("session.md.key.pid");
+    private static final String KEY_STARTED = FormatWords.get("session.md.key.started");
+    private static final String KEY_SAVED = FormatWords.get("session.md.key.saved");
+    private static final String KEY_SCHEMA = FormatWords.get("session.md.key.schema");
+    private static final String KEY_VIEW = FormatWords.get("session.md.key.view");
+    private static final String KEY_PLAN = FormatWords.get("session.md.key.plan");
+    private static final String KEY_DIRTY = FormatWords.get("session.md.key.dirty");
+    private static final String KEY_PERIOD = FormatWords.get("session.md.key.period");
+    private static final String KEY_FILTERS = FormatWords.get("session.md.key.filters");
+    private static final String KEY_FILTER_TEXT = FormatWords.get("session.md.key.filterText");
+    private static final String KEY_SELECTED = FormatWords.get("session.md.key.selected");
+    private static final String KEY_BOUNDS = FormatWords.get("session.md.key.bounds");
+    private static final String KEY_MAXIMIZED = FormatWords.get("session.md.key.maximized");
     /** Необязательная строка главного окна: дополнительная экономия «что-если» в месяц. */
-    private static final String KEY_WHAT_IF_EXTRA = "Что-если, доп. экономия в месяц";
-    private static final String KEY_CONTEXT = "Контекст";
+    private static final String KEY_WHAT_IF_EXTRA = FormatWords.get("session.md.key.whatIfExtra");
+    private static final String KEY_CONTEXT = FormatWords.get("session.md.key.context");
 
-    private static final String YES = "да";
-    private static final String NO = "нет";
-    private static final String MODAL = "модальное";
-    private static final String MODELESS = "немодальное";
+    private static final String YES = FormatWords.get("session.md.yes");
+    private static final String NO = FormatWords.get("session.md.no");
+    private static final String MODAL = FormatWords.get("session.md.modal");
+    private static final String MODELESS = FormatWords.get("session.md.modeless");
+    /** Слово перед владельцем в заголовке окна; «, » и «: » вокруг него добавляет код. */
+    private static final String OWNER = FormatWords.get("session.md.owner");
     /** Как пишется неизвестный тип окна. */
     private static final String UNKNOWN_TYPE = "?";
 
     /** Заголовок окна: {@code ### w1 — RULE_EDITOR (модальное, владелец: main)}; id и владелец без сырых пробелов. */
-    private static final Pattern WINDOW_HEADING =
-            Pattern.compile("^### (\\S+) — (\\S+) \\((" + MODAL + "|" + MODELESS + "), владелец: (\\S+)\\)$");
+    private static final Pattern WINDOW_HEADING = Pattern.compile("^### (\\S+) — (\\S+) \\(("
+            + Pattern.quote(MODAL) + "|" + Pattern.quote(MODELESS) + "), " + Pattern.quote(OWNER) + ": (\\S+)\\)$");
 
     /** Создаёт кодек (состояния нет, экземпляры взаимозаменяемы). */
     public MarkdownSnapshotCodec() {
@@ -126,7 +140,7 @@ public final class MarkdownSnapshotCodec implements SnapshotCodec<String> {
     public SessionSnapshot decode(String encoded) throws SnapshotFormatException {
         SessionSnapshot snapshot = decodeDocument(encoded).snapshot();
         if (snapshot == null) {
-            throw new SnapshotFormatException("В файле сессии нет снимка (раздел «" + SECTION_MAIN.substring(3) + "» отсутствует)");
+            throw new SnapshotFormatException(Texts.get("session.codec.md.noSnapshot", sectionName(SECTION_MAIN)));
         }
         return snapshot;
     }
@@ -185,7 +199,7 @@ public final class MarkdownSnapshotCodec implements SnapshotCodec<String> {
             lines.add("");
             lines.add("### " + escapeToken(window.id()) + " — "
                     + (window.type() == null ? UNKNOWN_TYPE : window.type().name())
-                    + " (" + (window.modal() ? MODAL : MODELESS) + ", владелец: " + escapeToken(window.ownerId()) + ")");
+                    + " (" + (window.modal() ? MODAL : MODELESS) + ", " + OWNER + ": " + escapeToken(window.ownerId()) + ")");
             lines.add("");
             lines.add(item(KEY_CONTEXT, pairs(window.context())));
             lines.add(item(KEY_BOUNDS, bounds(window.bounds())));
@@ -216,13 +230,13 @@ public final class MarkdownSnapshotCodec implements SnapshotCodec<String> {
      */
     public SessionDocument decodeDocument(String text) throws SnapshotFormatException {
         if (text == null || text.isBlank()) {
-            throw new SnapshotFormatException("Файл сессии пуст");
+            throw new SnapshotFormatException(Texts.get("session.codec.md.empty"));
         }
         String[] lines = text.replace("\r\n", "\n").split("\n", -1);
         try {
             return new Parser(lines).parse();
         } catch (IllegalArgumentException | NullPointerException e) {
-            throw new SnapshotFormatException("Файл сессии повреждён: " + e.getMessage(), e);
+            throw new SnapshotFormatException(Texts.get("session.codec.md.corrupted", e.getMessage()), e);
         }
     }
 
@@ -240,6 +254,21 @@ public final class MarkdownSnapshotCodec implements SnapshotCodec<String> {
             }
         }
         return null;
+    }
+
+    /**
+     * Название раздела без «## » — так раздел называется в сообщениях.
+     *
+     * @param section заголовок раздела из {@link FormatWords}
+     * @return например «Главное окно»
+     */
+    private static String sectionName(String section) {
+        return section.substring(3);
+    }
+
+    /** @return образец первой строки для сообщений: «# Сессия CashPrediction (клиент)» */
+    private static String titleSample() {
+        return TITLE_PREFIX + Texts.get("session.codec.md.clientPlaceholder") + ")";
     }
 
     // ---------------------------------------------------------------- разбор
@@ -266,7 +295,7 @@ public final class MarkdownSnapshotCodec implements SnapshotCodec<String> {
                 int lineNo = i + 1;
                 if (line.startsWith("# ")) {
                     if (!line.startsWith(TITLE_PREFIX) || !line.endsWith(")")) {
-                        throw error(lineNo, "ожидался заголовок «" + TITLE_PREFIX + "клиент)»");
+                        throw error(lineNo, Texts.get("session.codec.md.expectedTitle", titleSample()));
                     }
                     client = line.substring(TITLE_PREFIX.length(), line.length() - 1);
                     section = "header";
@@ -290,7 +319,7 @@ public final class MarkdownSnapshotCodec implements SnapshotCodec<String> {
                 } else if (line.startsWith("- ")) {
                     int colon = indexOfUnescaped(line, ':', 2);
                     if (colon < 0) {
-                        throw error(lineNo, "в строке списка нет «:»");
+                        throw error(lineNo, Texts.get("session.codec.md.noColon"));
                     }
                     String key = unescape(line.substring(2, colon));
                     String raw = line.substring(colon + 1);
@@ -301,7 +330,7 @@ public final class MarkdownSnapshotCodec implements SnapshotCodec<String> {
                         case "main" -> main.put(key, value);
                         case "windows" -> {
                             if (window == null) {
-                                throw error(lineNo, "строка списка до заголовка окна");
+                                throw error(lineNo, Texts.get("session.codec.md.itemBeforeWindow"));
                             }
                             window.add(key, value, lineNo);
                         }
@@ -313,7 +342,7 @@ public final class MarkdownSnapshotCodec implements SnapshotCodec<String> {
                 // Пустые строки и произвольный текст между элементами игнорируются.
             }
             if (client == null) {
-                throw new SnapshotFormatException("Файл сессии повреждён: нет заголовка «" + TITLE_PREFIX + "клиент)»");
+                throw new SnapshotFormatException(Texts.get("session.codec.md.noTitle", titleSample()));
             }
             int schema = header.containsKey(KEY_SCHEMA) ? CodecText.parseSchema(header.get(KEY_SCHEMA)) : SnapshotSchema.CURRENT;
             SessionMarker marker = null;
@@ -356,7 +385,7 @@ public final class MarkdownSnapshotCodec implements SnapshotCodec<String> {
                 return PlanState.CLEAN;
             }
             if (!dirty.equals(YES) && !dirty.startsWith(YES + " (")) {
-                throw new SnapshotFormatException("Файл сессии повреждён: «" + KEY_DIRTY + "» должно быть «да» или «нет»");
+                throw notYesNo(KEY_DIRTY);
             }
             return PlanState.dirty(embeddedPlan == null ? "" : embeddedPlan);
         }
@@ -368,7 +397,7 @@ public final class MarkdownSnapshotCodec implements SnapshotCodec<String> {
                 i++;
             }
             if (i >= lines.length || !lines[i].startsWith("```")) {
-                throw error(i + 1, "в разделе «" + SECTION_PLAN.substring(3) + "» ожидался блок кода");
+                throw error(i + 1, Texts.get("session.codec.md.expectedCodeBlock", sectionName(SECTION_PLAN)));
             }
             String fence = lines[i];
             List<String> content = new ArrayList<>();
@@ -379,20 +408,20 @@ public final class MarkdownSnapshotCodec implements SnapshotCodec<String> {
                 }
                 content.add(lines[j]);
             }
-            throw error(i + 1, "блок кода с текстом плана не закрыт");
+            throw error(i + 1, Texts.get("session.codec.md.codeBlockNotClosed"));
         }
 
         private WindowDraft parseHeading(String line, int lineNo) throws SnapshotFormatException {
             Matcher m = WINDOW_HEADING.matcher(line);
             if (!m.matches()) {
-                throw error(lineNo, "некорректный заголовок окна");
+                throw error(lineNo, Texts.get("session.codec.md.badWindowHeading"));
             }
             WindowType type = m.group(2).equals(UNKNOWN_TYPE) ? null : WindowType.fromName(m.group(2)).orElse(null);
             return new WindowDraft(unescape(m.group(1)), type, m.group(3).equals(MODAL), unescape(m.group(4)));
         }
 
         private SnapshotFormatException error(int lineNo, String detail) {
-            return new SnapshotFormatException("Файл сессии повреждён, строка " + lineNo + ": " + detail);
+            return errorAtLine(lineNo, detail);
         }
     }
 
@@ -421,8 +450,7 @@ public final class MarkdownSnapshotCodec implements SnapshotCodec<String> {
                 bounds = value;
             } else {
                 if (fields.containsKey(key)) {
-                    throw new SnapshotFormatException("Файл сессии повреждён, строка " + lineNo
-                            + ": поле «" + key + "» окна " + id + " повторяется");
+                    throw errorAtLine(lineNo, Texts.get("session.codec.md.repeatedField", key, id));
                 }
                 fields.put(key, unescape(value));
             }
@@ -435,6 +463,27 @@ public final class MarkdownSnapshotCodec implements SnapshotCodec<String> {
     }
 
     // ---------------------------------------------------------------- текстовые помощники
+
+    /**
+     * Ошибка разбора с номером строки файла.
+     *
+     * @param lineNo номер строки (с 1)
+     * @param detail причина на языке интерфейса
+     * @return исключение с готовым сообщением
+     */
+    private static SnapshotFormatException errorAtLine(int lineNo, String detail) {
+        return new SnapshotFormatException(Texts.get("session.codec.md.corruptedAtLine", lineNo, detail));
+    }
+
+    /**
+     * Ошибка «значение не да/нет»; сами слова берутся из грамматики файла.
+     *
+     * @param key ключ строки
+     * @return исключение с готовым сообщением
+     */
+    private static SnapshotFormatException notYesNo(String key) {
+        return new SnapshotFormatException(Texts.get("session.codec.md.yesNo", key, YES, NO));
+    }
 
     private static String item(String key, String value) {
         // Для пустого значения не оставляем концевой пробел: редакторы его всё равно срежут.
@@ -461,7 +510,7 @@ public final class MarkdownSnapshotCodec implements SnapshotCodec<String> {
         Map<String, String> map = parsePairs(value);
         for (String key : List.of("x", "y", "width", "height")) {
             if (!map.containsKey(key)) {
-                throw new SnapshotFormatException("Файл сессии повреждён: в «" + KEY_BOUNDS + "» нет «" + key + "»");
+                throw new SnapshotFormatException(Texts.get("session.codec.md.missingPart", KEY_BOUNDS, key));
             }
         }
         return new WindowBounds(CodecText.parseNumber(map.get("x"), "x"), CodecText.parseNumber(map.get("y"), "y"),
@@ -469,17 +518,21 @@ public final class MarkdownSnapshotCodec implements SnapshotCodec<String> {
     }
 
     private static boolean parseYesNo(String text, String what) throws SnapshotFormatException {
-        return switch (text.strip()) {
-            case YES -> true;
-            case NO -> false;
-            default -> throw new SnapshotFormatException("Файл сессии повреждён: «" + what + "» должно быть «да» или «нет»");
-        };
+        // Слова «да/нет» больше не константы времени компиляции (они из FormatWords), поэтому не switch.
+        String value = text.strip();
+        if (value.equals(YES)) {
+            return true;
+        }
+        if (value.equals(NO)) {
+            return false;
+        }
+        throw notYesNo(what);
     }
 
     private static String requireKey(Map<String, String> map, String key) throws SnapshotFormatException {
         String value = map.get(key);
         if (value == null) {
-            throw new SnapshotFormatException("Файл сессии повреждён: нет строки «" + key + "»");
+            throw new SnapshotFormatException(Texts.get("session.codec.md.missingLine", key));
         }
         return value;
     }
@@ -501,7 +554,7 @@ public final class MarkdownSnapshotCodec implements SnapshotCodec<String> {
             }
             int eq = indexOfUnescaped(trimmed, '=', 0);
             if (eq < 0) {
-                throw new SnapshotFormatException("Файл сессии повреждён: в «" + trimmed + "» нет «=»");
+                throw new SnapshotFormatException(Texts.get("session.codec.md.missingPart", trimmed, "="));
             }
             result.put(unescape(trimmed.substring(0, eq)), unescape(trimmed.substring(eq + 1)));
         }

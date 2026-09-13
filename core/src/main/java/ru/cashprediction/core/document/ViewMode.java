@@ -1,28 +1,29 @@
 package ru.cashprediction.core.document;
 
 import java.util.Optional;
+import ru.cashprediction.core.format.FormatWords;
 import ru.cashprediction.core.markdown.RuFormats;
 
 /**
  * Режим центральной области главного окна: таблица событий или график баланса.
  *
- * <p>Одинаков для трёх клиентов (JavaFX, Swing, Web) и хранится в {@code settings.md} словом {@link #label()}.</p>
+ * <p>Одинаков для трёх клиентов (JavaFX, Swing, Web) и хранится в {@code settings.md} словом {@link #label()}.
+ * Это слово — грамматика файла настроек, а не текст интерфейса: оно берётся из нелокализуемого ресурса
+ * {@link FormatWords}, чтобы файл читался при любом языке интерфейса.</p>
  */
 public enum ViewMode {
     /** Вертикальная таблица событий с балансом после каждого. */
-    TABLE("таблица"),
+    TABLE,
     /** Шаговый график баланса по дням. */
-    CHART("график");
-
-    private final String label;
-
-    ViewMode(String label) {
-        this.label = label;
-    }
+    CHART;
 
     /** @return слово для файла настроек: «таблица» / «график» */
     public String label() {
-        return label;
+        // Слово ищется при каждом вызове, а не в конструкторе: ошибка ресурса не ломает загрузку перечисления.
+        return switch (this) {
+            case TABLE -> FormatWords.get("settings.view.table");
+            case CHART -> FormatWords.get("settings.view.chart");
+        };
     }
 
     /**
@@ -34,7 +35,8 @@ public enum ViewMode {
     public static Optional<ViewMode> parse(String text) {
         String t = RuFormats.normalize(text);
         for (ViewMode mode : values()) {
-            if (t.equals(mode.label) || t.equals(mode.name().toLowerCase(java.util.Locale.ROOT))) {
+            // Нормализуются обе стороны: слово формата в ресурсе может быть записано с заглавной буквы или с «ё».
+            if (t.equals(RuFormats.normalize(mode.label())) || t.equals(mode.name().toLowerCase(java.util.Locale.ROOT))) {
                 return Optional.of(mode);
             }
         }
