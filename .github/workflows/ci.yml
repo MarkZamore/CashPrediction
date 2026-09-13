@@ -34,9 +34,25 @@ jobs:
       - name: Build and test
         shell: pwsh
         run: |
-          # Тесты ядра (включая реестр Windows) и web-сервера; окна приложения не открываются.
+          # Тесты ядра (включая реестр Windows) и web-сервера.
           & mvn -B -ntp install
           if ($LASTEXITCODE -ne 0) { throw "Сборка или тесты не прошли." }
+
+      - name: Portable build
+        shell: pwsh
+        run: |
+          # Та же портативная сборка, что публикуется из main, но без публикации.
+          & mvn -B -ntp -Pdist -pl dist package
+          if ($LASTEXITCODE -ne 0) { throw "Портативная сборка не собралась." }
+
+      - name: Verify portable build
+        shell: pwsh
+        run: |
+          & "$env:GITHUB_WORKSPACE\.github\scripts\Test-Portable.ps1" `
+            -PortableDir "$env:GITHUB_WORKSPACE\dist\target\dist\CashPrediction" `
+            -WorkDir "$env:RUNNER_TEMP\portable test" `
+            -CleanRegistry
+          if ($LASTEXITCODE -ne 0) { throw "Проверка портативной сборки не прошла." }
 
       - name: Test reports
         if: failure()
