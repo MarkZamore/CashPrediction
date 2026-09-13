@@ -55,7 +55,8 @@ jobs:
 
           "RELEASE_NUMBER=$releaseNumber" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           "RELEASE_NOTE=$($match.Groups['line'].Value.Trim())" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-          Write-Host "Версия $releaseNumber: $($match.Groups['line'].Value.Trim())"
+          # ${releaseNumber} в фигурных скобках: иначе двоеточие после имени PowerShell читает как диск.
+          Write-Host "Версия ${releaseNumber}: $($match.Groups['line'].Value.Trim())"
 
       - name: Build and test
         shell: pwsh

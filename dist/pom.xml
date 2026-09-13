@@ -173,8 +173,9 @@
                  enable-native-access=javafx.graphics  : JEP 472, JavaFX грузит свои DLL;
                  -XX:-UsePerfData                      : не создавать %TEMP%\hsperfdata_*;
                  -XX:-CreateCoredumpOnCrash            : не писать minidump в рабочий каталог;
-                 -XX:ErrorFile=$ROOTDIR/CashMemory/... : отчёт о падении самой JVM только в CashMemory
-                                                         ($ROOTDIR лаунчер подставляет как корень папки);
+                 -XX:+SuppressFatalErrorMessage        : при падении самой JVM не писать hs_err_pid*.log
+                                                         (решение пользователя: в CashMemory только .md и XML снимков);
+                 -XX:-DumpReplayDataOnError            : не писать replay_pid*.log при сбое JIT-компилятора;
                  user.language/country=ru              : интерфейс и форматы на русском.
           -->
           <execution>
@@ -199,7 +200,8 @@
                 <argument>--java-options</argument><argument>--enable-native-access=javafx.graphics</argument>
                 <argument>--java-options</argument><argument>-XX:-UsePerfData</argument>
                 <argument>--java-options</argument><argument>-XX:-CreateCoredumpOnCrash</argument>
-                <argument>--java-options</argument><argument>-XX:ErrorFile=$ROOTDIR/CashMemory/hs_err_%p.log</argument>
+                <argument>--java-options</argument><argument>-XX:+SuppressFatalErrorMessage</argument>
+                <argument>--java-options</argument><argument>-XX:-DumpReplayDataOnError</argument>
                 <argument>--java-options</argument><argument>-Duser.language=ru</argument>
                 <argument>--java-options</argument><argument>-Duser.country=RU</argument>
                 <argument>--java-options</argument><argument>-Xmx512m</argument>

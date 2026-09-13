@@ -92,7 +92,8 @@ GraalVM native-image не поддерживает AWT/Swing на Windows, а Ja
 | `--enable-native-access=javafx.graphics` | только JavaFX-лаунчер: JEP 472, JavaFX загружает свои DLL; без флага JDK 25 печатает предупреждение |
 | `-XX:-UsePerfData` | не создавать `%TEMP%\hsperfdata_<пользователь>` |
 | `-XX:-CreateCoredumpOnCrash` | не писать дамп памяти в рабочий каталог при падении JVM |
-| `-XX:ErrorFile=$ROOTDIR/CashMemory/hs_err_%p.log` | отчёт о падении самой JVM только внутри CashMemory |
+| `-XX:+SuppressFatalErrorMessage` | при падении самой JVM не создавать отчёт `hs_err_pid*.log` |
+| `-XX:-DumpReplayDataOnError` | при сбое JIT-компилятора не создавать `replay_pid*.log` |
 | `-Duser.language=ru -Duser.country=RU` | русский интерфейс и форматы независимо от настроек Windows |
 | `-Xmx512m` | ограничение памяти |
 
@@ -104,7 +105,7 @@ GraalVM native-image не поддерживает AWT/Swing на Windows, а Ja
 |---|---|
 | `%TEMP%\hsperfdata_*` | `-XX:-UsePerfData` |
 | `~/.openjfx/cache` (DLL JavaFX при запуске из jar) | в дистрибутиве JavaFX берётся из jlink-рантайма, кэш не создаётся |
-| `hs_err_pid*.log`, дампы | `-XX:ErrorFile` в CashMemory, `-XX:-CreateCoredumpOnCrash` |
+| `hs_err_pid*.log`, `replay_pid*.log`, дампы | `-XX:+SuppressFatalErrorMessage`, `-XX:-DumpReplayDataOnError`, `-XX:-CreateCoredumpOnCrash` |
 | `java.util.prefs` | используется только пользовательский корень, на Windows это реестр `HKCU\Software\JavaSoft\Prefs` |
 | временные файлы атомарной записи | создаются только внутри CashMemory и удаляются |
 
