@@ -2,7 +2,10 @@ package ru.cashprediction.core.model;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.regex.Pattern;
+import ru.cashprediction.core.text.Texts;
 
 /**
  * Денежная сумма в минимальных единицах (копейках, центах).
@@ -24,7 +27,7 @@ public record Money(long minor) implements Comparable<Money> {
     /** Нулевая сумма. */
     public static final Money ZERO = new Money(0);
 
-    /** Целая часть и дробь из цифр ASCII: после очистки строки от пробелов и знака. */
+    /** Дробная часть из цифр ASCII (разделители разрядов в ней недопустимы). */
     private static final Pattern DIGITS = Pattern.compile("[0-9]*");
 
     /**
@@ -60,75 +63,78 @@ public record Money(long minor) implements Comparable<Money> {
     /**
      * Разбирает сумму, введённую человеком или записанную в .md-файл.
      *
-     * <p>Правила терпимы к ручному вводу:</p>
+     * <p>Правила терпимы к привычным формам записи, но строги к разделителям разрядов:</p>
      * <ul>
-     *   <li>любые пробелы (включая неразрывные U+00A0 и U+202F), апостроф и символы валют (₽, $, €) игнорируются;</li>
+     *   <li>символы валют (₽, $, €) и пробелы по краям игнорируются;</li>
      *   <li>знак: ведущий {@code +}, {@code -} или типографский минус {@code −};</li>
      *   <li>десятичный разделитель: запятая или точка; если есть оба, разделителем считается последний,
-     *       а другой символ считается разделителем тысяч ({@code 1.234,56} и {@code 1,234.56});</li>
-     *   <li>если один и тот же символ встречается несколько раз, он считается разделителем тысяч ({@code 1,234,567});</li>
+     *       а другой символ считается разделителем разрядов ({@code 1.234,56} и {@code 1,234.56});</li>
+     *   <li>если один и тот же знак препинания встречается несколько раз, он считается разделителем разрядов
+     *       ({@code 1,234,567}); одиночная запятая или точка — десятичный разделитель;</li>
+     *   <li>пробелы внутри числа (включая неразрывные U+00A0 и U+202F) и апостроф — тоже разделители разрядов;</li>
+     *   <li><b>группы разрядов строгие:</b> если в целой части есть разделитель разрядов, первая группа содержит
+     *       от 1 до 3 цифр, а каждая следующая — ровно 3 ({@code 1 234 567}); запись {@code 12 3}, {@code 1 23},
+     *       {@code 12,3,4} или {@code 1,23,456} отклоняется: такая опечатка иначе молча превратилась бы
+     *       в другую сумму;</li>
      *   <li>больше двух знаков после запятой округляются до копейки по правилу HALF_UP.</li>
      * </ul>
      *
      * @param text исходный текст, например {@code "80 000,00"}, {@code "80000.5"}, {@code "-1 200"}
      * @return разобранная сумма
-     * @throws IllegalArgumentException если текст пуст или не является числом
+     * @throws IllegalArgumentException если текст пуст, не является числом или разряды сгруппированы неверно
+     *                                  (сообщение по-русски, начинается с «Некорректная сумма: «…»»)
      */
     public static Money parse(String text) {
         if (text == null) {
             throw new IllegalArgumentException("Сумма не указана");
         }
-        // Шаг 1: выбрасываем всё «декоративное» и нормализуем типографский минус.
+        // Шаг 1: выбрасываем символы валют и нормализуем типографский минус; пробелы пока сохраняем,
+        // потому что внутри числа они разделяют разряды и участвуют в строгой проверке групп.
         StringBuilder cleaned = new StringBuilder(text.length());
         text.codePoints().forEach(cp -> {
-            if (Character.isWhitespace(cp) || Character.isSpaceChar(cp) || cp == '\''
-                    || Character.getType(cp) == Character.CURRENCY_SYMBOL) {
+            if (Character.getType(cp) == Character.CURRENCY_SYMBOL) {
                 return;
             }
-            cleaned.appendCodePoint(cp == '−' ? '-' : cp);
+            cleaned.appendCodePoint(cp == '−' ? '-' : isBlank(cp) ? ' ' : cp);
         });
-        String s = cleaned.toString();
+        String s = cleaned.toString().strip();
         boolean negative = false;
         if (s.startsWith("-")) {
             negative = true;
-            s = s.substring(1);
+            s = s.substring(1).strip();
         } else if (s.startsWith("+")) {
-            s = s.substring(1);
+            s = s.substring(1).strip();
         }
         if (s.isEmpty()) {
             throw new IllegalArgumentException("Сумма не указана");
         }
 
-        // Шаг 2: определяем десятичный разделитель.
-        String integerPart;
-        String fractionPart;
+        // Шаг 2: определяем десятичный разделитель и знак препинания, разделяющий разряды.
         int lastComma = s.lastIndexOf(',');
         int lastDot = s.lastIndexOf('.');
+        int decimal;
+        char groupingPunct;
         if (lastComma >= 0 && lastDot >= 0) {
-            int decimal = Math.max(lastComma, lastDot);
-            String grouping = decimal == lastComma ? "." : ",";
-            integerPart = s.substring(0, decimal).replace(grouping, "");
-            fractionPart = s.substring(decimal + 1);
+            decimal = Math.max(lastComma, lastDot);
+            groupingPunct = decimal == lastComma ? '.' : ',';
+        } else if (lastComma >= 0 || lastDot >= 0) {
+            char separator = lastComma >= 0 ? ',' : '.';
+            boolean repeated = s.indexOf(separator) != s.lastIndexOf(separator);
+            // Повторяющийся знак — разделитель разрядов («1,234,567»), одиночный — десятичный («80000.5»).
+            decimal = repeated ? -1 : s.lastIndexOf(separator);
+            groupingPunct = repeated ? separator : 0;
         } else {
-            String separator = lastComma >= 0 ? "," : ".";
-            int first = s.indexOf(separator);
-            int last = s.lastIndexOf(separator);
-            if (last < 0) {
-                integerPart = s;
-                fractionPart = "";
-            } else if (first != last) {
-                integerPart = s.replace(separator, "");
-                fractionPart = "";
-            } else {
-                integerPart = s.substring(0, last);
-                fractionPart = s.substring(last + 1);
-            }
+            decimal = -1;
+            groupingPunct = 0;
         }
+        String integerRaw = decimal < 0 ? s : s.substring(0, decimal);
+        String fractionPart = decimal < 0 ? "" : s.substring(decimal + 1);
+        String integerPart = integerDigits(integerRaw, groupingPunct, text);
         if (integerPart.isEmpty() && fractionPart.isEmpty()) {
-            throw new IllegalArgumentException("Некорректная сумма: «" + text.strip() + "»");
+            throw invalid(text);
         }
-        if (!DIGITS.matcher(integerPart).matches() || !DIGITS.matcher(fractionPart).matches()) {
-            throw new IllegalArgumentException("Некорректная сумма: «" + text.strip() + "»");
+        if (!DIGITS.matcher(fractionPart).matches()) {
+            throw invalid(text);
         }
 
         // Шаг 3: переводим в копейки с округлением.
@@ -140,6 +146,70 @@ public record Money(long minor) implements Comparable<Money> {
         } catch (ArithmeticException e) {
             throw new IllegalArgumentException("Слишком большая сумма: «" + text.strip() + "»", e);
         }
+    }
+
+    /**
+     * Проверяет группы разрядов целой части и возвращает её цифры без разделителей.
+     *
+     * @param raw           целая часть до десятичного разделителя (пробелы уже приведены к обычному пробелу)
+     * @param groupingPunct знак препинания, разделяющий разряды, или {@code 0}, если такого нет
+     * @param original      исходный текст для сообщения об ошибке
+     * @return только цифры целой части (может быть пустой строкой, например для «,5»)
+     * @throws IllegalArgumentException если встретился посторонний символ или группа неверной длины
+     */
+    private static String integerDigits(String raw, char groupingPunct, String original) {
+        List<String> groups = new ArrayList<>();
+        StringBuilder current = new StringBuilder();
+        boolean grouped = false;
+        for (int i = 0; i < raw.length(); i++) {
+            char c = raw.charAt(i);
+            if (c >= '0' && c <= '9') {
+                current.append(c);
+            } else if (c == ' ' || c == '\'' || (groupingPunct != 0 && c == groupingPunct)) {
+                // Серия пробелов подряд считается одним разделителем: два пробела при вводе — не повод для ошибки.
+                boolean spaceRun = c == ' ' && i > 0 && raw.charAt(i - 1) == ' ';
+                if (!spaceRun) {
+                    groups.add(current.toString());
+                    current.setLength(0);
+                    grouped = true;
+                }
+            } else {
+                throw invalid(original);
+            }
+        }
+        groups.add(current.toString());
+        if (!grouped) {
+            return groups.getFirst();
+        }
+        String first = groups.getFirst();
+        if (first.isEmpty() || first.length() > 3) {
+            throw invalidGrouping(original);
+        }
+        for (int i = 1; i < groups.size(); i++) {
+            if (groups.get(i).length() != 3) {
+                throw invalidGrouping(original);
+            }
+        }
+        return String.join("", groups);
+    }
+
+    /** @return {@code true} для любого пробельного символа, включая неразрывные U+00A0 и U+202F */
+    private static boolean isBlank(int cp) {
+        return Character.isWhitespace(cp) || Character.isSpaceChar(cp);
+    }
+
+    private static IllegalArgumentException invalid(String text) {
+        return new IllegalArgumentException("Некорректная сумма: «" + text.strip() + "»");
+    }
+
+    /**
+     * Ошибка неверной группировки разрядов (решение L1).
+     *
+     * <p>Текст берётся из общего каталога ({@code money.error.grouping}): новое сообщение модели не пишется
+     * литералом (решение L13); остальные сообщения {@code parse} переезжают в каталог на этапе S0.5.</p>
+     */
+    private static IllegalArgumentException invalidGrouping(String text) {
+        return new IllegalArgumentException(Texts.get("money.error.grouping", text.strip()));
     }
 
     /**

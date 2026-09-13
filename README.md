@@ -74,7 +74,7 @@
 
 | Хранилище | Где смотреть |
 |---|---|
-| Реестр Windows | `HKEY_CURRENT_USER\Software\JavaSoft\Prefs\ru\cashprediction\session\fx` (и `\swing`) |
+| Реестр Windows | прежний интерфейс: `HKEY_CURRENT_USER\Software\JavaSoft\Prefs\ru\cashprediction\session\fx` (и `\swing`); интерфейс ядра (`--ui core`): отдельный узел каждой портативной копии `…\session\fx-<8 символов>` (и `swing-…`), а путь её папки CashMemory записан рядом в значении `cashmemory.path` |
 | XML-файл | `CashMemory\session-fx.xml` (и `session-swing.xml`) |
 
 Если прошлый запуск завершился аварийно, при старте появляется диалог с выбором: восстановить из реестра, из XML-файла или не восстанавливать. Web-клиент хранит состояние на сервере. Перезагрузка страницы возвращает те же открытые окна и значения. После аварийного падения сервера страница предлагает восстановить сеанс.

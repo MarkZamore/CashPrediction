@@ -1,0 +1,88 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Модуль ui-parity: только тесты (архитектура §6.3–6.5). Собирается лишь в профилях -Pui-tests и -Pe2e,
+  в сборку по умолчанию (mvn -B install) не входит: ему нужны интерактивный рабочий стол Windows,
+  настоящий реестр и установленный Edge или Chrome.
+
+  Содержимое этапа S0 — каркас стенда:
+    ClientLauncher      - запуск клиента отдельной JVM с module path из jar реактора и аргументами §3.8/§6.3;
+    ProcessTree         - завершение процесса вместе со всеми потомками через ProcessHandle;
+    RegistryNodeCleaner - тестовые узлы ru/cashprediction/selftest/<uuid> и слепок настоящих узлов сеанса;
+    EdgeLauncher        - headless Edge (или Chrome) с DevToolsActivePort;
+    CdpClient           - Page.navigate, Page.captureScreenshot, Runtime.evaluate через java.net.http.
+
+  Внешних библиотек нет: только ядро, JDK и JUnit 5 (область test). Интеграционные тесты *IT выполняет
+  surefire (как в core), отдельный failsafe-плагин не нужен.
+-->
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <parent>
+    <groupId>ru.cashprediction</groupId>
+    <artifactId>cashprediction-parent</artifactId>
+    <version>1.0.0</version>
+  </parent>
+
+  <artifactId>cashprediction-ui-parity</artifactId>
+  <name>CashPrediction UI parity tests</name>
+
+  <properties>
+    <!-- Модуль без основного кода: пустой jar не создаётся и не устанавливается в локальный репозиторий. -->
+    <maven.install.skip>true</maven.install.skip>
+    <maven.deploy.skip>true</maven.deploy.skip>
+  </properties>
+
+  <dependencies>
+    <!-- Ядро: LaunchOptions (проверка имён аргументов), RegistrySessionStore (правила узлов), мини-JSON для CDP.
+         Область test, потому что весь код модуля тестовый; для -am этого достаточно, ядро собирается первым. -->
+    <dependency>
+      <groupId>ru.cashprediction</groupId>
+      <artifactId>cashprediction-core</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.junit.jupiter</groupId>
+      <artifactId>junit-jupiter</artifactId>
+      <scope>test</scope>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <plugins>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-jar-plugin</artifactId>
+        <configuration>
+          <!-- В src/main ничего нет: без этого плагин создал бы пустой jar с предупреждением. -->
+          <skipIfEmpty>true</skipIfEmpty>
+        </configuration>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-surefire-plugin</artifactId>
+        <configuration>
+          <!-- Стандартные шаблоны плюс *IT: интеграционные тесты стенда идут в той же фазе test,
+               профиль ui-tests/e2e и так включается только там, где есть рабочий стол и браузер. -->
+          <includes>
+            <include>**/*Test.java</include>
+            <include>**/*IT.java</include>
+          </includes>
+          <!-- Полные стеки: падение стенда почти всегда означает внешнюю причину (браузер, реестр, процесс). -->
+          <trimStackTrace>false</trimStackTrace>
+          <systemPropertyVariables>
+            <!-- Раскладка реактора для ClientLauncher: откуда брать jar модулей и JavaFX. Корень — родитель модуля
+                 (модуль лежит прямо под корнем), а не maven.multiModuleProjectDirectory: без папки .mvn тот равен папке,
+                 из которой запущен Maven, и ломается при запуске из ui-parity или с -f. -->
+            <parity.reactor.root>${project.basedir}/..</parity.reactor.root>
+            <parity.project.version>${project.version}</parity.project.version>
+            <parity.javafx.version>${javafx.version}</parity.javafx.version>
+            <parity.maven.repository>${settings.localRepository}</parity.maven.repository>
+            <parity.build.directory>${project.build.directory}</parity.build.directory>
+          </systemPropertyVariables>
+        </configuration>
+      </plugin>
+    </plugins>
+  </build>
+</project>

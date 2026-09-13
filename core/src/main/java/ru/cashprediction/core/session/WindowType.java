@@ -41,8 +41,12 @@ public enum WindowType {
             List.of(WindowType.CONTEXT_MODE, WindowType.CONTEXT_TX_ID),
             List.of("date", "title", "kind", "amount", "category", "note")),
 
-    /** Корректировка конкретного повторения; контекст {@code ruleId}, {@code originalDate}. */
-    ADJUSTMENT_EDITOR("Корректировка", true,
+    /**
+     * Корректировка конкретного повторения; контекст {@code ruleId}, {@code originalDate}.
+     * Заголовок «Корректировка события» — по спецификации интерфейса v2 (§6.5); заголовки в снимок не пишутся,
+     * поэтому смена текста не затрагивает сохранённые снимки.
+     */
+    ADJUSTMENT_EDITOR("Корректировка события", true,
             List.of(WindowType.CONTEXT_RULE_ID, WindowType.CONTEXT_ORIGINAL_DATE),
             List.of("action", "amount", "date", "note")),
 

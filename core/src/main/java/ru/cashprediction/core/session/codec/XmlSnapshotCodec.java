@@ -34,6 +34,7 @@ import ru.cashprediction.core.session.WindowType;
  * <?xml version="1.0" encoding="UTF-8"?>
  * <session schema="1" client="fx" state="running" pid="12345" startedAt="2026-09-13T10:00:00Z" savedAt="2026-09-13T10:15:30.123Z">
  *   <main x="100" y="80" width="1200" height="800" maximized="false" view="TABLE" period="12m" filterText="">
+ *   (необязательный атрибут whatIfExtra="5000,00" пишется после filterText, только если задан)
  *     <plan path="Семейный бюджет 2026.md"/>
  *     <filters><filter id="showIncome" value="true"/><filter id="showExpense" value="true"/></filters>
  *     <selection rowId="r2@2026-10-01"/>
@@ -169,6 +170,10 @@ public final class XmlSnapshotCodec implements SnapshotCodec<String> {
         attr(sb, "view", main.view());
         attr(sb, "period", main.period());
         attr(sb, "filterText", main.filterText());
+        // Необязательный атрибут схемы 1: пишется только при значении, старые файлы остаются байт-в-байт прежними.
+        if (!main.whatIfExtra().isEmpty()) {
+            attr(sb, "whatIfExtra", main.whatIfExtra());
+        }
         sb.append(">\n");
         indent(sb, 2).append("<plan");
         attr(sb, "path", main.planPath());
@@ -384,7 +389,9 @@ public final class XmlSnapshotCodec implements SnapshotCodec<String> {
                 main.getAttribute("period"),
                 filters,
                 main.getAttribute("filterText"),
-                selection == null ? "" : selection.getAttribute("rowId"));
+                selection == null ? "" : selection.getAttribute("rowId"),
+                // getAttribute возвращает пустую строку для отсутствующего атрибута: так читаются старые файлы.
+                main.getAttribute("whatIfExtra"));
     }
 
     private static PlanState readPlan(Element unsavedPlan) throws SnapshotFormatException {

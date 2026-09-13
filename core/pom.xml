@@ -52,6 +52,13 @@
             <include>**/*TestCase.java</include>
             <include>**/*IT.java</include>
           </includes>
+          <systemPropertyVariables>
+            <!-- Строгий режим каталога текстов (решение L13): отсутствующий ключ или аргумент в тестах ядра — исключение,
+                 у пользователя вместо текста показывается !ключ!. -->
+            <cashprediction.ui.strictText>true</cashprediction.ui.strictText>
+            <!-- Папка модуля для тестов, читающих исходники (CoreModuleDir): не зависят от рабочей папки IDE. -->
+            <core.basedir>${project.basedir}</core.basedir>
+          </systemPropertyVariables>
         </configuration>
       </plugin>
     </plugins>

@@ -24,7 +24,8 @@ import ru.cashprediction.core.session.WindowType;
  *   "schemaVersion": 1, "savedAt": "2026-09-13T10:15:30.123Z", "client": "fx",
  *   "main": {"bounds": {"x": 100, "y": 80, "width": 1200, "height": 800}, "maximized": false,
  *            "view": "TABLE", "planPath": "Семейный бюджет 2026.md", "period": "12m",
- *            "filters": {"showIncome": true}, "filterText": "", "selectedRowId": "r2@2026-10-01"},
+ *            "filters": {"showIncome": true}, "filterText": "", "selectedRowId": "r2@2026-10-01",
+ *            "whatIfExtra": "5000,00"},                          // необязательное: только если задано
  *   "plan": {"dirty": true, "markdown": "# План: ..."},
  *   "windows": [{"id": "w1", "type": "RULE_EDITOR", "modal": true, "ownerId": "main", "bounds": null,
  *                "context": {"mode": "edit", "ruleId": "r3"}, "fields": {"title": "Аренда"}}]
@@ -165,6 +166,10 @@ public final class JsonSnapshotCodec implements SnapshotCodec<String> {
         json.put("filters", new LinkedHashMap<>(main.filters()));
         json.put("filterText", main.filterText());
         json.put("selectedRowId", main.selectedRowId());
+        // Необязательное поле схемы 1: пишется только при значении, чтобы снимки без «что-если» не менялись.
+        if (!main.whatIfExtra().isEmpty()) {
+            json.put("whatIfExtra", main.whatIfExtra());
+        }
         return json;
     }
 
@@ -178,7 +183,8 @@ public final class JsonSnapshotCodec implements SnapshotCodec<String> {
         }
         return new MainWindowState(boundsFromJson(json), Json.bool(json, "maximized", false),
                 Json.string(json, "view", ""), Json.string(json, "planPath", ""), Json.string(json, "period", ""),
-                filters, Json.string(json, "filterText", ""), Json.string(json, "selectedRowId", ""));
+                filters, Json.string(json, "filterText", ""), Json.string(json, "selectedRowId", ""),
+                Json.string(json, "whatIfExtra", ""));
     }
 
     private static Map<String, Object> windowToJson(WindowState window) {

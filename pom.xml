@@ -150,5 +150,20 @@
         <module>dist</module>
       </modules>
     </profile>
+    <!-- mvn -Pui-tests verify: трёхстороннее сравнение клиентов (архитектура §6.3). Нужен интерактивный рабочий
+         стол Windows и Edge; модуль ui-parity только тестовый и в сборку по умолчанию не входит. -->
+    <profile>
+      <id>ui-tests</id>
+      <modules>
+        <module>ui-parity</module>
+      </modules>
+    </profile>
+    <!-- mvn -Pe2e verify: сквозные тесты восстановления после сбоя и портативных exe (архитектура §6.4). -->
+    <profile>
+      <id>e2e</id>
+      <modules>
+        <module>ui-parity</module>
+      </modules>
+    </profile>
   </profiles>
 </project>

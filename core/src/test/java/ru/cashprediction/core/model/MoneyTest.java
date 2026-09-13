@@ -32,10 +32,30 @@ class MoneyTest {
         "0,005          | 1",
         "0,004          | 0",
         "45 000,00 ₽    | 4500000",
-        ",5             | 50"
+        ",5             | 50",
+        "1 234 567      | 123456700",
+        "1'234'567,89   | 123456789",
+        "1.234.567,89   | 123456789",
+        "80  000        | 8000000"
     })
     void parsesHumanInput(String text, long expectedMinor) {
         assertEquals(expectedMinor, Money.parse(text).minor());
+    }
+
+    /** Неверные группы разрядов отклоняются, а не превращаются молча в другую сумму (решение L1). */
+    @ParameterizedTest(name = "«{0}» отклоняется: неверные группы разрядов")
+    @CsvSource(delimiter = '|', value = {"12,3,4", "12 3", "1 23", "1,23,456", "1 2345", "1234 567", "1.23.456,00",
+        "80 000 ,00", "-12 3"})
+    void rejectsWrongDigitGrouping(String text) {
+        IllegalArgumentException e = assertThrows(IllegalArgumentException.class, () -> Money.parse(text));
+        assertTrue(e.getMessage().startsWith("Некорректная сумма: «"), e.getMessage());
+    }
+
+    @Test
+    void groupingErrorExplainsTheRule() {
+        IllegalArgumentException e = assertThrows(IllegalArgumentException.class, () -> Money.parse("12 3"));
+        assertEquals("Некорректная сумма: «12 3» — разряды разделяются группами по три цифры, например 1 234 567,89",
+                e.getMessage());
     }
 
     @ParameterizedTest(name = "«{0}» отклоняется")

@@ -40,6 +40,7 @@ import ru.cashprediction.core.session.WindowType;
  * - Выделено: r2@2026-10-01
  * - Границы: нет
  * - Развёрнуто: нет
+ * - Что-если, доп. экономия в месяц: 5000,00     (необязательная строка: только если задано)
  *
  * ## Открытые окна
  *
@@ -92,6 +93,8 @@ public final class MarkdownSnapshotCodec implements SnapshotCodec<String> {
     private static final String KEY_SELECTED = "Выделено";
     private static final String KEY_BOUNDS = "Границы";
     private static final String KEY_MAXIMIZED = "Развёрнуто";
+    /** Необязательная строка главного окна: дополнительная экономия «что-если» в месяц. */
+    private static final String KEY_WHAT_IF_EXTRA = "Что-если, доп. экономия в месяц";
     private static final String KEY_CONTEXT = "Контекст";
 
     private static final String YES = "да";
@@ -172,6 +175,10 @@ public final class MarkdownSnapshotCodec implements SnapshotCodec<String> {
         lines.add(item(KEY_SELECTED, escapeValue(main.selectedRowId())));
         lines.add(item(KEY_BOUNDS, bounds(main.bounds())));
         lines.add(item(KEY_MAXIMIZED, main.maximized() ? YES : NO));
+        // Необязательная строка схемы 1: только при значении, чтобы файлы без «что-если» не менялись.
+        if (!main.whatIfExtra().isEmpty()) {
+            lines.add(item(KEY_WHAT_IF_EXTRA, escapeValue(main.whatIfExtra())));
+        }
         lines.add("");
         lines.add(SECTION_WINDOWS);
         for (WindowState window : snapshot.windows()) {
@@ -339,7 +346,8 @@ public final class MarkdownSnapshotCodec implements SnapshotCodec<String> {
                     unescape(main.getOrDefault(KEY_PERIOD, "")),
                     filters,
                     unescape(main.getOrDefault(KEY_FILTER_TEXT, "")),
-                    unescape(main.getOrDefault(KEY_SELECTED, "")));
+                    unescape(main.getOrDefault(KEY_SELECTED, "")),
+                    unescape(main.getOrDefault(KEY_WHAT_IF_EXTRA, "")));
         }
 
         private PlanState planState() throws SnapshotFormatException {

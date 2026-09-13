@@ -1,10 +1,15 @@
 package ru.cashprediction.core.session.store;
 
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Path;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
+import java.util.HexFormat;
 import java.util.List;
+import java.util.Locale;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.regex.Matcher;
@@ -18,13 +23,22 @@ import ru.cashprediction.core.session.SnapshotSchema;
 import ru.cashprediction.core.session.WindowState;
 import ru.cashprediction.core.session.codec.JsonSnapshotCodec;
 import ru.cashprediction.core.session.codec.SnapshotFormatException;
+import ru.cashprediction.core.text.Texts;
 
 /**
  * Хранилище снимка сессии в реестре Windows (раздел 5.3 плана).
  *
- * <p>Раскладка узла {@code HKCU\Software\JavaSoft\Prefs\ru\cashprediction\session\<клиент>}:</p>
+ * <p><b>Узел.</b> У каждой установки (портативной копии) свой узел
+ * {@code HKCU\Software\JavaSoft\Prefs\ru\cashprediction\session\<клиент>-<8 hex SHA-256 пути CashMemory>},
+ * например {@code …\session\fx-3fa92c1d} (решение L2: две копии на одном компьютере не делят снимки).
+ * Явный префикс ({@code --registry-node}, свойство {@value #PROPERTY_NODE}) должен начинаться с
+ * {@value #REQUIRED_PREFIX}; узел тогда {@code <префикс>/<клиент>}. Старые клиенты до этапа S4 используют
+ * прежний общий узел {@code …\session\<клиент>} ({@link #forClient(String)}).</p>
+ *
+ * <p>Раскладка узла:</p>
  * <pre>
  * schema=1  state=running|closed  pid=12345  started.at=…  client=fx      маркер сеанса
+ * cashmemory.path=D:\CashPrediction\CashMemory                            чья это копия (если известно)
  * plan.path=…  view=TABLE  windows.count=1  window.0.type=RULE_EDITOR     читаемые дубли для regedit
  * snapshot.count=4  snapshot.length=15321  snapshot.crc32=8f3a1c22
  * snapshot.0 … snapshot.3                                                 JSON-куски по 4096 символов
@@ -47,8 +61,17 @@ import ru.cashprediction.core.session.codec.SnapshotFormatException;
  */
 public final class RegistrySessionStore implements SessionStore {
 
-    /** Префикс узлов реестра; к нему добавляется идентификатор клиента. */
+    /** Префикс узлов реестра; к нему добавляется идентификатор клиента (и хеш установки). */
     public static final String NODE_PREFIX = "ru/cashprediction/session/";
+
+    /** Обязательное начало явного префикса узла: программа не пишет в реестр вне своей ветки. */
+    public static final String REQUIRED_PREFIX = "ru/cashprediction/";
+
+    /** Системное свойство с явным префиксом узла (аналог аргумента {@code --registry-node}). */
+    public static final String PROPERTY_NODE = "cashprediction.registry.node";
+
+    /** Ключ-дубль: абсолютный путь CashMemory копии программы, которой принадлежит узел. */
+    public static final String KEY_CASHMEMORY_PATH = "cashmemory.path";
 
     /** Максимальный размер одного JSON-куска в символах. */
     public static final int CHUNK_SIZE = 4096;
@@ -87,6 +110,9 @@ public final class RegistrySessionStore implements SessionStore {
     private final String client;
     private final JsonSnapshotCodec codec = new JsonSnapshotCodec();
 
+    /** Путь CashMemory для читаемого значения {@link #KEY_CASHMEMORY_PATH}; {@code null} — не писать. */
+    private final String cashMemoryPath;
+
     /** Ошибка последней «тихой» операции; {@code null} — ошибок нет. */
     private volatile String lastError;
 
@@ -97,19 +123,213 @@ public final class RegistrySessionStore implements SessionStore {
      * @param client  клиент, которому принадлежит узел
      */
     public RegistrySessionStore(RegistryBackend backend, String client) {
-        this.backend = Objects.requireNonNull(backend, "backend");
-        this.client = SnapshotSchema.requireClient(client);
+        this(backend, client, null);
     }
 
     /**
-     * Создаёт хранилище в настоящем реестре для клиента: узел {@code ru/cashprediction/session/<клиент>}.
+     * Создаёт хранилище поверх бэкенда и запоминает путь CashMemory, который пишется читаемым значением
+     * {@value #KEY_CASHMEMORY_PATH}: по нему в regedit видно, какой портативной копии принадлежит узел.
+     *
+     * @param backend        узел реестра
+     * @param client         клиент, которому принадлежит узел
+     * @param cashMemoryPath абсолютный путь папки CashMemory или {@code null}, если значение не пишется
+     */
+    public RegistrySessionStore(RegistryBackend backend, String client, String cashMemoryPath) {
+        this.backend = Objects.requireNonNull(backend, "backend");
+        this.client = SnapshotSchema.requireClient(client);
+        this.cashMemoryPath = cashMemoryPath == null || cashMemoryPath.isBlank() ? null : cashMemoryPath;
+    }
+
+    /**
+     * Создаёт хранилище в настоящем реестре по прежней схеме узлов, общей для всех копий программы на компьютере.
+     *
+     * <p>Узел: префикс из системного свойства {@value #PROPERTY_NODE} + {@code /<клиент>}, если свойство задано
+     * (так изолируются самотесты старых клиентов); иначе прежний узел {@code ru/cashprediction/session/<клиент>}.
+     * Метод оставлен для старых клиентов до этапа S4; новый интерфейс ядра использует
+     * {@link #forClient(String, Path)} с отдельным узлом для каждой установки (решение L2).</p>
      *
      * @param client {@code fx}, {@code swing} или {@code web}
      * @return хранилище (возможно, недоступное — см. {@link #isAvailable()})
+     * @throws IllegalArgumentException если свойство задаёт префикс вне {@code ru/cashprediction/}
+     * @deprecated две портативные копии на одном компьютере делят этот узел; используйте
+     *             {@link #forClient(String, Path)}
      */
+    @Deprecated
     public static RegistrySessionStore forClient(String client) {
-        return new RegistrySessionStore(new PreferencesRegistryBackend(NODE_PREFIX + SnapshotSchema.requireClient(client)),
-                client);
+        SnapshotSchema.requireClient(client);
+        String prefix = System.getProperty(PROPERTY_NODE);
+        String node = prefix == null || prefix.isBlank() ? legacyNodePath(client) : nodePath(prefix, client);
+        return new RegistrySessionStore(new PreferencesRegistryBackend(node), client);
+    }
+
+    /**
+     * Создаёт хранилище в настоящем реестре с узлом этой установки (решение L2): две портативные копии
+     * на одном компьютере не делят снимки сеанса.
+     *
+     * @param client        {@code fx}, {@code swing} или {@code web}
+     * @param cashMemoryDir папка CashMemory этой копии программы (может ещё не существовать)
+     * @return хранилище (возможно, недоступное — см. {@link #isAvailable()})
+     * @see #forClient(String, Path, String)
+     */
+    public static RegistrySessionStore forClient(String client, Path cashMemoryDir) {
+        return forClient(client, cashMemoryDir, null);
+    }
+
+    /**
+     * Создаёт хранилище в настоящем реестре с узлом установки или с явным префиксом узла.
+     *
+     * <p>Выбор узла:</p>
+     * <ol>
+     *   <li>{@code nodePrefixOrNull} задан (аргумент {@code --registry-node} из {@code LaunchOptions}) —
+     *       узел {@code <префикс>/<клиент>};</li>
+     *   <li>иначе задано системное свойство {@value #PROPERTY_NODE} — узел {@code <свойство>/<клиент>};</li>
+     *   <li>иначе узел установки {@link #installationNodePath(String, Path)}, например
+     *       {@code ru/cashprediction/session/fx-3fa92c1d}.</li>
+     * </ol>
+     * <p>Префикс обязан начинаться с {@value #REQUIRED_PREFIX} и не может лежать в ветке снимков
+     * {@code ru/cashprediction/session}: так тесты и ручные запуски не могут записать снимки в чужую ветку реестра,
+     * в общий узел прежних клиентов или в узел настоящей установки (решение L12). Пустой или состоящий из пробелов
+     * префикс равносилен {@code null}: иначе заданное свойство молча уступило бы узлу установки.</p>
+     *
+     * @param client           {@code fx}, {@code swing} или {@code web}
+     * @param cashMemoryDir    папка CashMemory этой копии программы (может ещё не существовать)
+     * @param nodePrefixOrNull префикс узла, например {@code ru/cashprediction/selftest/<uuid>}, или {@code null} / пустая
+     *                         строка
+     * @return хранилище (возможно, недоступное — см. {@link #isAvailable()})
+     * @throws IllegalArgumentException если префикс не начинается с {@value #REQUIRED_PREFIX} или некорректен
+     */
+    public static RegistrySessionStore forClient(String client, Path cashMemoryDir, String nodePrefixOrNull) {
+        String node = resolveNodePath(client, cashMemoryDir, nodePrefixOrNull);
+        return new RegistrySessionStore(new PreferencesRegistryBackend(node), client, normalizedPath(cashMemoryDir));
+    }
+
+    /**
+     * Создаёт хранилище в памяти процесса (аргумент {@code --registry memory}): настоящий реестр не трогается,
+     * снимок живёт до завершения процесса. Нужен тестам и изолированным запускам.
+     *
+     * @param client        {@code fx}, {@code swing} или {@code web}
+     * @param cashMemoryDir папка CashMemory или {@code null}
+     * @return хранилище поверх {@link InMemoryRegistryBackend}
+     */
+    public static RegistrySessionStore inMemory(String client, Path cashMemoryDir) {
+        return new RegistrySessionStore(new InMemoryRegistryBackend(), client,
+                cashMemoryDir == null ? null : normalizedPath(cashMemoryDir));
+    }
+
+    /**
+     * Вычисляет путь узла, который выберет {@link #forClient(String, Path, String)}, не открывая реестр.
+     *
+     * @param client           идентификатор клиента
+     * @param cashMemoryDir    папка CashMemory
+     * @param nodePrefixOrNull явный префикс или {@code null} (пустая строка — то же, что {@code null})
+     * @return путь узла относительно {@code HKCU\Software\JavaSoft\Prefs}
+     * @throws IllegalArgumentException если префикс некорректен
+     */
+    public static String resolveNodePath(String client, Path cashMemoryDir, String nodePrefixOrNull) {
+        SnapshotSchema.requireClient(client);
+        Objects.requireNonNull(cashMemoryDir, "cashMemoryDir");
+        // Пустой аргумент не должен перекрывать свойство: с ним тестовый запуск ушёл бы в настоящий узел установки.
+        boolean explicit = nodePrefixOrNull != null && !nodePrefixOrNull.isBlank();
+        String prefix = explicit ? nodePrefixOrNull : System.getProperty(PROPERTY_NODE);
+        return prefix == null || prefix.isBlank() ? installationNodePath(client, cashMemoryDir) : nodePath(prefix, client);
+    }
+
+    /**
+     * Узел установки по умолчанию: {@code ru/cashprediction/session/<клиент>-<8 hex>}, где 8 hex — первые восемь
+     * строчных шестнадцатеричных цифр SHA-256 от нормализованного абсолютного пути CashMemory в нижнем регистре.
+     *
+     * <p>Почему хеш, а не сам путь: имя узла реестра ограничено 80 символами и не должно содержать косую черту;
+     * хеш короткий, стабильный и различает копии. Сам путь для человека пишется значением
+     * {@value #KEY_CASHMEMORY_PATH}.</p>
+     *
+     * @param client        идентификатор клиента
+     * @param cashMemoryDir папка CashMemory
+     * @return путь узла, например {@code ru/cashprediction/session/fx-3fa92c1d}
+     */
+    public static String installationNodePath(String client, Path cashMemoryDir) {
+        return NODE_PREFIX + SnapshotSchema.requireClient(client) + "-" + installationHash(cashMemoryDir);
+    }
+
+    /**
+     * Первые 8 шестнадцатеричных цифр SHA-256 пути CashMemory (см. {@link #installationNodePath(String, Path)}).
+     *
+     * @param cashMemoryDir папка CashMemory
+     * @return 8 строчных шестнадцатеричных цифр
+     */
+    public static String installationHash(Path cashMemoryDir) {
+        String key = normalizedPath(cashMemoryDir).toLowerCase(Locale.ROOT);
+        try {
+            byte[] digest = MessageDigest.getInstance("SHA-256").digest(key.getBytes(StandardCharsets.UTF_8));
+            return HexFormat.of().formatHex(digest, 0, 4);
+        } catch (NoSuchAlgorithmException e) {
+            // SHA-256 обязателен для любой реализации Java SE; сюда выполнение не доходит.
+            throw new IllegalStateException("SHA-256 is not available in this JDK", e);
+        }
+    }
+
+    /**
+     * Прежний общий узел клиента {@code ru/cashprediction/session/<клиент>}.
+     *
+     * @param client идентификатор клиента
+     * @return путь узла
+     */
+    public static String legacyNodePath(String client) {
+        return NODE_PREFIX + SnapshotSchema.requireClient(client);
+    }
+
+    /**
+     * Проверяет явный префикс узла и приклеивает к нему клиента.
+     *
+     * @param prefix префикс, например {@code ru/cashprediction/selftest/1b2c} (завершающая косая черта допустима)
+     * @param client идентификатор клиента
+     * @return {@code <префикс>/<клиент>}
+     * @throws IllegalArgumentException если префикс вне {@value #REQUIRED_PREFIX}, в ветке снимков
+     *                                  {@code ru/cashprediction/session}, содержит пустые части, {@code .}, {@code ..}
+     *                                  или обратную косую черту
+     */
+    public static String nodePath(String prefix, String client) {
+        SnapshotSchema.requireClient(client);
+        String p = Objects.requireNonNull(prefix, "prefix").strip();
+        while (p.endsWith("/")) {
+            p = p.substring(0, p.length() - 1);
+        }
+        if (!p.startsWith(REQUIRED_PREFIX) || p.length() == REQUIRED_PREFIX.length()) {
+            // Тексты из каталога (решение L13): сообщение видит пользователь, запустивший exe с --registry-node.
+            throw new IllegalArgumentException(Texts.get("registry.error.prefix", prefix, REQUIRED_PREFIX));
+        }
+        String sessionArea = NODE_PREFIX.substring(0, NODE_PREFIX.length() - 1);
+        if (p.equals(sessionArea) || p.startsWith(NODE_PREFIX)) {
+            // Явный узел нужен для изоляции (L12): в ветке session лежат общий узел прежних клиентов и узлы установок.
+            throw new IllegalArgumentException(Texts.get("registry.error.sessionArea", prefix, sessionArea));
+        }
+        for (String part : p.split("/", -1)) {
+            if (part.isEmpty() || part.equals(".") || part.equals("..") || part.contains("\\") || part.length() > 80) {
+                throw new IllegalArgumentException(Texts.get("registry.error.part", prefix));
+            }
+        }
+        return p + "/" + client;
+    }
+
+    /**
+     * Путь узла в реестре, если хранилище работает поверх настоящего реестра.
+     *
+     * @return путь относительно {@code HKCU\Software\JavaSoft\Prefs} или пустая строка для хранилища в памяти
+     */
+    public String nodePath() {
+        return backend instanceof PreferencesRegistryBackend preferences ? preferences.nodePath() : "";
+    }
+
+    /**
+     * Путь CashMemory, который пишется значением {@value #KEY_CASHMEMORY_PATH}.
+     *
+     * @return путь или пусто, если хранилище создано без него
+     */
+    public Optional<String> cashMemoryPath() {
+        return Optional.ofNullable(cashMemoryPath);
+    }
+
+    private static String normalizedPath(Path dir) {
+        return Objects.requireNonNull(dir, "cashMemoryDir").toAbsolutePath().normalize().toString();
     }
 
     /**
@@ -155,6 +375,7 @@ public final class RegistrySessionStore implements SessionStore {
             backend.put(KEY_PID, String.valueOf(marker.pid()));
             backend.put(KEY_STARTED_AT, marker.startedAt().toString());
             backend.put(KEY_CLIENT, marker.client());
+            putCashMemoryPath();
             backend.flush();
             verifyWritten(KEY_STATE, marker.state());
             lastError = null;
@@ -211,6 +432,7 @@ public final class RegistrySessionStore implements SessionStore {
             // 2. Читаемые дубли для regedit.
             backend.put(KEY_SCHEMA, String.valueOf(snapshot.schemaVersion()));
             backend.put(KEY_CLIENT, snapshot.client());
+            putCashMemoryPath();
             backend.put(KEY_PLAN_PATH, snapshot.main().planPath());
             backend.put(KEY_VIEW, snapshot.main().view());
             List<WindowState> windows = snapshot.windows();
@@ -351,6 +573,13 @@ public final class RegistrySessionStore implements SessionStore {
             if (window.matches() && isAtLeast(window.group(1), windowCount)) {
                 backend.remove(key);
             }
+        }
+    }
+
+    /** Пишет читаемый путь CashMemory, если хранилище создано с ним (длинный путь обрезается до лимита значения). */
+    private void putCashMemoryPath() {
+        if (cashMemoryPath != null) {
+            backend.put(KEY_CASHMEMORY_PATH, cashMemoryPath.length() > 4000 ? cashMemoryPath.substring(0, 4000) : cashMemoryPath);
         }
     }
 
