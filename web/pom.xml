@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Модуль web: тонкий web-клиент. Сервер: встроенный com.sun.net.httpserver из JDK,
+  клиент: статические HTML/CSS/JS из ресурсов jar. Запуск: `mvn -pl web exec:exec`.
+  Тесты поднимают настоящий сервер на свободном порту с временной папкой CashMemory
+  и обращаются к JSON API через java.net.http.HttpClient.
+-->
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <parent>
+    <groupId>ru.cashprediction</groupId>
+    <artifactId>cashprediction-parent</artifactId>
+    <version>1.0.0</version>
+  </parent>
+
+  <artifactId>cashprediction-web</artifactId>
+  <name>CashPrediction Web</name>
+
+  <dependencies>
+    <dependency>
+      <groupId>ru.cashprediction</groupId>
+      <artifactId>cashprediction-core</artifactId>
+    </dependency>
+    <!-- JUnit 5 только для тестов; версия приходит из junit-bom родительского POM. -->
+    <dependency>
+      <groupId>org.junit.jupiter</groupId>
+      <artifactId>junit-jupiter</artifactId>
+      <scope>test</scope>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <plugins>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-compiler-plugin</artifactId>
+        <executions>
+          <execution>
+            <!-- Только компиляция тестов: они компилируются «внутрь» модуля ru.cashprediction.web (patch-module),
+                 а HTTP-клиент тестов живёт в модуле java.net.http, которого нет в module-info. Аргументы
+                 добавляются к родительским (-Xlint), а не заменяют их (combine.children="append"). -->
+            <id>default-testCompile</id>
+            <configuration>
+              <compilerArgs combine.children="append">
+                <arg>--add-modules</arg>
+                <arg>java.net.http</arg>
+                <arg>--add-reads</arg>
+                <arg>ru.cashprediction.web=java.net.http</arg>
+              </compilerArgs>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+      <plugin>
+        <!-- Настройки surefire (classpath вместо module path, русская локаль) наследуются от родителя. -->
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-surefire-plugin</artifactId>
+      </plugin>
+      <plugin>
+        <groupId>org.codehaus.mojo</groupId>
+        <artifactId>exec-maven-plugin</artifactId>
+        <configuration>
+          <executable>${java.home}/bin/java</executable>
+          <arguments>
+            <argument>-XX:-UsePerfData</argument>
+            <argument>-Dcashprediction.home=${cashprediction.dev.home}</argument>
+            <argument>-Duser.language=ru</argument>
+            <argument>-Duser.country=RU</argument>
+            <argument>-classpath</argument>
+            <classpath/>
+            <argument>ru.cashprediction.web.WebMain</argument>
+          </arguments>
+        </configuration>
+      </plugin>
+    </plugins>
+  </build>
+</project>

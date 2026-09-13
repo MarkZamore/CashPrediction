@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Модуль ui-fx: настольный клиент на JavaFX.
+  Запуск в режиме разработки: сначала `mvn -q -DskipTests install` в корне, затем `mvn -pl ui-fx javafx:run`.
+-->
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <parent>
+    <groupId>ru.cashprediction</groupId>
+    <artifactId>cashprediction-parent</artifactId>
+    <version>1.0.0</version>
+  </parent>
+
+  <artifactId>cashprediction-ui-fx</artifactId>
+  <name>CashPrediction JavaFX</name>
+
+  <dependencies>
+    <dependency>
+      <groupId>ru.cashprediction</groupId>
+      <artifactId>cashprediction-core</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.openjfx</groupId>
+      <artifactId>javafx-controls</artifactId>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <plugins>
+      <plugin>
+        <groupId>org.openjfx</groupId>
+        <artifactId>javafx-maven-plugin</artifactId>
+        <configuration>
+          <!-- Модульный запуск: module/class. -->
+          <mainClass>ru.cashprediction.fx/ru.cashprediction.fx.FxMain</mainClass>
+          <options>
+            <!-- JEP 472: JavaFX грузит нативные библиотеки, без этого флага JDK 25 печатает предупреждение. -->
+            <option>--enable-native-access=javafx.graphics</option>
+            <!-- Не создавать файлы hsperfdata в %TEMP%. -->
+            <option>-XX:-UsePerfData</option>
+            <!-- В dev-режиме CashMemory создаётся в корне проекта. -->
+            <option>-Dcashprediction.home=${cashprediction.dev.home}</option>
+            <option>-Duser.language=ru</option>
+            <option>-Duser.country=RU</option>
+          </options>
+        </configuration>
+      </plugin>
+    </plugins>
+  </build>
+</project>

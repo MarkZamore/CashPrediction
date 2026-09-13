@@ -1,0 +1,238 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Модуль dist (включается профилем: mvn -Pdist -DskipTests package).
+
+  Собирает ПОРТАТИВНУЮ папку target/dist/CashPrediction с тремя лаунчерами:
+    CashPrediction.exe        - JavaFX-клиент (главный лаунчер);
+    CashPrediction-Swing.exe  - Swing-клиент;
+    CashPrediction-Web.exe    - web-сервер тонкого клиента.
+  Внутри лежит урезанная Java (jlink), установка не требуется, при запуске создаётся только CashMemory.
+
+  Почему не один .exe: GraalVM native-image не поддерживает AWT/Swing на Windows, а JavaFX там
+  не собирается вовсе; jpackage в режиме app-image не требует WiX и не создаёт инсталлятор.
+
+  Конвейер (фазы выполняются по порядку):
+    generate-resources : скачать и распаковать jmods JavaFX от Gluon (jlink не умеет брать JavaFX из jar);
+    prepare-package    : удалить старый результат (jlink и jpackage падают, если папка существует),
+                         скопировать модульные jar проекта в target/mods;
+    package            : jlink -> target/runtime, jpackage -> target/dist/CashPrediction, zip-архив.
+-->
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <parent>
+    <groupId>ru.cashprediction</groupId>
+    <artifactId>cashprediction-parent</artifactId>
+    <version>1.0.0</version>
+  </parent>
+
+  <artifactId>cashprediction-dist</artifactId>
+  <packaging>pom</packaging>
+  <name>CashPrediction Portable Distribution</name>
+
+  <properties>
+    <!-- Папка с jmods JavaFX; по умолчанию сюда распаковывается архив Gluon. Можно переопределить -Djavafx.jmods=... -->
+    <javafx.jmods>${project.build.directory}/javafx-jmods/javafx-jmods-${javafx.version}</javafx.jmods>
+    <dist.runtime>${project.build.directory}/runtime</dist.runtime>
+    <dist.output>${project.build.directory}/dist</dist.output>
+  </properties>
+
+  <!-- Зависимости нужны только для порядка сборки в реакторе и для copy-dependencies. -->
+  <dependencies>
+    <dependency>
+      <groupId>ru.cashprediction</groupId>
+      <artifactId>cashprediction-core</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>ru.cashprediction</groupId>
+      <artifactId>cashprediction-ui-fx</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>ru.cashprediction</groupId>
+      <artifactId>cashprediction-ui-swing</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>ru.cashprediction</groupId>
+      <artifactId>cashprediction-web</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <plugins>
+      <!-- 1. jmods JavaFX: архив ~46 МБ кэшируется в ~/.m2, повторные сборки его не качают. -->
+      <plugin>
+        <groupId>io.github.download-maven-plugin</groupId>
+        <artifactId>download-maven-plugin</artifactId>
+        <executions>
+          <execution>
+            <id>javafx-jmods</id>
+            <phase>generate-resources</phase>
+            <goals>
+              <goal>wget</goal>
+            </goals>
+            <configuration>
+              <url>https://download2.gluonhq.com/openjfx/${javafx.version}/openjfx-${javafx.version}_windows-x64_bin-jmods.zip</url>
+              <unpack>true</unpack>
+              <outputDirectory>${project.build.directory}/javafx-jmods</outputDirectory>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+
+      <!-- 2. Удаление прошлого результата: jlink/jpackage отказываются писать в существующую папку. -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-clean-plugin</artifactId>
+        <executions>
+          <execution>
+            <id>clean-previous-image</id>
+            <phase>prepare-package</phase>
+            <goals>
+              <goal>clean</goal>
+            </goals>
+            <configuration>
+              <excludeDefaultDirectories>true</excludeDefaultDirectories>
+              <!-- jpackage копирует .exe-лаунчеры с атрибутом «только чтение»; без force удаление падает на Windows. -->
+              <force>true</force>
+              <filesets>
+                <fileset><directory>${dist.runtime}</directory></fileset>
+                <fileset><directory>${dist.output}</directory></fileset>
+                <fileset><directory>${project.build.directory}/mods</directory></fileset>
+              </filesets>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+
+      <!-- 3. Модульные jar проекта; JavaFX исключён, он приходит из jmods. -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-dependency-plugin</artifactId>
+        <executions>
+          <execution>
+            <id>copy-modules</id>
+            <phase>prepare-package</phase>
+            <goals>
+              <goal>copy-dependencies</goal>
+            </goals>
+            <configuration>
+              <outputDirectory>${project.build.directory}/mods</outputDirectory>
+              <includeScope>runtime</includeScope>
+              <excludeGroupIds>org.openjfx</excludeGroupIds>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+
+      <plugin>
+        <groupId>org.codehaus.mojo</groupId>
+        <artifactId>exec-maven-plugin</artifactId>
+        <executions>
+          <!--
+            4. jlink: урезанная Java только с нужными модулями.
+               Транзитивно войдут java.base, java.desktop, java.prefs, java.xml, jdk.httpserver,
+               javafx.base/graphics/controls, jdk.unsupported.
+               jdk.localedata + include-locales=ru,en: без них русское форматирование дат и чисел
+               молча становится английским.
+               НЕ использовать strip-native-commands: на Windows теряются DLL JavaFX (JDK-8281089).
+          -->
+          <execution>
+            <id>jlink</id>
+            <phase>package</phase>
+            <goals>
+              <goal>exec</goal>
+            </goals>
+            <configuration>
+              <executable>${java.home}/bin/jlink</executable>
+              <arguments>
+                <argument>--module-path</argument>
+                <argument>${java.home}/jmods;${javafx.jmods};${project.build.directory}/mods</argument>
+                <argument>--add-modules</argument>
+                <argument>ru.cashprediction.fx,ru.cashprediction.swing,ru.cashprediction.web,jdk.localedata</argument>
+                <argument>--include-locales=ru,en</argument>
+                <argument>--strip-debug</argument>
+                <argument>--no-header-files</argument>
+                <argument>--no-man-pages</argument>
+                <argument>--compress</argument>
+                <argument>zip-6</argument>
+                <argument>--output</argument>
+                <argument>${dist.runtime}</argument>
+              </arguments>
+            </configuration>
+          </execution>
+
+          <!--
+            5. jpackage app-image: папка с тремя .exe без инсталлятора.
+               Рабочий каталог = папка модуля, поэтому относительные пути icon= в launchers/*.properties работают.
+               JVM-опции главного (JavaFX) лаунчера:
+                 enable-native-access=javafx.graphics  : JEP 472, JavaFX грузит свои DLL;
+                 -XX:-UsePerfData                      : не создавать %TEMP%\hsperfdata_*;
+                 -XX:-CreateCoredumpOnCrash            : не писать minidump в рабочий каталог;
+                 -XX:ErrorFile=$ROOTDIR/CashMemory/... : отчёт о падении самой JVM только в CashMemory
+                                                         ($ROOTDIR лаунчер подставляет как корень папки);
+                 user.language/country=ru              : интерфейс и форматы на русском.
+          -->
+          <execution>
+            <id>jpackage</id>
+            <phase>package</phase>
+            <goals>
+              <goal>exec</goal>
+            </goals>
+            <configuration>
+              <executable>${java.home}/bin/jpackage</executable>
+              <workingDirectory>${project.basedir}</workingDirectory>
+              <arguments>
+                <argument>--type</argument><argument>app-image</argument>
+                <argument>--name</argument><argument>CashPrediction</argument>
+                <argument>--app-version</argument><argument>${project.version}</argument>
+                <argument>--vendor</argument><argument>CashPrediction</argument>
+                <argument>--description</argument><argument>CashPrediction budget forecast (JavaFX)</argument>
+                <argument>--runtime-image</argument><argument>${dist.runtime}</argument>
+                <argument>--module</argument><argument>ru.cashprediction.fx/ru.cashprediction.fx.FxMain</argument>
+                <argument>--icon</argument><argument>icons/CashPrediction.ico</argument>
+                <argument>--java-options</argument><argument>--enable-native-access=javafx.graphics</argument>
+                <argument>--java-options</argument><argument>-XX:-UsePerfData</argument>
+                <argument>--java-options</argument><argument>-XX:-CreateCoredumpOnCrash</argument>
+                <argument>--java-options</argument><argument>-XX:ErrorFile=$ROOTDIR/CashMemory/hs_err_%p.log</argument>
+                <argument>--java-options</argument><argument>-Duser.language=ru</argument>
+                <argument>--java-options</argument><argument>-Duser.country=RU</argument>
+                <argument>--java-options</argument><argument>-Xmx512m</argument>
+                <argument>--add-launcher</argument><argument>CashPrediction-Swing=launchers/swing.properties</argument>
+                <argument>--add-launcher</argument><argument>CashPrediction-Web=launchers/web.properties</argument>
+                <argument>--dest</argument><argument>${dist.output}</argument>
+              </arguments>
+            </configuration>
+          </execution>
+
+          <!--
+            6. Zip портативной папки для удобной передачи.
+               Антивирус Windows ненадолго блокирует только что созданные jpackage файлы
+               (PermissionDenied на runtime/lib/*.jar), поэтому архивация повторяется до 5 раз.
+               ErrorActionPreference=Stop и exit 1 нужны, чтобы Maven увидел ошибку: иначе
+               powershell -Command возвращает 0 даже после неудачного Compress-Archive.
+          -->
+          <execution>
+            <id>zip</id>
+            <phase>package</phase>
+            <goals>
+              <goal>exec</goal>
+            </goals>
+            <configuration>
+              <executable>powershell.exe</executable>
+              <arguments>
+                <argument>-NoProfile</argument>
+                <argument>-Command</argument>
+                <argument>$ErrorActionPreference = 'Stop'; for ($i = 1; $i -le 5; $i++) { try { Compress-Archive -Path '${dist.output}/CashPrediction' -DestinationPath '${dist.output}/CashPrediction-portable.zip' -Force; exit 0 } catch { Write-Host ('Zip attempt ' + $i + ' failed: ' + $_.Exception.Message); Start-Sleep -Seconds 3 } }; exit 1</argument>
+              </arguments>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+    </plugins>
+  </build>
+</project>

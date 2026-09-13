@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Модуль ui-swing: настольный клиент на Swing.
+  Запуск в режиме разработки: `mvn -q -DskipTests install`, затем `mvn -pl ui-swing exec:exec`
+  (отдельный процесс java, чтобы System.exit приложения не завершал Maven).
+-->
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <parent>
+    <groupId>ru.cashprediction</groupId>
+    <artifactId>cashprediction-parent</artifactId>
+    <version>1.0.0</version>
+  </parent>
+
+  <artifactId>cashprediction-ui-swing</artifactId>
+  <name>CashPrediction Swing</name>
+
+  <dependencies>
+    <dependency>
+      <groupId>ru.cashprediction</groupId>
+      <artifactId>cashprediction-core</artifactId>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <plugins>
+      <plugin>
+        <groupId>org.codehaus.mojo</groupId>
+        <artifactId>exec-maven-plugin</artifactId>
+        <configuration>
+          <executable>${java.home}/bin/java</executable>
+          <arguments>
+            <argument>-XX:-UsePerfData</argument>
+            <argument>-Dcashprediction.home=${cashprediction.dev.home}</argument>
+            <argument>-Duser.language=ru</argument>
+            <argument>-Duser.country=RU</argument>
+            <argument>-classpath</argument>
+            <classpath/>
+            <argument>ru.cashprediction.swing.SwingMain</argument>
+          </arguments>
+        </configuration>
+      </plugin>
+    </plugins>
+  </build>
+</project>

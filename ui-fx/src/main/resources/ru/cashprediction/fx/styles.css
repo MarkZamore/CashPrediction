@@ -1,0 +1,202 @@
+/*
+ * Оформление главного окна CashPrediction (JavaFX).
+ * Цвета строк таблицы и серий графика заданы здесь, а не в коде: так их проще поменять и сверить с Swing и Web.
+ */
+
+.root {
+    -fx-font-family: "Segoe UI", "System";
+    -fx-font-size: 13px;
+}
+
+/* ---------- таблица прогноза ---------- */
+
+/* Отрицательный баланс: светло-красный фон строки. -fx-background, а не -fx-background-color:
+   так выделенная строка по-прежнему закрашивается цветом выделения темы Modena. */
+.forecast-table .table-row-cell.negative {
+    -fx-background: #fde2e1;
+}
+
+/* Баланс ниже подушки безопасности: светло-жёлтый фон. */
+.forecast-table .table-row-cell.below-cushion {
+    -fx-background: #fff4c2;
+}
+
+/* Строка итога месяца. */
+.forecast-table .table-row-cell.total-row {
+    -fx-background: #e8eef6;
+}
+
+.forecast-table .table-row-cell.total-row .table-cell {
+    -fx-font-weight: bold;
+}
+
+/* Доход зелёный, расход красный, баланс жирный. */
+.forecast-table .table-cell.income-cell {
+    -fx-text-fill: #1b7f3b;
+    -fx-alignment: CENTER-RIGHT;
+}
+
+.forecast-table .table-cell.expense-cell {
+    -fx-text-fill: #b3261e;
+    -fx-alignment: CENTER-RIGHT;
+}
+
+.forecast-table .table-cell.balance-cell {
+    -fx-font-weight: bold;
+    -fx-alignment: CENTER-RIGHT;
+}
+
+.forecast-table .table-cell.marks-cell {
+    -fx-alignment: CENTER;
+}
+
+/* Прошедшие события серые (правило стоит после цветов дохода и расхода и перекрывает их). */
+.forecast-table .table-row-cell.past .table-cell,
+.forecast-table .table-row-cell.past .table-cell.income-cell,
+.forecast-table .table-row-cell.past .table-cell.expense-cell {
+    -fx-text-fill: #8a8f98;
+}
+
+/* Пропущенное событие зачёркнуто. */
+.forecast-table .table-row-cell.skipped .table-cell .text {
+    -fx-strikethrough: true;
+}
+
+/* Строка «что-если» — курсив. */
+.forecast-table .table-row-cell.what-if .table-cell {
+    -fx-font-style: italic;
+}
+
+/* Текст выделенной строки остаётся читаемым на цвете выделения. */
+.forecast-table:focused .table-row-cell:filled:selected .table-cell {
+    -fx-text-fill: -fx-selection-bar-text;
+}
+
+/* ---------- панель сводки ---------- */
+
+.summary-bar {
+    -fx-background-color: #f6f8fa;
+    -fx-border-color: transparent transparent #d0d7de transparent;
+}
+
+.summary-card {
+    -fx-background-color: #ffffff;
+    -fx-border-color: #d0d7de;
+    -fx-border-radius: 6;
+    -fx-background-radius: 6;
+    -fx-padding: 6 10 6 10;
+    /* Минимальную ширину не задаём: её вычисляет SummaryBar (заголовок и значение карточки не сжимаются). */
+}
+
+.summary-card:hover {
+    -fx-border-color: #1f6feb;
+}
+
+.summary-card .card-title {
+    -fx-text-fill: #57606a;
+    -fx-font-size: 11px;
+}
+
+.summary-card .card-value {
+    -fx-font-size: 16px;
+    -fx-font-weight: bold;
+    -fx-text-fill: #1f2328;
+}
+
+.summary-card .card-value.negative {
+    -fx-text-fill: #b3261e;
+}
+
+.summary-card .card-subtitle {
+    -fx-text-fill: #57606a;
+    -fx-font-size: 11px;
+}
+
+/* ---------- график: порядок серий постоянный (баланс, ноль, подушка, цель, сегодня, события) ---------- */
+
+/* Отступ справа: подпись последней даты на оси X («31.08.27») иначе обрезалась краем окна. */
+.balance-chart {
+    -fx-padding: 5 32 5 5;
+}
+
+.balance-chart .chart-series-line.default-color0 {
+    -fx-stroke: #1f6feb;
+    -fx-stroke-width: 2px;
+}
+
+.balance-chart .chart-legend-item-symbol.default-color0 {
+    -fx-background-color: #1f6feb;
+}
+
+.balance-chart .chart-series-line.default-color1 {
+    -fx-stroke: #6e7781;
+    -fx-stroke-width: 1px;
+    -fx-stroke-dash-array: 4 4;
+}
+
+.balance-chart .chart-legend-item-symbol.default-color1 {
+    -fx-background-color: #6e7781;
+}
+
+.balance-chart .chart-series-line.default-color2 {
+    -fx-stroke: #d4a72c;
+    -fx-stroke-width: 1.5px;
+    -fx-stroke-dash-array: 6 4;
+}
+
+.balance-chart .chart-legend-item-symbol.default-color2 {
+    -fx-background-color: #d4a72c;
+}
+
+.balance-chart .chart-series-line.default-color3 {
+    -fx-stroke: #1b7f3b;
+    -fx-stroke-width: 1.5px;
+    -fx-stroke-dash-array: 8 4;
+}
+
+.balance-chart .chart-legend-item-symbol.default-color3 {
+    -fx-background-color: #1b7f3b;
+}
+
+.balance-chart .chart-series-line.default-color4 {
+    -fx-stroke: #8250df;
+    -fx-stroke-width: 1.5px;
+}
+
+.balance-chart .chart-legend-item-symbol.default-color4 {
+    -fx-background-color: #8250df;
+}
+
+/* Маркеры событий: только точки, без соединяющей линии. */
+.balance-chart .chart-series-line.default-color5 {
+    -fx-stroke: transparent;
+}
+
+.balance-chart .chart-legend-item-symbol.default-color5 {
+    -fx-background-color: #1b7f3b, #b3261e;
+    -fx-background-insets: 0 5 0 0, 0 0 0 5;
+}
+
+/* ---------- панель инструментов ---------- */
+
+/* Включённый режим «что-если»: выделяется только подпись самой кнопки, пункты её меню не затрагиваются. */
+.menu-button.what-if-active > .label {
+    -fx-font-weight: bold;
+    -fx-text-fill: #8250df;
+}
+
+/* ---------- строка состояния ---------- */
+
+.status-bar {
+    -fx-background-color: #f6f8fa;
+    -fx-border-color: #d0d7de transparent transparent transparent;
+    -fx-font-size: 12px;
+}
+
+.status-bar .status-dirty {
+    -fx-text-fill: #8a5300;
+}
+
+.status-bar .status-message {
+    -fx-text-fill: #b3261e;
+}

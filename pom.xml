@@ -1,0 +1,150 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Родительский POM проекта CashPrediction.
+
+  Проект состоит из четырёх обязательных модулей и одного профильного:
+    core      - доменная модель, движок прогноза, Markdown-хранилище, снимки сессии (без UI);
+    ui-fx     - настольный клиент на JavaFX;
+    ui-swing  - настольный клиент на Swing;
+    web       - тонкий web-клиент (встроенный HTTP-сервер JDK + HTML/JS);
+    dist      - (профиль -Pdist) сборка портативной папки через jlink + jpackage.
+
+  Единственные внешние зависимости: OpenJFX (только для ui-fx) и JUnit 5 (только тесты).
+-->
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <groupId>ru.cashprediction</groupId>
+  <artifactId>cashprediction-parent</artifactId>
+  <version>1.0.0</version>
+  <packaging>pom</packaging>
+
+  <name>CashPrediction</name>
+  <description>Учёт финансов с прогнозом будущего баланса: JavaFX, Swing и Web-клиенты над общим ядром</description>
+
+  <modules>
+    <module>core</module>
+    <module>ui-fx</module>
+    <module>ui-swing</module>
+    <module>web</module>
+  </modules>
+
+  <properties>
+    <!-- Кодировка исходников и ресурсов: в коде много русских комментариев и строк. -->
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
+    <!-- Java 25 без preview-возможностей: records, sealed-типы, pattern matching в switch. -->
+    <maven.compiler.release>25</maven.compiler.release>
+    <!-- Версия JavaFX ОБЯЗАНА совпадать с версией jmods Gluon, которые скачивает модуль dist. -->
+    <javafx.version>25.0.4</javafx.version>
+    <junit.version>5.14.4</junit.version>
+    <!-- Папка, рядом с которой в dev-режиме создаётся CashMemory (корень проекта). -->
+    <cashprediction.dev.home>${maven.multiModuleProjectDirectory}</cashprediction.dev.home>
+  </properties>
+
+  <dependencyManagement>
+    <dependencies>
+      <dependency>
+        <groupId>ru.cashprediction</groupId>
+        <artifactId>cashprediction-core</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <!-- OpenJFX: платформенный classifier (win) подтягивается автоматически через pom артефакта. -->
+      <dependency>
+        <groupId>org.openjfx</groupId>
+        <artifactId>javafx-controls</artifactId>
+        <version>${javafx.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.junit</groupId>
+        <artifactId>junit-bom</artifactId>
+        <version>${junit.version}</version>
+        <type>pom</type>
+        <scope>import</scope>
+      </dependency>
+    </dependencies>
+  </dependencyManagement>
+
+  <build>
+    <pluginManagement>
+      <plugins>
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-clean-plugin</artifactId>
+          <version>3.5.0</version>
+        </plugin>
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-resources-plugin</artifactId>
+          <version>3.5.0</version>
+        </plugin>
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-compiler-plugin</artifactId>
+          <version>3.16.0</version>
+          <configuration>
+            <release>${maven.compiler.release}</release>
+            <encoding>UTF-8</encoding>
+            <showWarnings>true</showWarnings>
+            <compilerArgs>
+              <!-- Все предупреждения, кроме шумных для Swing (serial) и records (missing-explicit-ctor). -->
+              <arg>-Xlint:all,-serial,-missing-explicit-ctor</arg>
+            </compilerArgs>
+          </configuration>
+        </plugin>
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-surefire-plugin</artifactId>
+          <version>3.6.0</version>
+          <configuration>
+            <!-- Тесты запускаются на classpath: так JUnit не требует правок module-info. -->
+            <useModulePath>false</useModulePath>
+            <argLine>-Dfile.encoding=UTF-8 -Duser.language=ru -Duser.country=RU -XX:-UsePerfData</argLine>
+          </configuration>
+        </plugin>
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-jar-plugin</artifactId>
+          <version>3.5.1</version>
+        </plugin>
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-install-plugin</artifactId>
+          <version>3.1.4</version>
+        </plugin>
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-dependency-plugin</artifactId>
+          <version>3.11.0</version>
+        </plugin>
+        <plugin>
+          <groupId>org.codehaus.mojo</groupId>
+          <artifactId>exec-maven-plugin</artifactId>
+          <version>3.6.4</version>
+        </plugin>
+        <plugin>
+          <groupId>org.openjfx</groupId>
+          <artifactId>javafx-maven-plugin</artifactId>
+          <version>0.0.8</version>
+        </plugin>
+        <plugin>
+          <groupId>io.github.download-maven-plugin</groupId>
+          <artifactId>download-maven-plugin</artifactId>
+          <version>2.1.0</version>
+        </plugin>
+      </plugins>
+    </pluginManagement>
+  </build>
+
+  <profiles>
+    <!-- mvn -Pdist -DskipTests package: собирает портативную папку с тремя .exe. -->
+    <profile>
+      <id>dist</id>
+      <modules>
+        <module>dist</module>
+      </modules>
+    </profile>
+  </profiles>
+</project>

@@ -1,0 +1,5 @@
+# Единые окончания строк в репозитории (приложение само пишет файлы CashMemory с LF)
+* text=auto eol=lf
+*.png binary
+*.ico binary
+*.jar binary

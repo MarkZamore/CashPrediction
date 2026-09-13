@@ -1,0 +1,799 @@
+/*
+ * Стили тонкого клиента CashPrediction. Без внешних шрифтов и библиотек: системный шрифт Windows (Segoe UI),
+ * цифры с одинаковой шириной (tabular-nums), светлая и тёмная схемы через CSS-переменные.
+ * Комментарии «JavaFX → Swing → Web» отмечают элементы — аналоги 23 классов JavaFX (раздел 7 плана).
+ */
+
+:root {
+  --bg: #f3f4f6;
+  --surface: #ffffff;
+  --surface-2: #f8f9fb;
+  --surface-3: #eef1f5;
+  --border: #d8dde3;
+  --border-strong: #b6bec8;
+  --text: #1f2328;
+  --muted: #5f6873;
+  --accent: #1f6feb;
+  --accent-hover: #1a5fcc;
+  --accent-weak: #e3edff;
+  --accent-text: #ffffff;
+  --income: #1a7f37;
+  --expense: #cf222e;
+  --negative-bg: #fde9ea;
+  --cushion-bg: #fff5d6;
+  --past: #8b949e;
+  --cushion: #bf8700;
+  --goal: #8250df;
+  --today: #d1242f;
+  --zero: #57606a;
+  --warn: #9a6700;
+  --good: #1a7f37;
+  --shadow: 0 8px 28px rgba(15, 23, 42, 0.18);
+  --radius: 6px;
+  --font: "Segoe UI", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
+  --mono: "Cascadia Mono", Consolas, "Courier New", monospace;
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #15181d;
+    --surface: #1d2127;
+    --surface-2: #232830;
+    --surface-3: #2a3039;
+    --border: #353c46;
+    --border-strong: #4a525e;
+    --text: #e6e9ed;
+    --muted: #9aa4b0;
+    --accent: #4c8dff;
+    --accent-hover: #6aa0ff;
+    --accent-weak: #1f3350;
+    --income: #4ac26b;
+    --expense: #ff6a69;
+    --negative-bg: #3b1f22;
+    --cushion-bg: #3a3218;
+    --past: #7d8590;
+    --cushion: #d29922;
+    --goal: #a371f7;
+    --today: #ff7b72;
+    --zero: #8b949e;
+    --warn: #d29922;
+    --good: #4ac26b;
+    --shadow: 0 8px 28px rgba(0, 0, 0, 0.5);
+    color-scheme: dark;
+  }
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+[hidden] { display: none !important; }
+
+html, body {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  font: 14px/1.4 var(--font);
+  color: var(--text);
+  background: var(--bg);
+  overflow: hidden;
+}
+
+button, input, select, textarea { font: inherit; color: inherit; }
+code, pre { font-family: var(--mono); }
+.muted { color: var(--muted); }
+.noscript { padding: 24px; }
+
+/* ------------------------------------------------------------------ каркас главного окна */
+
+.app {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+}
+
+.app-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 8px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+.brand img { display: block; }
+
+.app-main {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.view {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  margin: 0 8px 8px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+/* ------------------------------------------------------------------ строка меню и всплывающие меню */
+
+/* JavaFX: MenuBar → Swing: JMenuBar → Web: <nav role="menubar"> */
+.menubar-list {
+  display: flex;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.menubar-item {
+  padding: 6px 10px;
+  cursor: default;
+  border-radius: 4px;
+  user-select: none;
+  outline: none;
+}
+.menubar-item:hover, .menubar-item:focus-visible, .menubar-item.open {
+  background: var(--accent-weak);
+}
+
+/* JavaFX: ContextMenu / Menu → Swing: JPopupMenu → Web: <ul role="menu"> */
+.menu-popup {
+  position: fixed;
+  z-index: 1000;
+  min-width: 240px;
+  max-width: 420px;
+  max-height: calc(100vh - 16px);
+  overflow-y: auto;
+  margin: 0;
+  padding: 4px 0;
+  list-style: none;
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  outline: none;
+}
+/* JavaFX: MenuItem / CheckMenuItem / RadioMenuItem → Swing: JMenuItem… → Web: role="menuitem…" */
+.menu-item {
+  display: grid;
+  grid-template-columns: 22px 1fr auto;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 14px 5px 6px;
+  cursor: default;
+  white-space: nowrap;
+  outline: none;
+  user-select: none;
+}
+.menu-item:focus, .menu-item:hover { background: var(--accent-weak); }
+.menu-item.disabled { color: var(--muted); opacity: 0.65; }
+.menu-item.disabled:hover { background: transparent; }
+.menu-mark { text-align: center; color: var(--accent); font-weight: 600; }
+.menu-text { overflow: hidden; text-overflow: ellipsis; }
+.menu-accel { color: var(--muted); font-size: 12px; padding-left: 18px; }
+/* JavaFX: SeparatorMenuItem → Swing: JPopupMenu.Separator → Web: <li role="separator"><hr> */
+.menu-separator { padding: 3px 0; }
+.menu-separator hr { margin: 0; border: 0; border-top: 1px solid var(--border); }
+/* JavaFX: CustomMenuItem → Swing: JPanel в JMenu → Web: <li class="custom"> */
+.menu-custom { padding: 6px 14px 8px 28px; }
+.custom-slider, .custom-field { display: flex; flex-direction: column; gap: 4px; }
+.custom-label { font-size: 13px; }
+.menu-range { width: 100%; accent-color: var(--accent); }
+.custom-input { display: flex; align-items: center; gap: 6px; }
+.menu-number { width: 130px; }
+.context-menu { min-width: 250px; }
+
+/* ------------------------------------------------------------------ панель инструментов */
+
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+.tool-sep { width: 1px; align-self: stretch; background: var(--border); margin: 2px 2px; }
+.tool-spacer { flex: 1; }
+
+.tool-button, .btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 30px;
+  padding: 4px 12px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  background: var(--surface);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.tool-button:hover:not(:disabled), .btn:hover:not(:disabled) { background: var(--surface-3); }
+.tool-button:disabled, .btn:disabled { opacity: 0.5; cursor: default; }
+.tool-button:focus-visible, .btn:focus-visible, .input:focus-visible, .table-wrap:focus-visible, .summary-card:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+.btn.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-text);
+}
+.btn.primary:hover:not(:disabled) { background: var(--accent-hover); }
+.tool-button.icon, .btn.icon { padding: 4px 8px; }
+.tool-button.active { border-color: var(--accent); color: var(--accent); }
+.save-button.dirty { border-color: var(--accent); box-shadow: inset 0 -2px 0 var(--accent); }
+
+/* JavaFX: SplitMenuButton → Swing: SwingSplitMenuButton → Web: div.split-button */
+.split-button { display: inline-flex; }
+.split-button .split-main { border-top-right-radius: 0; border-bottom-right-radius: 0; }
+.split-button .split-arrow { border-top-left-radius: 0; border-bottom-left-radius: 0; border-left: 0; padding: 4px 8px; }
+/* JavaFX: MenuButton → Swing: SwingMenuButton → Web: <button aria-haspopup="menu"> */
+.menu-button .arrow { color: var(--muted); }
+
+.toggle-group { display: inline-flex; }
+.toggle-group .toggle:first-child { border-top-right-radius: 0; border-bottom-right-radius: 0; }
+.toggle-group .toggle:last-child { border-top-left-radius: 0; border-bottom-left-radius: 0; border-left: 0; }
+.toggle[aria-pressed="true"] { background: var(--accent-weak); border-color: var(--accent); color: var(--accent); }
+
+.input {
+  min-height: 30px;
+  padding: 4px 8px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+.input:disabled { opacity: 0.55; }
+textarea.input { resize: vertical; width: 100%; }
+.filter-input { width: 220px; }
+
+/* ------------------------------------------------------------------ баннер восстановления и сообщения */
+
+.recovery-banner {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 16px;
+  background: var(--cushion-bg);
+  border-bottom: 2px solid var(--cushion);
+}
+.banner-icon { font-size: 26px; color: var(--warn); }
+.banner-text { flex: 1; display: flex; flex-direction: column; gap: 2px; }
+.banner-details { color: var(--muted); font-size: 13px; }
+.banner-problem { color: var(--expense); font-size: 13px; }
+.banner-buttons { display: flex; gap: 8px; flex-wrap: wrap; }
+
+.notice-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  padding: 5px 12px;
+  font-size: 13px;
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--border);
+}
+.notice.error { color: var(--expense); }
+.notice.warning { color: var(--warn); }
+.notice.info { color: var(--accent); }
+
+/* ------------------------------------------------------------------ сводка */
+
+/* Карточки переносятся на следующую строку, а не прячутся за горизонтальной прокруткой: при длинном горизонте
+   появляется карточка «Через 12 мес.», и на 1280 px последняя карточка («Цель») иначе уходила за край окна. */
+.summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 8px;
+  flex-shrink: 0;
+}
+.summary-card {
+  flex: 1 1 132px;
+  max-width: 220px;
+  min-width: 132px;
+  padding: 6px 12px 7px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
+  border-radius: var(--radius);
+  cursor: default;
+  user-select: none;
+}
+.summary-card.negative { border-left-color: var(--expense); }
+.summary-card.negative .card-value { color: var(--expense); }
+.summary-card.warn { border-left-color: var(--cushion); }
+.summary-card.warn .card-value { color: var(--warn); }
+.summary-card.good { border-left-color: var(--good); }
+.card-title { font-size: 12px; color: var(--muted); white-space: nowrap; }
+.card-value { font-size: 17px; font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.card-sub { font-size: 11px; color: var(--muted); white-space: nowrap; }
+.summary-empty { color: var(--muted); padding: 4px; }
+
+/* ------------------------------------------------------------------ таблица */
+
+/* JavaFX: TableView → Swing: JTable → Web: <table> с липкой шапкой */
+.table-wrap {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  outline: none;
+}
+.forecast-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-variant-numeric: tabular-nums;
+}
+.forecast-table th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  padding: 7px 10px;
+  text-align: left;
+  font-weight: 600;
+  font-size: 13px;
+  background: var(--surface-3);
+  border-bottom: 1px solid var(--border-strong);
+  white-space: nowrap;
+}
+.forecast-table td {
+  padding: 4px 10px;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+  height: 28px;
+}
+.forecast-table .col-money { text-align: right; }
+.forecast-table th.col-money { text-align: right; }
+.forecast-table .col-title { white-space: normal; min-width: 160px; }
+.forecast-table .col-category { color: var(--muted); }
+.forecast-table .col-marks { text-align: center; color: var(--muted); }
+/* Разрядка нужна только значкам отметок в ячейках, а не заголовку «Отметки». */
+.forecast-table td.col-marks { letter-spacing: 2px; }
+.forecast-table .col-day { color: var(--muted); }
+.forecast-table td.col-income { color: var(--income); }
+.forecast-table td.col-expense { color: var(--expense); }
+.forecast-table td.col-balance { font-weight: 600; }
+
+.forecast-table tr.row { cursor: default; }
+.forecast-table tr.row:hover td { background-image: linear-gradient(rgba(127, 127, 127, 0.07), rgba(127, 127, 127, 0.07)); }
+.forecast-table tr.negative td { background-color: var(--negative-bg); }
+.forecast-table tr.negative td.col-balance { color: var(--expense); }
+.forecast-table tr.below-cushion td { background-color: var(--cushion-bg); }
+.forecast-table tr.past td { color: var(--past); }
+.forecast-table tr.skipped td.col-title,
+.forecast-table tr.skipped td.amount-cell { text-decoration: line-through; opacity: 0.75; }
+.forecast-table tr.origin-start td { font-style: italic; }
+.forecast-table tr.what-if td.col-marks { color: var(--goal); }
+.forecast-table tr.selected td {
+  background-color: var(--accent-weak);
+  box-shadow: inset 0 1px 0 var(--accent), inset 0 -1px 0 var(--accent);
+}
+.forecast-table tr.month-total td {
+  background: var(--surface-2);
+  font-weight: 600;
+  font-size: 13px;
+  border-bottom: 1px solid var(--border-strong);
+}
+.forecast-table tr.month-total td.total-title { color: var(--muted); }
+.forecast-table tr.empty-row td { padding: 24px; text-align: center; color: var(--muted); white-space: normal; }
+.table-footer { padding: 6px 12px; font-size: 13px; color: var(--muted); border-top: 1px solid var(--border); background: var(--surface-2); }
+
+/* ------------------------------------------------------------------ график */
+
+.chart-legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 14px;
+  padding: 6px 12px;
+  font-size: 12px;
+  border-bottom: 1px solid var(--border);
+}
+.legend-item { display: inline-flex; align-items: center; gap: 5px; }
+.legend-swatch { display: inline-block; width: 18px; height: 0; border-top: 2px solid var(--accent); }
+.legend-zero .legend-swatch { border-top: 2px dashed var(--zero); }
+.legend-cushion .legend-swatch { border-top: 2px dashed var(--cushion); }
+.legend-goal .legend-swatch { border-top: 2px dotted var(--goal); }
+.legend-today .legend-swatch { border-top: 2px solid var(--today); }
+.legend-income .legend-swatch, .legend-expense .legend-swatch { width: 9px; height: 9px; border: 0; border-radius: 50%; background: var(--income); }
+.legend-expense .legend-swatch { background: var(--expense); }
+.legend-bar .legend-swatch { width: 10px; height: 10px; border: 0; background: var(--income); opacity: 0.6; }
+.legend-hint { margin-left: auto; color: var(--muted); }
+
+.chart-host { position: relative; flex: 1; min-height: 0; overflow: hidden; }
+.chart-host > svg { position: absolute; inset: 0; display: block; }
+.chart-empty { padding: 32px; text-align: center; color: var(--muted); }
+
+.balance-chart { font-family: var(--font); user-select: none; }
+.balance-chart .chart-bg { fill: var(--surface); }
+.balance-chart .chart-grid line { stroke: var(--border); stroke-width: 1; opacity: 0.7; }
+.balance-chart .chart-grid-v { stroke: var(--border); stroke-width: 1; opacity: 0.4; }
+.balance-chart .chart-label { font-size: 11px; fill: var(--muted); }
+.balance-chart .chart-axis { stroke: var(--border-strong); stroke-width: 1; }
+.balance-chart .chart-area { fill: var(--accent); opacity: 0.1; }
+.balance-chart .chart-line { fill: none; stroke: var(--accent); stroke-width: 2; }
+.balance-chart .chart-zero { stroke: var(--zero); stroke-width: 1.2; stroke-dasharray: 5 4; }
+.balance-chart .chart-cushion { stroke: var(--cushion); stroke-width: 1.2; stroke-dasharray: 6 4; }
+.balance-chart .chart-goal { stroke: var(--goal); stroke-width: 1.2; stroke-dasharray: 2 3; }
+.balance-chart .chart-today { stroke: var(--today); stroke-width: 1.2; }
+.balance-chart .chart-ref-label.cushion { fill: var(--warn); }
+.balance-chart .chart-ref-label.goal { fill: var(--goal); }
+.balance-chart .chart-ref-label.today { fill: var(--today); }
+.balance-chart .chart-marker { stroke: var(--surface); stroke-width: 1; cursor: help; }
+.balance-chart .chart-marker.income { fill: var(--income); }
+.balance-chart .chart-marker.expense { fill: var(--expense); }
+.balance-chart .chart-marker.mixed { fill: var(--warn); }
+.balance-chart .chart-marker:hover { stroke: var(--text); stroke-width: 2; }
+.balance-chart .chart-bar.pos { fill: var(--income); opacity: 0.55; }
+.balance-chart .chart-bar.neg { fill: var(--expense); opacity: 0.55; }
+.balance-chart .chart-bar:hover { opacity: 0.85; }
+.balance-chart .chart-cross { stroke: var(--muted); stroke-width: 1; stroke-dasharray: 3 3; pointer-events: none; }
+.balance-chart .chart-dot { fill: var(--accent); stroke: var(--surface); stroke-width: 2; pointer-events: none; }
+
+/* ------------------------------------------------------------------ строка состояния */
+
+.statusbar {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  padding: 3px 8px;
+  font-size: 12px;
+  color: var(--muted);
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  white-space: nowrap;
+  overflow: hidden;
+}
+.status-seg { padding: 0 10px; border-right: 1px solid var(--border); }
+.status-seg:last-child { border-right: 0; }
+.status-seg.warn { color: var(--warn); }
+.status-file { color: var(--text); }
+.status-spacer { flex: 1; }
+.status-session.ok { color: var(--good); }
+.status-session.off { color: var(--warn); }
+
+/* ------------------------------------------------------------------ всплывающие элементы */
+
+/* JavaFX: Tooltip → Swing: JToolTip → Web: <div class="tooltip"> */
+.tooltip {
+  position: fixed;
+  z-index: 3000;
+  max-width: 380px;
+  padding: 6px 9px;
+  font-size: 12px;
+  line-height: 1.45;
+  color: #f5f7fa;
+  background: #262c34;
+  border-radius: 4px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
+  white-space: pre-line;
+  pointer-events: none;
+}
+
+/* JavaFX: PopupControl → Swing: SwingPopupControl → Web: .popover */
+.popover {
+  position: fixed;
+  z-index: 1500;
+  padding: 10px 12px;
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+}
+.spark-title { font-size: 12px; color: var(--muted); }
+.spark-value { font-size: 16px; font-weight: 600; font-variant-numeric: tabular-nums; margin-bottom: 4px; }
+.spark-caption { font-size: 11px; color: var(--muted); margin-top: 4px; }
+.sparkline { display: block; }
+.sparkline .spark-line { fill: none; stroke: var(--accent); stroke-width: 1.6; }
+.sparkline .spark-zero { stroke: var(--zero); stroke-dasharray: 3 3; }
+.sparkline .spark-cushion { stroke: var(--cushion); stroke-dasharray: 4 3; }
+.sparkline .spark-goal { stroke: var(--goal); stroke-dasharray: 2 2; }
+.sparkline .spark-dot { fill: var(--today); stroke: var(--surface); stroke-width: 1.5; }
+
+/* JavaFX: PopupWindow → Swing: JWindow → Web: div.day-card */
+.day-card {
+  position: fixed;
+  z-index: 1400;
+  min-width: 200px;
+  max-width: 320px;
+  padding: 8px 12px;
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+  pointer-events: none;
+  font-size: 13px;
+}
+.day-card-date { font-weight: 600; }
+.day-card-balance { font-variant-numeric: tabular-nums; margin: 2px 0 4px; }
+.day-card-balance.negative { color: var(--expense); }
+.day-card-events { margin: 0; padding: 0; list-style: none; }
+.day-card-events li { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.day-card-events .amount { font-variant-numeric: tabular-nums; }
+.day-card-events .income .amount { color: var(--income); }
+.day-card-events .expense .amount { color: var(--expense); }
+.day-card-events .skipped { text-decoration: line-through; opacity: 0.7; }
+
+/* JavaFX: Popup → Swing: PopupFactory.getPopup → Web: absolute div с <form> */
+.quick-edit-popup {
+  position: fixed;
+  z-index: 1600;
+  padding: 8px 10px;
+  background: var(--surface);
+  border: 1px solid var(--accent);
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+}
+.quick-form { display: flex; flex-direction: column; gap: 4px; margin: 0; }
+.quick-title { font-size: 12px; color: var(--muted); }
+.quick-row { display: flex; gap: 4px; }
+.quick-input { width: 140px; min-height: 30px; padding: 4px 8px; border: 1px solid var(--border-strong); border-radius: var(--radius); background: var(--surface); text-align: right; }
+.quick-error { font-size: 12px; color: var(--expense); }
+.quick-error:empty { display: none; }
+
+.toasts {
+  position: fixed;
+  right: 16px;
+  bottom: 34px;
+  z-index: 2500;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: flex-end;
+  pointer-events: none;
+}
+.toast {
+  max-width: 440px;
+  padding: 8px 14px;
+  color: #fff;
+  background: #2d333b;
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  transition: opacity 0.35s, transform 0.35s;
+}
+.toast.success { background: #1f7a3a; }
+.toast.warning { background: #9a6700; }
+.toast.error { background: #b42331; }
+.toast.hide { opacity: 0; transform: translateY(6px); }
+
+/* ------------------------------------------------------------------ диалоги */
+
+/* JavaFX: Dialog<R> + DialogPane → Swing: SwingDialog + SwingDialogPane → Web: <dialog><form method="dialog"> */
+dialog.app-dialog {
+  width: min(520px, 96vw);
+  max-width: 96vw;
+  max-height: 92vh;
+  padding: 0;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: 10px;
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+dialog.app-dialog::backdrop { background: rgba(15, 23, 42, 0.35); }
+dialog.modeless { position: fixed; z-index: 900; margin: 0; }
+
+.dialog-pane {
+  display: flex;
+  flex-direction: column;
+  max-height: 92vh;
+  margin: 0;
+}
+.dialog-pane.busy { cursor: progress; }
+.dialog-titlebar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 8px 8px 16px;
+  background: var(--surface-3);
+  border-bottom: 1px solid var(--border);
+  cursor: move;
+  user-select: none;
+}
+.dialog-title { flex: 1; font-weight: 600; }
+.dialog-x { border: 0; background: transparent; padding: 2px 8px; border-radius: 4px; cursor: pointer; color: var(--muted); }
+.dialog-x:hover { background: var(--border); color: var(--text); }
+.dialog-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-2);
+}
+.dialog-icon {
+  flex: none;
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  font-size: 17px;
+  border-radius: 50%;
+  background: var(--accent-weak);
+  color: var(--accent);
+}
+.alert-warning .dialog-icon { background: var(--cushion-bg); color: var(--warn); }
+.alert-error .dialog-icon { background: var(--negative-bg); color: var(--expense); }
+.dialog-header-text { white-space: pre-line; padding-top: 4px; }
+.dialog-content { padding: 12px 16px; overflow: auto; }
+.dialog-text, .alert-text { margin: 0; white-space: pre-line; }
+.dialog-details { margin: 0 16px 8px; }
+.dialog-details summary { cursor: pointer; color: var(--accent); padding: 4px 0; }
+.details-text {
+  max-height: 44vh;
+  overflow: auto;
+  margin: 6px 0 0;
+  padding: 8px 10px;
+  font-size: 12px;
+  white-space: pre-wrap;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+.dialog-validation { padding: 0 16px 6px; color: var(--muted); font-size: 13px; }
+.dialog-error {
+  margin: 0 16px 8px;
+  padding: 6px 10px;
+  color: var(--expense);
+  background: var(--negative-bg);
+  border-radius: var(--radius);
+  white-space: pre-line;
+}
+.dialog-buttons {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 16px;
+  border-top: 1px solid var(--border);
+  background: var(--surface-2);
+}
+.dialog-buttons-left, .dialog-buttons-right { display: flex; gap: 8px; flex-wrap: wrap; }
+.dialog-buttons .btn { min-width: 88px; justify-content: center; }
+.path { font-size: 12px; word-break: break-all; }
+.plain-list { margin: 4px 0; padding-left: 20px; }
+
+.field-label { display: flex; flex-direction: column; gap: 4px; }
+.field-label .input { width: 100%; }
+.field-hint { font-size: 12px; color: var(--muted); margin-top: 2px; }
+.choice-select { width: 100%; }
+select.choice-select[size] { min-height: 150px; }
+
+/* ------------------------------------------------------------------ формы */
+
+.form-grid {
+  display: grid;
+  grid-template-columns: minmax(120px, max-content) 1fr;
+  gap: 8px 12px;
+  align-items: center;
+}
+.form-row { display: contents; }
+.form-row.disabled .form-label { color: var(--muted); }
+.form-label { text-align: right; color: var(--text); }
+.form-control { min-width: 0; }
+.form-control > .input:not([type="checkbox"]), .form-control > select { width: 100%; }
+.form-section {
+  grid-column: 1 / -1;
+  margin-top: 6px;
+  padding-bottom: 2px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--muted);
+  border-bottom: 1px solid var(--border);
+}
+.form-section:first-child { margin-top: 0; }
+.check-wrap { display: inline-flex; align-items: center; gap: 6px; }
+.check-wrap input { width: 16px; height: 16px; accent-color: var(--accent); }
+.with-suffix, .with-list { display: flex; align-items: center; gap: 6px; }
+.with-suffix .input, .with-list .input { flex: 1; min-width: 0; }
+.suffix { color: var(--muted); }
+.money-input { text-align: right; font-variant-numeric: tabular-nums; }
+.number-input { max-width: 120px; }
+.date-field { position: relative; display: flex; align-items: center; gap: 4px; }
+.date-input { width: 130px; }
+.date-button { min-height: 30px; }
+.date-picker { position: absolute; left: 0; bottom: 0; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+.radio-group { display: flex; flex-direction: column; gap: 4px; }
+.radio-label { display: inline-flex; align-items: center; gap: 6px; }
+.radio-label input { accent-color: var(--accent); }
+
+.preview-dates { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; font-size: 13px; min-height: 26px; }
+.preview-rule { color: var(--muted); }
+.date-chip { padding: 1px 7px; border-radius: 10px; background: var(--surface-3); font-variant-numeric: tabular-nums; }
+.date-chip.shifted { background: var(--cushion-bg); }
+/* Даты предпросмотра — кнопки: щелчок выбирает событие для «Скорректировать событие…». */
+button.date-chip { border: 1px solid transparent; color: inherit; font: inherit; font-size: 13px; cursor: pointer; }
+button.date-chip:hover { border-color: currentColor; }
+button.date-chip[aria-pressed="true"] { border-color: currentColor; box-shadow: inset 0 0 0 1px currentColor; font-weight: 600; }
+.preview-box { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
+.preview-adjust { font-size: 12px; padding: 2px 10px; }
+
+.wizard-steps { display: flex; gap: 6px; list-style: none; margin: 0 0 12px; padding: 0; counter-reset: step; }
+.wizard-steps li {
+  flex: 1;
+  padding: 4px 8px;
+  font-size: 12px;
+  color: var(--muted);
+  border-bottom: 3px solid var(--border);
+  counter-increment: step;
+}
+.wizard-steps li::before { content: counter(step) ". "; }
+.wizard-steps li.current { color: var(--accent); border-bottom-color: var(--accent); font-weight: 600; }
+
+.goal-result { margin-top: 12px; padding: 8px 12px; border-radius: var(--radius); background: var(--surface-2); border: 1px solid var(--border); min-height: 48px; }
+.goal-line { margin: 4px 0; }
+.goal-line.good strong { color: var(--good); }
+.goal-line.bad { color: var(--warn); }
+
+/* JavaFX: FileChooser / DirectoryChooser → Swing: JFileChooser → Web: обозреватель /api/fs */
+.fs-browser { display: flex; flex-direction: column; gap: 8px; }
+.fs-bar { display: flex; gap: 6px; }
+.fs-path { flex: 1; min-width: 0; font-family: var(--mono); font-size: 12px; }
+.fs-roots { width: 72px; }
+.fs-list {
+  height: 290px;
+  margin: 0;
+  padding: 2px 0;
+  overflow: auto;
+  list-style: none;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  background: var(--surface);
+  outline: none;
+}
+.fs-list:focus-visible { outline: 2px solid var(--accent); }
+.fs-entry { display: grid; grid-template-columns: 24px 1fr auto; align-items: center; gap: 6px; padding: 3px 10px; cursor: default; outline: none; }
+.fs-entry:hover { background: var(--surface-3); }
+.fs-entry[aria-selected="true"] { background: var(--accent-weak); }
+.fs-meta { font-size: 12px; color: var(--muted); }
+.fs-empty { padding: 16px; color: var(--muted); text-align: center; }
+.fs-name { flex-direction: row; align-items: center; }
+.fs-name .input { flex: 1; }
+.fs-filter, .fs-status { font-size: 12px; color: var(--muted); }
+
+/* ------------------------------------------------------------------ экран «нет связи» */
+
+/* Модальный <dialog> на всё окно: сброс стандартных рамок и размеров диалога браузера. */
+.server-down {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  max-height: none;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+}
+.server-down[open] {
+  display: grid;
+  place-items: center;
+}
+.server-down::backdrop { background: rgba(15, 23, 42, 0.55); }
+.server-down-card {
+  max-width: 480px;
+  margin: 16px;
+  padding: 20px 24px;
+  background: var(--surface);
+  border-radius: 10px;
+  box-shadow: var(--shadow);
+}
+.server-down-card h2 { margin: 0 0 8px; font-size: 18px; }
+
+@media (max-width: 760px) {
+  .filter-input { width: 140px; }
+  .legend-hint { display: none; }
+  .forecast-table .col-category, .forecast-table .col-day { display: none; }
+  .form-grid { grid-template-columns: 1fr; }
+  .form-label { text-align: left; }
+}

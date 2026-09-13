@@ -1,0 +1,63 @@
+<!doctype html>
+<!--
+  CashPrediction — тонкий web-клиент (третий равноправный клиент наряду с JavaFX и Swing).
+
+  Страница только показывает данные и отправляет команды: план, прогноз, «что-если», снимки сессии и файлы
+  живут на сервере (модуль web поверх модуля core). Скрипты — ES-модули без библиотек, стили — style.css;
+  внешних ресурсов нет (Content-Security-Policy сервера разрешает только этот же адрес).
+
+  Разметка главного окна (раздел 6 плана): строка меню, панель инструментов, баннер восстановления после сбоя,
+  панель сводки, таблица или график, строка состояния. Всё содержимое строится скриптами app.js и соседними модулями.
+-->
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>CashPrediction</title>
+  <link rel="icon" type="image/png" href="favicon.png">
+  <link rel="stylesheet" href="style.css">
+  <!-- Один модуль-загрузчик; остальные модули он импортирует сам. -->
+  <script type="module" src="app.js"></script>
+</head>
+<body>
+  <div id="app" class="app">
+    <header id="app-header" class="app-header">
+      <div class="brand" aria-hidden="true"><img src="favicon.png" alt="" width="18" height="18"></div>
+      <!-- JavaFX: MenuBar → Swing: JMenuBar → Web: <nav role="menubar"> -->
+      <nav id="menubar" class="menubar" role="menubar" aria-label="Главное меню"></nav>
+    </header>
+    <!-- Панель инструментов: SplitMenuButton, MenuButton, переключатель вида, фильтр, сохранение. -->
+    <div id="toolbar" class="toolbar" role="toolbar" aria-label="Панель инструментов"></div>
+
+    <!-- Web-аналог диалога 17 «Восстановление»: баннер «Восстановить с сервера / Начать заново». -->
+    <section id="recovery-banner" class="recovery-banner" role="region" aria-live="assertive"
+             aria-label="Восстановление после сбоя" hidden></section>
+
+    <!-- Короткие сообщения о состоянии прогноза (ошибка горизонта, обрезанная таблица, автосохранение). -->
+    <div id="notice-bar" class="notice-bar" role="status" hidden></div>
+
+    <main id="app-main" class="app-main">
+      <section id="summary" class="summary" aria-label="Сводка прогноза"></section>
+      <section id="view-table" class="view view-table" aria-label="Таблица событий"></section>
+      <section id="view-chart" class="view view-chart" aria-label="График баланса" hidden></section>
+    </main>
+
+    <footer id="statusbar" class="statusbar" role="status" aria-live="polite"></footer>
+  </div>
+
+  <!-- Экран «нет связи с сервером» и «сервер остановлен». Это <dialog>, открываемый через showModal(): только так он
+       попадает в верхний слой браузера поверх уже открытых модальных диалогов (обычный div с z-index оставался под ними). -->
+  <dialog id="server-down" class="server-down" role="alertdialog" aria-labelledby="server-down-title">
+    <div class="server-down-card">
+      <h2 id="server-down-title">Нет связи с сервером CashPrediction</h2>
+      <p id="server-down-text">Сервер остановлен или перезапускается.</p>
+      <p><button id="server-down-retry" type="button" class="btn primary">Повторить</button></p>
+    </div>
+  </dialog>
+
+  <noscript>
+    <p class="noscript">Для работы CashPrediction в браузере нужен JavaScript.</p>
+  </noscript>
+</body>
+</html>
