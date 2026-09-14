@@ -46,7 +46,7 @@ import ru.cashprediction.core.text.Texts;
  *
  * ## Открытые окна
  *
- * ### w1 — RULE_EDITOR (модальное, владелец: main)
+ * ### w1 - RULE_EDITOR (модальное, владелец: main)
  *
  * - Контекст: mode=edit; ruleId=r3
  * - Границы: нет
@@ -118,8 +118,8 @@ public final class MarkdownSnapshotCodec implements SnapshotCodec<String> {
     /** Как пишется неизвестный тип окна. */
     private static final String UNKNOWN_TYPE = "?";
 
-    /** Заголовок окна: {@code ### w1 — RULE_EDITOR (модальное, владелец: main)}; id и владелец без сырых пробелов. */
-    private static final Pattern WINDOW_HEADING = Pattern.compile("^### (\\S+) — (\\S+) \\(("
+    /** Заголовок окна: {@code ### w1 - RULE_EDITOR (модальное, владелец: main)}; id и владелец без сырых пробелов. */
+    private static final Pattern WINDOW_HEADING = Pattern.compile("^### (\\S+) - (\\S+) \\(("
             + Pattern.quote(MODAL) + "|" + Pattern.quote(MODELESS) + "), " + Pattern.quote(OWNER) + ": (\\S+)\\)$");
 
     /** Создаёт кодек (состояния нет, экземпляры взаимозаменяемы). */
@@ -197,7 +197,7 @@ public final class MarkdownSnapshotCodec implements SnapshotCodec<String> {
         lines.add(SECTION_WINDOWS);
         for (WindowState window : snapshot.windows()) {
             lines.add("");
-            lines.add("### " + escapeToken(window.id()) + " — "
+            lines.add("### " + escapeToken(window.id()) + " - "
                     + (window.type() == null ? UNKNOWN_TYPE : window.type().name())
                     + " (" + (window.modal() ? MODAL : MODELESS) + ", " + OWNER + ": " + escapeToken(window.ownerId()) + ")");
             lines.add("");

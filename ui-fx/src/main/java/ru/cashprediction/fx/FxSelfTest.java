@@ -507,11 +507,11 @@ public final class FxSelfTest {
                 Event.fireEvent(menu, new Event(Menu.ON_SHOWING));
                 level = new ArrayList<>(menu.getItems());
             } else if (i < parts.length - 1) {
-                throw new IllegalArgumentException("«" + part + "» — пункт, а не подменю");
+                throw new IllegalArgumentException("«" + part + "» - пункт, а не подменю");
             }
         }
         if (found == null || found instanceof Menu) {
-            throw new IllegalArgumentException("«" + path + "» — подменю, а не пункт");
+            throw new IllegalArgumentException("«" + path + "» - подменю, а не пункт");
         }
         if (found.isDisable()) {
             throw new IllegalArgumentException("пункт «" + path + "» недоступен");

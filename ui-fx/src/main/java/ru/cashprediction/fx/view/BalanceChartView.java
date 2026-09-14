@@ -203,7 +203,7 @@ public final class BalanceChartView extends StackPane {
             end = rangeStart;
         }
         rangeDays = Math.max(1, ChronoUnit.DAYS.between(rangeStart, end));
-        chart.setTitle("Баланс на конец дня, " + DateFormats.ru(rangeStart) + " — " + DateFormats.ru(end)
+        chart.setTitle("Баланс на конец дня, " + DateFormats.ru(rangeStart) + " - " + DateFormats.ru(end)
                 + ", " + plan.currency());
         xAxis.setLowerBound(0);
         xAxis.setUpperBound(rangeDays);
@@ -255,13 +255,13 @@ public final class BalanceChartView extends StackPane {
         if (!now.isBefore(rangeStart) && !now.isAfter(end)) {
             double x = dayIndex(now);
             today.getData().setAll(List.of(new XYChart.Data<>(x, lo), new XYChart.Data<>(x, hi)));
-            legendHints.put("Сегодня", "Сегодня, " + DateFormats.ru(now) + ": левее — прошедшие дни");
+            legendHints.put("Сегодня", "Сегодня, " + DateFormats.ru(now) + ": левее - прошедшие дни");
         } else {
             today.getData().clear();
         }
 
         markers.getData().setAll(view.chartMarkers() ? markerData(document, end) : List.of());
-        legendHints.put("События", "События периода: зелёные — доходы, красные — расходы");
+        legendHints.put("События", "События периода: зелёные - доходы, красные - расходы");
 
         chart.setBars(view.chartBars() ? bars(end) : List.of());
         // Легенда создаётся при раскладке графика: подсказки ставятся после неё.

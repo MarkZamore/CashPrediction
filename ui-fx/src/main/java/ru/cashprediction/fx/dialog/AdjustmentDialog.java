@@ -75,12 +75,12 @@ public final class AdjustmentDialog extends FxStatefulDialog<AdjustmentOutcome> 
         note.setWrapText(true);
 
         VBox actions = new VBox(6,
-                radio("Пропустить — события не будет", ActionType.SKIP, initialAction),
+                radio("Пропустить - события не будет", ActionType.SKIP, initialAction),
                 radio("Изменить сумму", ActionType.CHANGE_AMOUNT, initialAction),
                 radio("Перенести на другую дату", ActionType.MOVE_DATE, initialAction),
                 radio("Заменить сумму и дату", ActionType.REPLACE, initialAction));
         String ruleInfo = "По правилу: " + rule.kind().label() + " " + rule.amount().format(plan.currency())
-                + (shifted.equals(originalDate) ? "" : ", с учётом выходных — " + DateFormats.ru(shifted));
+                + (shifted.equals(originalDate) ? "" : ", с учётом выходных - " + DateFormats.ru(shifted));
         Label info = new Label(ruleInfo);
         info.setWrapText(true);
         appPane().setForm(new FormGrid()

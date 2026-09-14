@@ -1,9 +1,9 @@
 /**
  * @file Диалоги плана целиком: диалог 1 «Новый план» (мастер из трёх страниц) и диалог 2 «Параметры плана».
  *
- * Мастер создаёт план в памяти сервера (POST /api/plans/new) — файл появится при первом сохранении (Ctrl+S).
+ * Мастер создаёт план в памяти сервера (POST /api/plans/new) - файл появится при первом сохранении (Ctrl+S).
  * «Параметры плана» меняют план через PlanDocument (PUT /api/plan/settings), смена названия переименовывает файл.
- * Оба диалога — восстанавливаемые окна (NEW_PLAN_WIZARD с контекстом page, PLAN_SETTINGS).
+ * Оба диалога - восстанавливаемые окна (NEW_PLAN_WIZARD с контекстом page, PLAN_SETTINGS).
  */
 
 import { h, planNameProblem } from './util.js';
@@ -43,9 +43,9 @@ function addHorizonFields(form) {
  */
 function validateHorizon(form) {
   const kind = form.value('horizonKind');
-  if (kind === 'UNTIL') return isValidDate(form.text('horizonUntil')) ? '' : 'Дата окончания горизонта — в виде ДД.ММ.ГГГГ';
+  if (kind === 'UNTIL') return isValidDate(form.text('horizonUntil')) ? '' : 'Дата окончания горизонта - в виде ДД.ММ.ГГГГ';
   const n = Number(form.text('horizonValue'));
-  return Number.isInteger(n) && n >= 1 ? '' : 'Горизонт — целое число больше нуля';
+  return Number.isInteger(n) && n >= 1 ? '' : 'Горизонт - целое число больше нуля';
 }
 
 /**
@@ -78,11 +78,11 @@ export function newPlanWizard({ existing = null } = {}) {
   p1.add('cushion', { label: 'Подушка безопасности', type: 'money', hint: 'Строки ниже этой суммы подсвечиваются жёлтым' });
   p2.section('Регулярный доход (необязательно)');
   p2.add('quickIncomeTitle', { label: 'Название' });
-  p2.add('quickIncomeAmount', { label: 'Сумма', type: 'money', placeholder: 'пусто — не добавлять' });
+  p2.add('quickIncomeAmount', { label: 'Сумма', type: 'money', placeholder: 'пусто - не добавлять' });
   p2.add('quickIncomeDay', { label: 'День месяца', type: 'number', min: 1, max: 31 });
   p2.section('Регулярный расход (необязательно)');
   p2.add('quickExpenseTitle', { label: 'Название' });
-  p2.add('quickExpenseAmount', { label: 'Сумма', type: 'money', placeholder: 'пусто — не добавлять' });
+  p2.add('quickExpenseAmount', { label: 'Сумма', type: 'money', placeholder: 'пусто - не добавлять' });
   p2.add('quickExpenseDay', { label: 'День месяца', type: 'number', min: 1, max: 31 });
   for (const form of pages) form.fill(initial);
 
@@ -110,19 +110,19 @@ export function newPlanWizard({ existing = null } = {}) {
       // Имя плана станет именем файла: те же правила, что PlanValidator.checkPlanName.
       if (planNameProblem(p0.text('name'))) return planNameProblem(p0.text('name'));
       if (!p0.text('currency').trim()) return 'Укажите валюту';
-      if (!isValidDate(p0.text('startDate'), true)) return 'Дата начала — в виде ДД.ММ.ГГГГ';
-      if (!isValidMoney(p0.text('startBalance'), { allowEmpty: true, allowNegative: true })) return 'Сумма — число, например 150 000,00';
+      if (!isValidDate(p0.text('startDate'), true)) return 'Дата начала - в виде ДД.ММ.ГГГГ';
+      if (!isValidMoney(p0.text('startBalance'), { allowEmpty: true, allowNegative: true })) return 'Сумма - число, например 150 000,00';
     }
     if (i === 1) {
       const message = validateHorizon(p1);
       if (message) return message;
-      if (!isValidMoney(p1.text('cushion'), { allowEmpty: true })) return 'Подушка — неотрицательная сумма';
+      if (!isValidMoney(p1.text('cushion'), { allowEmpty: true })) return 'Подушка - неотрицательная сумма';
     }
     if (i === 2) {
       for (const prefix of ['quickIncome', 'quickExpense']) {
-        if (!isValidMoney(p2.text(`${prefix}Amount`), { allowEmpty: true, positive: true })) return 'Сумма операции — число больше нуля';
+        if (!isValidMoney(p2.text(`${prefix}Amount`), { allowEmpty: true, positive: true })) return 'Сумма операции - число больше нуля';
         const day = Number(p2.text(`${prefix}Day`) || '1');
-        if (p2.text(`${prefix}Amount`).trim() && (!Number.isInteger(day) || day < 1 || day > 31)) return 'День месяца — от 1 до 31';
+        if (p2.text(`${prefix}Amount`).trim() && (!Number.isInteger(day) || day < 1 || day > 31)) return 'День месяца - от 1 до 31';
       }
     }
     return '';
@@ -259,7 +259,7 @@ export function planSettingsDialog({ existing = null } = {}) {
   form.add('cushion', { label: 'Подушка безопасности', type: 'money' });
   form.section('Цель накоплений');
   form.add('goalTitle', { label: 'Цель', placeholder: 'Например, Отпуск' });
-  form.add('goalTarget', { label: 'Сумма цели', type: 'money', placeholder: 'пусто — без цели' });
+  form.add('goalTarget', { label: 'Сумма цели', type: 'money', placeholder: 'пусто - без цели' });
   form.add('goalDate', { label: 'Желаемая дата', type: 'date', placeholder: 'необязательно' });
   form.section('Заметка');
   form.add('note', { label: 'Заметка', type: 'textarea', rows: 3 });
@@ -271,13 +271,13 @@ export function planSettingsDialog({ existing = null } = {}) {
     // Смена названия переименует файл: те же правила, что PlanValidator.checkPlanName.
     if (planNameProblem(form.text('name'))) return planNameProblem(form.text('name'));
     if (!form.text('currency').trim()) return 'Укажите валюту';
-    if (!isValidDate(form.text('startDate'))) return 'Дата начала — в виде ДД.ММ.ГГГГ';
-    if (!isValidMoney(form.text('startBalance'), { allowEmpty: true, allowNegative: true })) return 'Начальный баланс — число';
+    if (!isValidDate(form.text('startDate'))) return 'Дата начала - в виде ДД.ММ.ГГГГ';
+    if (!isValidMoney(form.text('startBalance'), { allowEmpty: true, allowNegative: true })) return 'Начальный баланс - число';
     const horizonMessage = validateHorizon(form);
     if (horizonMessage) return horizonMessage;
-    if (!isValidMoney(form.text('cushion'), { allowEmpty: true })) return 'Подушка — неотрицательная сумма';
-    if (!isValidMoney(form.text('goalTarget'), { allowEmpty: true, positive: true })) return 'Сумма цели — число больше нуля';
-    if (!isValidDate(form.text('goalDate'), true)) return 'Желаемая дата — в виде ДД.ММ.ГГГГ';
+    if (!isValidMoney(form.text('cushion'), { allowEmpty: true })) return 'Подушка - неотрицательная сумма';
+    if (!isValidMoney(form.text('goalTarget'), { allowEmpty: true, positive: true })) return 'Сумма цели - число больше нуля';
+    if (!isValidDate(form.text('goalDate'), true)) return 'Желаемая дата - в виде ДД.ММ.ГГГГ';
     return '';
   };
 

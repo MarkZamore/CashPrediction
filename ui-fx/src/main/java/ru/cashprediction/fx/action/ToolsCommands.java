@@ -138,7 +138,7 @@ final class ToolsCommands {
         // JavaFX: Alert → Swing: JOptionPane.showMessageDialog(WARNING_MESSAGE) → Web: <dialog class="alert">
         Alert alert = Dialogs.withDetails(problems == 0 ? AlertType.INFORMATION : AlertType.WARNING, "Диагностика",
                 problems == 0 ? "Замечаний к плану нет" : "Найдено замечаний: " + problems,
-                "Подробности — в раскрываемой области ниже.", String.join("\n", lines));
+                "Подробности - в раскрываемой области ниже.", String.join("\n", lines));
         // JavaFX: DialogPane → Swing: SwingDialogPane (JPanel header/content/кнопки) → Web: <dialog><form method="dialog">
         alert.getDialogPane().setExpanded(true);
         support.host().show(alert, WindowState.MAIN_OWNER, r -> { });

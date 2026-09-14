@@ -42,7 +42,7 @@ public final class FileChooserService {
      * @param onResult итоговый путь (с расширением, подтверждённая замена) или пусто, ровно один раз
      */
     public void chooseFile(FileChooserSpec spec, Consumer<Optional<Path>> onResult) {
-        throw new UnsupportedOperationException("S2: core-app-file — FileChooserService.chooseFile");
+        throw new UnsupportedOperationException("S2: core-app-file - FileChooserService.chooseFile");
     }
 
     /**
@@ -52,6 +52,6 @@ public final class FileChooserService {
      * @param onResult папка или пусто, ровно один раз
      */
     public void chooseDirectory(DirectoryChooserSpec spec, Consumer<Optional<Path>> onResult) {
-        throw new UnsupportedOperationException("S2: core-app-file — FileChooserService.chooseDirectory");
+        throw new UnsupportedOperationException("S2: core-app-file - FileChooserService.chooseDirectory");
     }
 }

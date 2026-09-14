@@ -35,7 +35,7 @@ public record PlotTransform(double plotX, double plotY, double plotWidth, double
      * @return дата, ограниченная диапазоном
      */
     public LocalDate dateAt(double x) {
-        throw new UnsupportedOperationException("S1: core-chart — PlotTransform.dateAt");
+        throw new UnsupportedOperationException("S1: core-chart - PlotTransform.dateAt");
     }
 
     /**
@@ -45,7 +45,7 @@ public record PlotTransform(double plotX, double plotY, double plotWidth, double
      * @return координата
      */
     public double xOf(LocalDate date) {
-        throw new UnsupportedOperationException("S1: core-chart — PlotTransform.xOf");
+        throw new UnsupportedOperationException("S1: core-chart - PlotTransform.xOf");
     }
 
     /**
@@ -55,7 +55,7 @@ public record PlotTransform(double plotX, double plotY, double plotWidth, double
      * @return координата
      */
     public double yOf(long minor) {
-        throw new UnsupportedOperationException("S1: core-chart — PlotTransform.yOf");
+        throw new UnsupportedOperationException("S1: core-chart - PlotTransform.yOf");
     }
 
     /**
@@ -66,6 +66,6 @@ public record PlotTransform(double plotX, double plotY, double plotWidth, double
      * @return {@code true}, если внутри или на границе
      */
     public boolean contains(double x, double y) {
-        throw new UnsupportedOperationException("S1: core-chart — PlotTransform.contains");
+        throw new UnsupportedOperationException("S1: core-chart - PlotTransform.contains");
     }
 }

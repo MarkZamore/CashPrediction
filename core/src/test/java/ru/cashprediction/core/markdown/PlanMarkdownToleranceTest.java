@@ -180,7 +180,7 @@ class PlanMarkdownToleranceTest {
 
                 | ID | Тип | Сумма | Повтор | С | По |
                 |---|---|---|---|---|---|
-                | r1 | доход | 80 000,00 | ежемесячно 5 | 05.10.2026 | — |
+                | r1 | доход | 80 000,00 | ежемесячно 5 | 05.10.2026 | - |
 
                 ## Разовые операции
 
@@ -344,7 +344,7 @@ class PlanMarkdownToleranceTest {
         assertTrue(result.plan().oneTimes().isEmpty());
         assertEquals(1, result.plan().adjustments().size(), "перенос с лишней суммой разобран");
         assertTrue(result.diagnostics().stream().anyMatch(d -> d.severity() == Severity.WARNING
-                && d.message().contains("Новая сумма")), "лишняя сумма — предупреждение");
+                && d.message().contains("Новая сумма")), "лишняя сумма - предупреждение");
         assertEquals(5, result.plan().note().lines().count());
     }
 

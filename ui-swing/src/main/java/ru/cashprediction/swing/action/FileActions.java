@@ -278,7 +278,7 @@ final class FileActions extends ActionSupport {
         Path file = context().layout().dir().resolve(settingsName);
         if (!Files.exists(file)) {
             context().updateSettings(s -> s.withRecentPlanRemoved(settingsName));
-            alerts().error("Файл плана не найден", "Файла «" + file + "» больше нет — он убран из списка недавних.");
+            alerts().error("Файл плана не найден", "Файла «" + file + "» больше нет - он убран из списка недавних.");
             return;
         }
         confirmDiscard(() -> loadPlan(file));
@@ -445,8 +445,8 @@ final class FileActions extends ActionSupport {
     private void askChangedOnDisk(Path file, Consumer<Boolean> done) {
         SwingAlert alert = alerts().create(SwingAlert.AlertType.WARNING, "Файл изменён снаружи",
                 "Файл «" + file.getFileName() + "» изменён другой программой после открытия",
-                "«Перезаписать» — сохранить план из CashPrediction поверх чужих правок.\n"
-                        + "«Перечитать» — открыть файл заново; несохранённые изменения в программе будут потеряны.",
+                "«Перезаписать» - сохранить план из CashPrediction поверх чужих правок.\n"
+                        + "«Перечитать» - открыть файл заново; несохранённые изменения в программе будут потеряны.",
                 AppButtons.OVERWRITE, AppButtons.RELOAD, AppButtons.CANCEL);
         alerts().show(alert, result -> {
             SwingButtonType button = result.orElse(AppButtons.CANCEL);
@@ -677,7 +677,7 @@ final class FileActions extends ActionSupport {
      */
     public void cashMemoryFolder() {
         Path dir = context().layout().dir();
-        String content = "Все данные программы — планы (.md), настройки и снимки сеанса — хранятся здесь.\n"
+        String content = "Все данные программы - планы (.md), настройки и снимки сеанса - хранятся здесь.\n"
                 + (shared.browsingOtherFolder() ? "\nПланы сейчас открываются из папки:\n" + shared.plansFolder() + "\n" : "")
                 + "\nМожно открыть планы из другой папки на время этого сеанса. Новые планы, настройки и снимки "
                 + "по-прежнему сохраняются только в CashMemory.";

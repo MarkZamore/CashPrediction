@@ -26,6 +26,6 @@ public final class ChoiceForms {
 
     /** @return логика §6.8 */
     public static FormLogic currency() {
-        throw new UnsupportedOperationException("S1: core-forms-framework — ChoiceForms.currency");
+        throw new UnsupportedOperationException("S1: core-forms-framework - ChoiceForms.currency");
     }
 }

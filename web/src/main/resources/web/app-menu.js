@@ -18,12 +18,12 @@ export const PERIODS = [['M3', '3 месяца'], ['M6', '6 месяцев'], ['
 
 /** Текст окна «Горячие клавиши» для web-клиента (тот же набор, что в JavaFX и Swing, с заменами браузера). */
 export const HOTKEYS_TEXT = [
-  'Alt+Shift+N        Новый план                      (в JavaFX и Swing — Ctrl+N)',
+  'Alt+Shift+N        Новый план                      (в JavaFX и Swing - Ctrl+N)',
   'Alt+Shift+O        Открыть план                    (Ctrl+O)',
   'Ctrl+S             Сохранить',
   'Ctrl+Shift+S       Сохранить как',
   'F2                 Переименовать план',
-  'Ctrl+Shift+C       Экспорт в CSV                   (если занято браузером — Alt+Shift+C)',
+  'Ctrl+Shift+C       Экспорт в CSV                   (если занято браузером - Alt+Shift+C)',
   'Ctrl+I             Добавить регулярный доход',
   'Ctrl+E             Добавить регулярный расход',
   'Alt+Shift+T        Разовая операция                (Ctrl+T)',
@@ -35,11 +35,11 @@ export const HOTKEYS_TEXT = [
   'Ctrl+F             Перейти к фильтру',
   'Ctrl+G             Калькулятор цели',
   'F1                 О программе',
-  'F10                Строка меню: стрелки — перемещение, Enter — выбрать, Esc — закрыть',
+  'F10                Строка меню: стрелки - перемещение, Enter - выбрать, Esc - закрыть',
   'Shift+F10, Menu    Контекстное меню выбранной строки',
   '↑ ↓ PgUp PgDn      Выбор строки в таблице',
   '',
-  'В быстрой правке суммы (двойной щелчок по сумме): Enter — сохранить, Esc — закрыть.',
+  'В быстрой правке суммы (двойной щелчок по сумме): Enter - сохранить, Esc - закрыть.',
   'Сочетания Ctrl+N, Ctrl+T, Ctrl+W и Ctrl+O браузер не отдаёт странице, поэтому в веб-клиенте',
   'они заменены на Alt+Shift+буква.',
 ].join('\n');
@@ -197,7 +197,7 @@ export function whatIfItems() {
   /**
    * Включён ли коэффициент сценария (отличается от единицы).
    * @param {string|number} f коэффициент ("1", "0.90")
-   * @returns {boolean} true — суммы меняются
+   * @returns {boolean} true - суммы меняются
    */
   const factorOn = (f) => Number(String(f ?? '1').replace(',', '.')) !== 1;
   return [
@@ -363,7 +363,7 @@ export function buildToolbar(container) {
   // JavaFX: MenuButton → Swing: SwingMenuButton → Web: <button> + <ul role="menu">
   const period = menuButton(() => {
     const found = PERIODS.find(([value]) => value === vs().period);
-    return `Период: ${found ? found[1] : '—'}`;
+    return `Период: ${found ? found[1] : '-'}`;
   }, () => [...periodItems(), SEPARATOR, horizonItem()], 'Сколько месяцев показывать в таблице и на графике');
 
   // JavaFX: MenuButton → Swing: SwingMenuButton → Web: <button> + <ul role="menu">

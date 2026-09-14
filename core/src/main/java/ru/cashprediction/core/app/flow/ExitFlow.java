@@ -33,6 +33,6 @@ public final class ExitFlow {
 
     /** Запрос выхода от пользователя (порядок — в описании класса). */
     public void requestExit() {
-        throw new UnsupportedOperationException("S2: core-app-file — ExitFlow.requestExit");
+        throw new UnsupportedOperationException("S2: core-app-file - ExitFlow.requestExit");
     }
 }

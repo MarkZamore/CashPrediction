@@ -34,6 +34,6 @@ public final class DumpDiff {
      * @return расхождения по возрастанию указателя
      */
     public static List<Difference> diff(Object expected, Object actual, double boxTolerance) {
-        throw new UnsupportedOperationException("S2: core-protocol-dump — DumpDiff.diff");
+        throw new UnsupportedOperationException("S2: core-protocol-dump - DumpDiff.diff");
     }
 }

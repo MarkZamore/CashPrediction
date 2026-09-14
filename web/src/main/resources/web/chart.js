@@ -2,8 +2,8 @@
  * @file График баланса: SVG, построенный из точек ChartSeries.sample (не больше 1500 точек, их считает сервер).
  *
  * Шаговая линия баланса, горизонтали «ноль», «подушка», «цель», вертикаль «сегодня», маркеры событий, столбцы
- * итогов месяца. Наведение — карточка дня (PopupWindow), маркеры и столбцы — подсказки (Tooltip), правая кнопка —
- * контекстное меню (ContextMenu по ContextMenuEvent), двойной щелчок — переход к дате в таблице.
+ * итогов месяца. Наведение - карточка дня (PopupWindow), маркеры и столбцы - подсказки (Tooltip), правая кнопка -
+ * контекстное меню (ContextMenu по ContextMenuEvent), двойной щелчок - переход к дате в таблице.
  * JavaFX: LineChart (createSymbols=false, animated=false) → Swing: BalanceChartComponent (Graphics2D) → Web: SVG
  */
 
@@ -256,7 +256,7 @@ export function chartSvgMarkup(state, width, height) {
   root.insertBefore(svg('rect', { class: 'chart-bg', x: 0, y: 0, width, height: height + 26 }), content);
   root.insertBefore(svg('text', {
     class: 'chart-caption', x: 12, y: 18,
-    text: `CashPrediction — «${state.plan.name}»: баланс с ${ruDate(state.forecast.chart[0].date)} по ${state.periodEndText || ''}`,
+    text: `CashPrediction - «${state.plan.name}»: баланс с ${ruDate(state.forecast.chart[0].date)} по ${state.periodEndText || ''}`,
   }), content);
   return `<?xml version="1.0" encoding="UTF-8"?>\n${new XMLSerializer().serializeToString(root)}`;
 }
@@ -323,10 +323,10 @@ export class BalanceChart {
     const view = state.viewState;
     const items = [
       ['line', 'Баланс', 'Сколько денег на конец дня'],
-      ['zero', 'Ноль', 'Ниже линии — долг'],
+      ['zero', 'Ноль', 'Ниже линии - долг'],
       parseMoney(plan.cushion) > 0 ? ['cushion', `Подушка ${plan.cushionText}`, 'Неприкосновенный запас из параметров плана'] : null,
       plan.goal ? ['goal', `Цель ${plan.goal.targetText}`, `Цель «${plan.goal.title}»`] : null,
-      ['today', 'Сегодня', 'Вертикальная линия — сегодняшний день'],
+      ['today', 'Сегодня', 'Вертикальная линия - сегодняшний день'],
       view.chartMarkers ? ['income', 'Доход', 'Маркер дня с доходом'] : null,
       view.chartMarkers ? ['expense', 'Расход', 'Маркер дня с расходом'] : null,
       view.chartBars ? ['bar', 'Итог месяца', 'Столбцы внизу: доходы минус расходы за месяц'] : null,
@@ -334,7 +334,7 @@ export class BalanceChart {
     this.legend.replaceChildren(
       ...items.map(([cls, text, tip]) => h('span', { class: `legend-item legend-${cls}`, title: tip },
         h('span', { class: 'legend-swatch', 'aria-hidden': 'true' }), text)),
-      h('span', { class: 'legend-hint', text: 'Наведите — карточка дня · двойной щелчок — к дате в таблице · правая кнопка — меню' }));
+      h('span', { class: 'legend-hint', text: 'Наведите - карточка дня · двойной щелчок - к дате в таблице · правая кнопка - меню' }));
   }
 
   /**
@@ -462,7 +462,7 @@ function markerTooltip(iso, rowsByDate, cur) {
   const last = rows[rows.length - 1];
   return [
     ruDate(iso),
-    ...rows.map((r) => `${r.amountSignedText} ${cur} — ${r.title}`),
+    ...rows.map((r) => `${r.amountSignedText} ${cur} - ${r.title}`),
     `Баланс: ${last.balanceAfterText} ${cur}`,
   ].join('\n');
 }

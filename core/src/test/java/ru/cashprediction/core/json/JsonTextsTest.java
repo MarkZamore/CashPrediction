@@ -52,7 +52,7 @@ class JsonTextsTest {
         assertEquals(List.of("строка", "логическое значение", "число", "объект", "массив", "null"),
                 Arrays.asList(Json.typeName("s"), Json.typeName(true), Json.typeName(1L), Json.typeName(Map.of()),
                         Json.typeName(List.of()), Json.typeName(null)));
-        assertEquals(Texts.get("json.type.array"), Json.typeName(List.of()), "название типа — из каталога");
+        assertEquals(Texts.get("json.type.array"), Json.typeName(List.of()), "название типа - из каталога");
     }
 
     @Test

@@ -136,7 +136,7 @@ class ViewStateTest {
         ViewState noIncome = d.withShowIncome(false);
         assertFalse(noIncome.accepts(SALARY));
         assertFalse(noIncome.accepts(BONUS));
-        assertFalse(noIncome.accepts(SAVING), "строка «что-если» — это доход");
+        assertFalse(noIncome.accepts(SAVING), "строка «что-если» - это доход");
         assertTrue(noIncome.accepts(RENT));
 
         ViewState noExpense = d.withShowExpense(false);

@@ -138,7 +138,7 @@ public final class RuleDialog extends SwingDialog<RecurringRule> {
         form.addRow("Повтор", recurrenceKind);
         dayOfMonthLabel = form.addRow("День месяца", dayOfMonth);
         // JavaFX: Tooltip → Swing: setToolTipText → Web: title
-        dayOfMonth.setToolTipText("31 — последний день месяца");
+        dayOfMonth.setToolTipText("31 - последний день месяца");
         everyNRow = FormPanel.inline(everyN, everyNUnit);
         everyNLabel = form.addRow("Каждые", everyNRow);
         weekdayLabel = form.addRow("День недели", weekday);
@@ -443,7 +443,7 @@ public final class RuleDialog extends SwingDialog<RecurringRule> {
         LocalDate newFrom = fromEnabled.isSelected() ? from.value().orElse(null) : null;
         LocalDate newUntil = untilEnabled.isSelected() ? until.value().orElse(null) : null;
         if ((newUntil != null && newUntil.isBefore(plan.startDate())) || (newFrom != null && newFrom.isAfter(plan.endDate()))) {
-            return "Правило не даёт событий в горизонте прогноза (" + DateFormats.ru(plan.startDate()) + " – "
+            return "Правило не даёт событий в горизонте прогноза (" + DateFormats.ru(plan.startDate()) + " - "
                     + DateFormats.ru(plan.endDate()) + ")";
         }
         return null;

@@ -32,7 +32,7 @@ public final class AutosaveService {
 
     /** План изменился: перезапустить таймер 1 с. */
     public void documentChanged() {
-        throw new UnsupportedOperationException("S2: core-app-file — AutosaveService.documentChanged");
+        throw new UnsupportedOperationException("S2: core-app-file - AutosaveService.documentChanged");
     }
 
     /**
@@ -41,11 +41,11 @@ public final class AutosaveService {
      * @param enabled включено ли
      */
     public void setEnabled(boolean enabled) {
-        throw new UnsupportedOperationException("S2: core-app-file — AutosaveService.setEnabled");
+        throw new UnsupportedOperationException("S2: core-app-file - AutosaveService.setEnabled");
     }
 
     /** Останавливает таймер (выход). */
     public void stop() {
-        throw new UnsupportedOperationException("S2: core-app-file — AutosaveService.stop");
+        throw new UnsupportedOperationException("S2: core-app-file - AutosaveService.stop");
     }
 }

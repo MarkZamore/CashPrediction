@@ -102,7 +102,7 @@ public final class WebMain {
     static void openBrowser(WebServer server, ServerLog log) {
         Thread thread = new Thread(() -> {
             if (!browse(server.browserUri())) {
-                log.info("Браузер открыть не удалось: откройте адрес вручную — " + server.browserUri());
+                log.info("Браузер открыть не удалось: откройте адрес вручную - " + server.browserUri());
             }
         }, "cashprediction-browser");
         thread.setDaemon(true);

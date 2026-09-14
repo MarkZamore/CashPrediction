@@ -80,7 +80,7 @@ class SnapshotSchemaAdditionsTest {
                 + "\"plan\":{\"dirty\":false,\"markdown\":\"\"},\"windows\":[]}";
         MainWindowState main = new JsonSnapshotCodec().decode(json).main();
         assertEquals("", main.whatIfExtra());
-        assertFalse(main.filter(MainWindowState.FILTER_PAST_EXPANDED, false), "нет ключа — значение по умолчанию");
+        assertFalse(main.filter(MainWindowState.FILTER_PAST_EXPANDED, false), "нет ключа - значение по умолчанию");
         assertEquals(Map.of("showIncome", true), main.filters());
     }
 

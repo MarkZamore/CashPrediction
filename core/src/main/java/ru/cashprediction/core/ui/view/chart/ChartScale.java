@@ -43,7 +43,7 @@ public final class ChartScale {
      * @return деления
      */
     public static Ticks yTicks(long dataMinMinor, long dataMaxMinor) {
-        throw new UnsupportedOperationException("S1: core-chart — ChartScale.yTicks");
+        throw new UnsupportedOperationException("S1: core-chart - ChartScale.yTicks");
     }
 
     /**
@@ -53,6 +53,6 @@ public final class ChartScale {
      * @return 1, 2, 6 или 12
      */
     public static int monthLabelStep(int months) {
-        throw new UnsupportedOperationException("S1: core-chart — ChartScale.monthLabelStep");
+        throw new UnsupportedOperationException("S1: core-chart - ChartScale.monthLabelStep");
     }
 }

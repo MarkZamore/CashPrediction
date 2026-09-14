@@ -32,7 +32,7 @@ public final class AddSplitMenuButton extends SplitMenuButton {
         setText("Добавить доход");
         setOnAction(e -> shell.actions().addRule(Kind.INCOME, OpenRequest.fromMain()));
         // JavaFX: Tooltip → Swing: setToolTipText → Web: title
-        setTooltip(new Tooltip("Новый регулярный доход (Ctrl+I). Стрелка — расход, разовая операция, корректировка события"));
+        setTooltip(new Tooltip("Новый регулярный доход (Ctrl+I). Стрелка - расход, разовая операция, корректировка события"));
 
         // JavaFX: MenuItem → Swing: JMenuItem → Web: <li role="menuitem">
         MenuItem expense = new MenuItem("Добавить расход…");

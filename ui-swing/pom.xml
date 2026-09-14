@@ -23,6 +23,12 @@
       <groupId>ru.cashprediction</groupId>
       <artifactId>cashprediction-core</artifactId>
     </dependency>
+    <!-- JUnit 5 только для тестов; версия приходит из junit-bom родительского POM. -->
+    <dependency>
+      <groupId>org.junit.jupiter</groupId>
+      <artifactId>junit-jupiter</artifactId>
+      <scope>test</scope>
+    </dependency>
   </dependencies>
 
   <build>

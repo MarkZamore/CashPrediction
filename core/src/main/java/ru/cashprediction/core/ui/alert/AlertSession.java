@@ -90,21 +90,21 @@ public final class AlertSession implements StatefulWindow {
 
     /** Клиент показал сообщение. */
     public void shown() {
-        throw new UnsupportedOperationException("S1: core-forms-framework — AlertSession.shown");
+        throw new UnsupportedOperationException("S1: core-forms-framework - AlertSession.shown");
     }
 
     /** Сообщение закрыто (любой кнопкой или крестиком). */
     public void closed() {
-        throw new UnsupportedOperationException("S1: core-forms-framework — AlertSession.closed");
+        throw new UnsupportedOperationException("S1: core-forms-framework - AlertSession.closed");
     }
 
     @Override
     public WindowState captureState() {
-        throw new UnsupportedOperationException("S1: core-forms-framework — AlertSession.captureState");
+        throw new UnsupportedOperationException("S1: core-forms-framework - AlertSession.captureState");
     }
 
     @Override
     public void applyState(WindowState state) {
-        throw new UnsupportedOperationException("S1: core-forms-framework — AlertSession.applyState");
+        throw new UnsupportedOperationException("S1: core-forms-framework - AlertSession.applyState");
     }
 }

@@ -67,7 +67,7 @@ public final class QuickEditPopup implements StatefulWindow {
     private final Consumer<QuickEditPopup> onClosed;
     private final JPanel panel = new JPanel(new BorderLayout(4, 4));
     private final JTextField amountField = new JTextField(12);
-    private final JLabel hint = new JLabel("Enter — применить, Esc — закрыть");
+    private final JLabel hint = new JLabel("Enter - применить, Esc - закрыть");
 
     private Popup popup;
     private boolean closed;
@@ -171,7 +171,7 @@ public final class QuickEditPopup implements StatefulWindow {
             return;
         }
         String error = validationError();
-        hint.setText(error == null ? "Enter — применить, Esc — закрыть" : error);
+        hint.setText(error == null ? "Enter - применить, Esc - закрыть" : error);
         hint.setForeground(error == null ? Palette.PAST : Palette.EXPENSE);
         onTouch.run();
     }

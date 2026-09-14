@@ -56,7 +56,7 @@ public record SelfTestScript(String name, List<Line> lines) {
      * @throws IllegalArgumentException при ошибке разбора (с номером строки)
      */
     public static SelfTestScript parse(String name, String text) {
-        throw new UnsupportedOperationException("S2: core-protocol-dump — SelfTestScript.parse");
+        throw new UnsupportedOperationException("S2: core-protocol-dump - SelfTestScript.parse");
     }
 
     /**
@@ -67,6 +67,6 @@ public record SelfTestScript(String name, List<Line> lines) {
      * @throws IllegalArgumentException если сценария нет или он не разбирается
      */
     public static SelfTestScript load(String nameOrPath) {
-        throw new UnsupportedOperationException("S2: core-protocol-dump — SelfTestScript.load");
+        throw new UnsupportedOperationException("S2: core-protocol-dump - SelfTestScript.load");
     }
 }

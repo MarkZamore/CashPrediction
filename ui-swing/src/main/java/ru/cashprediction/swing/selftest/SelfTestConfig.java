@@ -83,7 +83,7 @@ public record SelfTestConfig(Path script, Path log, String recovery) {
                 Files.writeString(log, line + System.lineSeparator(), StandardCharsets.UTF_8,
                         StandardOpenOption.CREATE, StandardOpenOption.APPEND);
             } catch (IOException e) {
-                System.err.println("CashPrediction: журнал самотеста не записан: " + e.getMessage() + " — " + line);
+                System.err.println("CashPrediction: журнал самотеста не записан: " + e.getMessage() + " - " + line);
             }
         }
     }

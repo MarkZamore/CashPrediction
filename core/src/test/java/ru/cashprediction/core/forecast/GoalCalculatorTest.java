@@ -30,7 +30,7 @@ class GoalCalculatorTest {
     void reachDate() {
         Forecast f = run(SALARY);
         assertEquals(Optional.of(d("2026-11-05")), GoalCalculator.reachDate(f, Money.ofMajor(2500)));
-        assertEquals(Optional.of(START), GoalCalculator.reachDate(f, Money.ZERO), "уже достигнута — anchor");
+        assertEquals(Optional.of(START), GoalCalculator.reachDate(f, Money.ZERO), "уже достигнута - anchor");
         assertTrue(GoalCalculator.reachDate(f, Money.ofMajor(1_000_000)).isEmpty());
 
         Forecast later = ForecastEngine.forecast(SALARY, WhatIf.NONE, d("2026-12-20"), false);

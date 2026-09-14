@@ -24,7 +24,7 @@ public record TableEntry(ForecastRow row, YearMonth month, MonthTotals totals) {
     /** Проверяет, что задано ровно одно: событие или итог. */
     public TableEntry {
         if ((row == null) == (month == null || totals == null)) {
-            throw new IllegalArgumentException("Строка таблицы — либо событие, либо итог месяца");
+            throw new IllegalArgumentException("Строка таблицы - либо событие, либо итог месяца");
         }
     }
 

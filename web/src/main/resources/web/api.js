@@ -3,7 +3,7 @@
  *
  * Токен сеанса приходит в адресе страницы (?t=…), сохраняется в sessionStorage и убирается из адресной строки
  * (чтобы не попасть в историю и закладки). Каждый запрос несёт его в заголовке X-Token; ссылки скачивания
- * и navigator.sendBeacon, которые заголовков не поддерживают, — в параметре t.
+ * и navigator.sendBeacon, которые заголовков не поддерживают, - в параметре t.
  */
 
 const TOKEN_KEY = 'cashprediction.token';
@@ -19,7 +19,7 @@ let onServerDown = () => {};
  */
 export class ApiError extends Error {
   /**
-   * @param {number} status HTTP-статус (0 — сервер недоступен)
+   * @param {number} status HTTP-статус (0 - сервер недоступен)
    * @param {string} message сообщение
    * @param {object} [body] тело ответа
    */
@@ -35,7 +35,7 @@ export class ApiError extends Error {
 
 /**
  * Читает токен из адреса страницы или sessionStorage.
- * @returns {string} токен ('' — нет токена)
+ * @returns {string} токен ('' - нет токена)
  */
 export function initToken() {
   const params = new URLSearchParams(location.search);
@@ -44,7 +44,7 @@ export function initToken() {
     token = fromUrl;
     try {
       sessionStorage.setItem(TOKEN_KEY, fromUrl);
-      // Токен в памяти вкладки есть — убираем его из адресной строки.
+      // Токен в памяти вкладки есть - убираем его из адресной строки.
       params.delete('t');
       const query = params.toString();
       history.replaceState(null, '', location.pathname + (query ? `?${query}` : '') + location.hash);

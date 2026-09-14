@@ -50,12 +50,12 @@ public record OpenWindows(List<OpenWindow> windows) {
 
     /** @return открыто ли хоть одно модальное окно */
     public boolean modalOpen() {
-        throw new UnsupportedOperationException("S2: core-app-file — OpenWindows.modalOpen");
+        throw new UnsupportedOperationException("S2: core-app-file - OpenWindows.modalOpen");
     }
 
     /** @return последнее открытое модальное окно (владелец следующего модального окна) или пусто */
     public Optional<OpenWindow> topModal() {
-        throw new UnsupportedOperationException("S2: core-app-file — OpenWindows.topModal");
+        throw new UnsupportedOperationException("S2: core-app-file - OpenWindows.topModal");
     }
 
     /**
@@ -65,7 +65,7 @@ public record OpenWindows(List<OpenWindow> windows) {
      * @return окно или пусто
      */
     public Optional<OpenWindow> findSingleInstance(String singleInstanceKey) {
-        throw new UnsupportedOperationException("S2: core-app-file — OpenWindows.findSingleInstance");
+        throw new UnsupportedOperationException("S2: core-app-file - OpenWindows.findSingleInstance");
     }
 
     /**
@@ -75,7 +75,7 @@ public record OpenWindows(List<OpenWindow> windows) {
      * @return новый список
      */
     public OpenWindows with(OpenWindow window) {
-        throw new UnsupportedOperationException("S2: core-app-file — OpenWindows.with");
+        throw new UnsupportedOperationException("S2: core-app-file - OpenWindows.with");
     }
 
     /**
@@ -85,6 +85,6 @@ public record OpenWindows(List<OpenWindow> windows) {
      * @return новый список
      */
     public OpenWindows without(String windowId) {
-        throw new UnsupportedOperationException("S2: core-app-file — OpenWindows.without");
+        throw new UnsupportedOperationException("S2: core-app-file - OpenWindows.without");
     }
 }

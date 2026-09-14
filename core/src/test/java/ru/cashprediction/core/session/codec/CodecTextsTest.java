@@ -50,13 +50,13 @@ class CodecTextsTest {
 
             ## Открытые окна
 
-            ### w1 — RULE_EDITOR (модальное, владелец: main)
+            ### w1 - RULE_EDITOR (модальное, владелец: main)
 
             - Контекст: mode=edit
             - Границы: нет
             - title: Аренда
 
-            ### w2 — GOAL_CALCULATOR (немодальное, владелец: w1)
+            ### w2 - GOAL_CALCULATOR (немодальное, владелец: w1)
 
             - Контекст:
             - Границы: x=10; y=20; width=300; height=200
@@ -118,7 +118,7 @@ class CodecTextsTest {
         assertEquals("Файл сессии повреждён, строка 10: строка списка до заголовка окна",
                 message(() -> codec.decode(HEAD + "## Открытые окна\n\n- title: a\n")));
         assertEquals("Файл сессии повреждён, строка 15: поле «title» окна w1 повторяется",
-                message(() -> codec.decode(HEAD + "## Открытые окна\n\n### w1 — ALERT (модальное, владелец: main)\n\n"
+                message(() -> codec.decode(HEAD + "## Открытые окна\n\n### w1 - ALERT (модальное, владелец: main)\n\n"
                         + "- Контекст:\n- Границы: нет\n- title: a\n- title: b\n")));
         assertEquals("Файл сессии повреждён, строка 10: в разделе «Несохранённый план» ожидался блок кода",
                 message(() -> codec.decode(HEAD + "## Несохранённый план\n\nтекст\n")));

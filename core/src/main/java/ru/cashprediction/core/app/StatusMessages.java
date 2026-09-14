@@ -54,7 +54,7 @@ public record StatusMessages(Message message, String hoverTip, Map<String, Messa
      * @return новое состояние
      */
     public StatusMessages show(String text, StatusLevel level, Instant now) {
-        throw new UnsupportedOperationException("S2: core-app-file — StatusMessages.show");
+        throw new UnsupportedOperationException("S2: core-app-file - StatusMessages.show");
     }
 
     /**
@@ -64,7 +64,7 @@ public record StatusMessages(Message message, String hoverTip, Map<String, Messa
      * @return новое состояние
      */
     public StatusMessages hover(String tip) {
-        throw new UnsupportedOperationException("S2: core-app-file — StatusMessages.hover");
+        throw new UnsupportedOperationException("S2: core-app-file - StatusMessages.hover");
     }
 
     /**
@@ -76,7 +76,7 @@ public record StatusMessages(Message message, String hoverTip, Map<String, Messa
      * @return новое состояние
      */
     public StatusMessages withPersistent(String causeId, String text, StatusLevel level) {
-        throw new UnsupportedOperationException("S2: core-app-file — StatusMessages.withPersistent");
+        throw new UnsupportedOperationException("S2: core-app-file - StatusMessages.withPersistent");
     }
 
     /**
@@ -86,7 +86,7 @@ public record StatusMessages(Message message, String hoverTip, Map<String, Messa
      * @return новое состояние
      */
     public StatusMessages withoutPersistent(String causeId) {
-        throw new UnsupportedOperationException("S2: core-app-file — StatusMessages.withoutPersistent");
+        throw new UnsupportedOperationException("S2: core-app-file - StatusMessages.withoutPersistent");
     }
 
     /**
@@ -96,6 +96,6 @@ public record StatusMessages(Message message, String hoverTip, Map<String, Messa
      * @return сообщение или пусто; подсказка меню возвращается как сообщение уровня INFO без срока
      */
     public Optional<Message> visible(Instant now) {
-        throw new UnsupportedOperationException("S2: core-app-file — StatusMessages.visible");
+        throw new UnsupportedOperationException("S2: core-app-file - StatusMessages.visible");
     }
 }

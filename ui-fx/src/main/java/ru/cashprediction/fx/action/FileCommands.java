@@ -241,7 +241,7 @@ final class FileCommands {
         Path file = support.context().layout().dir().resolve(settingsName);
         if (!Files.exists(file)) {
             support.context().updateSettings(s -> s.withRecentPlanRemoved(settingsName));
-            support.error("Файл плана не найден", "Файла «" + file + "» больше нет — он убран из списка недавних.");
+            support.error("Файл плана не найден", "Файла «" + file + "» больше нет - он убран из списка недавних.");
             return;
         }
         loadPlan(file);
@@ -375,8 +375,8 @@ final class FileCommands {
         // JavaFX: Alert(WARNING) + ButtonType «Перезаписать/Перечитать» → Swing: JOptionPane.showOptionDialog → Web: <dialog class="alert">
         var alert = Dialogs.alert(AlertType.WARNING, "Файл изменён снаружи",
                 "Файл «" + file.getFileName() + "» изменён другой программой после открытия",
-                "«Перезаписать» — сохранить план из CashPrediction поверх чужих правок.\n"
-                        + "«Перечитать» — открыть файл заново; несохранённые изменения в программе будут потеряны.",
+                "«Перезаписать» - сохранить план из CashPrediction поверх чужих правок.\n"
+                        + "«Перечитать» - открыть файл заново; несохранённые изменения в программе будут потеряны.",
                 AppButtonTypes.OVERWRITE, AppButtonTypes.RELOAD, AppButtonTypes.CANCEL);
         support.host().show(alert, WindowState.MAIN_OWNER, result -> {
             ButtonType button = result.orElse(AppButtonTypes.CANCEL);
@@ -539,7 +539,7 @@ final class FileCommands {
      */
     void chooseCashMemoryFolder() {
         Path dir = support.context().layout().dir();
-        String content = "Все данные программы — планы (.md), настройки и снимки сеанса — хранятся здесь.\n"
+        String content = "Все данные программы - планы (.md), настройки и снимки сеанса - хранятся здесь.\n"
                 + (support.browsingOtherFolder() ? "\nПланы сейчас открываются из папки:\n" + support.plansFolder() + "\n" : "")
                 + "\nМожно открыть планы из другой папки на время этого сеанса. Новые планы, настройки и снимки "
                 + "по-прежнему сохраняются только в CashMemory.";
@@ -621,7 +621,7 @@ final class FileCommands {
         }
         // JavaFX: FileChooser → Swing: JFileChooser(FILES_ONLY) + FileNameExtensionFilter → Web: нет (только desktop)
         File chosen = Dialogs.pngChooser(support.context().layout().dir(),
-                PlanRepository.fileBaseName(support.plan().name() + " — график") + ".png").showSaveDialog(support.ownerWindow());
+                PlanRepository.fileBaseName(support.plan().name() + " - график") + ".png").showSaveDialog(support.ownerWindow());
         if (chosen == null) {
             return;
         }

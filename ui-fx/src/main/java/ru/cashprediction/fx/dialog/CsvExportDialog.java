@@ -40,12 +40,12 @@ public final class CsvExportDialog extends FxStatefulDialog<CsvExportChoice> {
         CsvOptions defaults = CsvOptions.DEFAULT;
         // Переключатели столбиком: в строку подписи обрезались до «зап…» и «таб…».
         VBox separators = new VBox(6,
-                radio(separator, "точка с запятой ( ; ) — для русского Excel", ";", defaults.separator() == ';'),
+                radio(separator, "точка с запятой ( ; ) - для русского Excel", ";", defaults.separator() == ';'),
                 radio(separator, "запятая ( , )", ",", defaults.separator() == ','),
                 radio(separator, "табуляция", TAB, defaults.separator() == '\t'));
         bom.setSelected(defaults.bom());
         VBox ranges = new VBox(6,
-                radio(range, "Видимый период: " + DateFormats.ru(periodFrom) + " — " + DateFormats.ru(periodTo), "PERIOD", true),
+                radio(range, "Видимый период: " + DateFormats.ru(periodFrom) + " - " + DateFormats.ru(periodTo), "PERIOD", true),
                 radio(range, "Весь горизонт плана: до " + DateFormats.ru(planEnd), "ALL", false));
         Label hint = new Label("Колонки: Дата, День, Операция, Категория, Доход, Расход, Баланс, Отметки, Заметка.");
         hint.setWrapText(true);

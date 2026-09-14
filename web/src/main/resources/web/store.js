@@ -1,9 +1,9 @@
 /**
  * @file Общее состояние тонкого клиента и реестры, через которые модули общаются без циклических импортов.
  *
- * Сервер — единственный источник истины: store.state всегда равно последнему ответу GET /api/state (или ответу
+ * Сервер - единственный источник истины: store.state всегда равно последнему ответу GET /api/state (или ответу
  * любой правки). Модули подписываются на изменения через store.on() и перерисовываются.
- * Реестр commands заполняет commands.js, реестр windowFactories — editors.js/commands.js
+ * Реестр commands заполняет commands.js, реестр windowFactories - editors.js/commands.js
  * (фабрики восстанавливаемых окон по WindowType, аналог WindowFactory ядра).
  */
 
@@ -23,7 +23,7 @@ export const store = {
   selectedRowId: '',
   /** Части главного окна, созданные app.js: {table, chart, summary, toolbar, filterInput, updateStatus}. */
   ui: {},
-  /** Сервер остановлен из браузера («Выход») — экран «нет связи» не показывается. */
+  /** Сервер остановлен из браузера («Выход») - экран «нет связи» не показывается. */
   stopped: false,
   /** Сервер остановлен аварийно из меню «Симулировать сбой». */
   crashSimulated: false,
@@ -142,7 +142,7 @@ export function notifyShown(id) {
  * Ждёт показа окна с данным идентификатором (не дольше timeoutMs).
  * @param {string} id идентификатор окна
  * @param {number} [timeoutMs=4000] таймаут
- * @returns {Promise<boolean>} true — показано, false — таймаут
+ * @returns {Promise<boolean>} true - показано, false - таймаут
  */
 export function waitShown(id, timeoutMs = 4000) {
   return new Promise((resolve) => {

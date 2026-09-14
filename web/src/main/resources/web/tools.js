@@ -89,7 +89,7 @@ export function goalCalculator({ existing = null } = {}) {
       result.append(h('p', { class: 'goal-line' }, `К ${res.byDateText} будет `, h('strong', { text: res.balanceAtByDateText }), '.'));
       if (res.required) {
         result.append(h('p', { class: 'goal-line' }, res.required === '0,00'
-          ? 'Дополнительно откладывать не нужно — цель успевает сама.'
+          ? 'Дополнительно откладывать не нужно - цель успевает сама.'
           : ['Чтобы успеть, откладывайте дополнительно ', h('strong', { text: res.requiredText }), ' в месяц.']));
       } else if (res.requiredProblem) {
         result.append(h('p', { class: 'goal-line bad', text: res.requiredProblem }));
@@ -149,7 +149,7 @@ export function goalCalculator({ existing = null } = {}) {
 }
 
 /**
- * Диалог 14 «Экспорт CSV»: разделитель, BOM, диапазон; «Сохранить» — скачивание файла браузером.
+ * Диалог 14 «Экспорт CSV»: разделитель, BOM, диапазон; «Сохранить» - скачивание файла браузером.
  * JavaFX: Dialog<CsvOptions> → FileChooser.showSaveDialog → Swing: CsvExportDialog → JFileChooser
  * → Web: <dialog> → ссылка скачивания GET /api/export.csv?t=…
  * @param {object} [options] параметры
@@ -162,7 +162,7 @@ export function csvExportDialog({ existing = null } = {}) {
   const form = new Form({ onChange: () => dialog && dialog.touch() });
   form.add('separator', {
     label: 'Разделитель', type: 'select',
-    options: [[';', 'Точка с запятой ( ; ) — Excel'], [',', 'Запятая ( , )'], ['TAB', 'Табуляция']],
+    options: [[';', 'Точка с запятой ( ; ) - Excel'], [',', 'Запятая ( , )'], ['TAB', 'Табуляция']],
   });
   form.add('bom', { label: 'Добавить BOM (Excel правильно покажет кириллицу)', type: 'checkbox' });
   form.add('range', {

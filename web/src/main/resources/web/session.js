@@ -4,7 +4,7 @@
  * Начать заново» после сбоя сервера и экраны «нет связи» / «сервер остановлен».
  *
  * Web-аналог раздела 5 плана: у браузера нет реестра и файлов, поэтому снимок хранит сервер
- * (CashMemory/web-session.md), а маркер сбоя двухуровневый — pagehide отправляет sendBeacon, а сервер при запуске
+ * (CashMemory/web-session.md), а маркер сбоя двухуровневый - pagehide отправляет sendBeacon, а сервер при запуске
  * видит «running» с мёртвым процессом.
  */
 
@@ -28,7 +28,7 @@ export const sendSelection = debounce((rowId) => {
 
 /** Отправляет размеры и положение окна браузера (MainWindowState.bounds, maximized). */
 const sendBounds = debounce(() => {
-  // Свёрнутое окно Windows сообщает координаты около -32000, безоконный браузер — крошечный размер:
+  // Свёрнутое окно Windows сообщает координаты около -32000, безоконный браузер - крошечный размер:
   // такие границы не записываются, чтобы восстановление не получило окно «за экраном».
   if (window.screenX < -10000 || window.screenY < -10000 || window.outerWidth < 200 || window.outerHeight < 150) return;
   const maximized = window.outerWidth >= screen.availWidth && window.outerHeight >= screen.availHeight;
@@ -141,7 +141,7 @@ async function showNoticesOnce(state) {
     if (sessionStorage.getItem(NOTICES_KEY) === text) return;
     sessionStorage.setItem(NOTICES_KEY, text);
   } catch {
-    // sessionStorage недоступен — покажем уведомление ещё раз, это не страшно.
+    // sessionStorage недоступен - покажем уведомление ещё раз, это не страшно.
   }
   const already = state.session && state.session.alreadyRunning;
   await alertDialog({
@@ -168,7 +168,7 @@ export async function offerUnrestoredPlan(warnings) {
     type: 'WARNING',
     title: 'План из снимка не открыт',
     header: 'Несохранённый план из снимка не удалось открыть',
-    content: 'Чтобы не потерять изменения, скачайте текст плана — его можно открыть через «Файл → Импорт с компьютера». '
+    content: 'Чтобы не потерять изменения, скачайте текст плана - его можно открыть через «Файл → Импорт с компьютера». '
       + 'После этого запись сессии начнётся.',
     details: (warnings || []).join('\n') || null,
     buttons: [DOWNLOAD, SKIP],
@@ -217,7 +217,7 @@ export function showRecoveryBanner(session) {
     h('div', { class: 'banner-text' },
       h('strong', { text: 'Предыдущий сеанс CashPrediction завершился аварийно.' }),
       h('div', {
-        text: `Начат: ${session.pendingStartedAtText || '—'}; снимок сохранён: ${session.pendingSavedAtText || '—'}. `
+        text: `Начат: ${session.pendingStartedAtText || '-'}; снимок сохранён: ${session.pendingSavedAtText || '-'}. `
           + 'Восстановить открытые окна и введённые данные?',
       }),
       h('div', {

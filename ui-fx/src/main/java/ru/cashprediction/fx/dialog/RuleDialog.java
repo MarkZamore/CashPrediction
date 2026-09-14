@@ -151,7 +151,7 @@ public final class RuleDialog extends FxStatefulDialog<RecurringRule> {
         monthDay.setPrefColumnCount(8);
         dayOfMonth.getValueFactory().setValue(plan.startDate().getDayOfMonth());
         // JavaFX: Tooltip → Swing: setToolTipText → Web: title / <div class="tooltip">
-        dayOfMonth.setTooltip(new Tooltip("31 — последний день месяца (в феврале 28 или 29)"));
+        dayOfMonth.setTooltip(new Tooltip("31 - последний день месяца (в феврале 28 или 29)"));
         fillRecurrence(existing == null ? new Recurrence.Monthly(plan.startDate().getDayOfMonth(), 1) : existing.recurrence());
 
         from = FxInputs.datePicker(existing == null || existing.from() == null ? plan.startDate() : existing.from());
@@ -349,7 +349,7 @@ public final class RuleDialog extends FxStatefulDialog<RecurringRule> {
         LocalDate planEnd = plan.endDate();
         if (rule.enabled() && (OccurrenceGenerator.windowStart(rule, plan.startDate()).isAfter(planEnd)
                 || OccurrenceGenerator.windowEnd(rule, planEnd).isBefore(plan.startDate()))) {
-            warnings.add("Правило не создаёт событий в горизонте плана (" + DateFormats.ru(plan.startDate()) + " — "
+            warnings.add("Правило не создаёт событий в горизонте плана (" + DateFormats.ru(plan.startDate()) + " - "
                     + DateFormats.ru(planEnd) + ")");
         }
         if (existing != null) {
@@ -396,7 +396,7 @@ public final class RuleDialog extends FxStatefulDialog<RecurringRule> {
 
     private void buildPreview() {
         preview.setPrefHeight(150);
-        preview.setPlaceholder(new Label("Заполните форму — здесь появятся даты"));
+        preview.setPlaceholder(new Label("Заполните форму - здесь появятся даты"));
         preview.setCellFactory(list -> new ListCell<>() {
             /**
              * Показывает дату предпросмотра: день недели, дату, сдвиг с выходного и отметку о корректировке.

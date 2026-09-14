@@ -103,7 +103,7 @@ public final class FxRecoveryDialog extends Dialog<RecoveryChoice> {
         if (info.restorable()) {
             return "• " + title + ": снимок от " + AppButtonTypes.localTime(info.snapshotAt().orElseThrow());
         }
-        return "• " + title + ": восстановить нельзя — " + reason(info);
+        return "• " + title + ": восстановить нельзя - " + reason(info);
     }
 
     private static String reason(StoreInfo info) {

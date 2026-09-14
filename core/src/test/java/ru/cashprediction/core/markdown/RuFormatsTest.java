@@ -139,7 +139,7 @@ class RuFormatsTest {
     void weekendPolicy() {
         assertEquals(WeekendPolicy.NONE, RuFormats.parseWeekendPolicy("нет"));
         assertEquals(WeekendPolicy.NONE, RuFormats.parseWeekendPolicy(""));
-        assertEquals(WeekendPolicy.NONE, RuFormats.parseWeekendPolicy("—"));
+        assertEquals(WeekendPolicy.NONE, RuFormats.parseWeekendPolicy("-"));
         assertEquals(WeekendPolicy.NONE, RuFormats.parseWeekendPolicy(null));
         assertEquals(WeekendPolicy.PREVIOUS_BUSINESS_DAY, RuFormats.parseWeekendPolicy("Раньше"));
         assertEquals(WeekendPolicy.NEXT_BUSINESS_DAY, RuFormats.parseWeekendPolicy(" ПОЗЖЕ "));
@@ -253,8 +253,8 @@ class RuFormatsTest {
         assertThrows(IllegalArgumentException.class, () -> RuFormats.parseDate("2026-02-30"));
         assertThrows(IllegalArgumentException.class, () -> RuFormats.parseDate("2026/09/01"));
         assertThrows(IllegalArgumentException.class, () -> RuFormats.parseDate(""));
-        assertThrows(IllegalArgumentException.class, () -> RuFormats.parseDate("—"));
-        assertNull(RuFormats.parseOptionalDate("—"));
+        assertThrows(IllegalArgumentException.class, () -> RuFormats.parseDate("-"));
+        assertNull(RuFormats.parseOptionalDate("-"));
         assertNull(RuFormats.parseOptionalDate(""));
         assertNull(RuFormats.parseOptionalDate(null));
         assertEquals(expected, RuFormats.parseOptionalDate("2026-09-01"));
@@ -281,10 +281,13 @@ class RuFormatsTest {
     void normalizeAndEmptyValues() {
         assertEquals("елка еж", RuFormats.normalize("  ЁЛКА \t Ёж  "));
         assertEquals("", RuFormats.normalize(null));
-        for (String empty : new String[] {null, "", "  ", "-", "—", "–", " — "}) {
+        for (String empty : new String[] {null, "", "  ", "-", " - "}) {
             assertTrue(RuFormats.isEmptyValue(empty), "«" + empty + "»");
         }
         assertFalse(RuFormats.isEmptyValue("0"));
         assertFalse(RuFormats.isEmptyValue("--"));
+        // Решение 2026-09-14: пустое значение пишется только дефисом-минусом, длинное и среднее тире особым случаем не являются.
+        assertFalse(RuFormats.isEmptyValue(String.valueOf(ru.cashprediction.core.format.DashFreeOutput.EM_DASH)));
+        assertFalse(RuFormats.isEmptyValue(String.valueOf(ru.cashprediction.core.format.DashFreeOutput.EN_DASH)));
     }
 }

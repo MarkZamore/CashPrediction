@@ -1,7 +1,7 @@
 /*
  * Стили тонкого клиента CashPrediction. Без внешних шрифтов и библиотек: системный шрифт Windows (Segoe UI),
  * цифры с одинаковой шириной (tabular-nums), светлая и тёмная схемы через CSS-переменные.
- * Комментарии «JavaFX → Swing → Web» отмечают элементы — аналоги 23 классов JavaFX (раздел 7 плана).
+ * Комментарии «JavaFX → Swing → Web» отмечают элементы - аналоги 23 классов JavaFX (раздел 7 плана).
  */
 
 :root {
@@ -709,7 +709,7 @@ select.choice-select[size] { min-height: 150px; }
 .preview-rule { color: var(--muted); }
 .date-chip { padding: 1px 7px; border-radius: 10px; background: var(--surface-3); font-variant-numeric: tabular-nums; }
 .date-chip.shifted { background: var(--cushion-bg); }
-/* Даты предпросмотра — кнопки: щелчок выбирает событие для «Скорректировать событие…». */
+/* Даты предпросмотра - кнопки: щелчок выбирает событие для «Скорректировать событие…». */
 button.date-chip { border: 1px solid transparent; color: inherit; font: inherit; font-size: 13px; cursor: pointer; }
 button.date-chip:hover { border-color: currentColor; }
 button.date-chip[aria-pressed="true"] { border-color: currentColor; box-shadow: inset 0 0 0 1px currentColor; font-weight: 600; }

@@ -55,11 +55,11 @@ public final class CsvExportDialog extends SwingDialog<CsvExportDialog.Choice> {
     public CsvExportDialog(Window owner, String ownerId, SessionRecorder recorder, LocalDate start, LocalDate periodEnd,
                            LocalDate forecastEnd) {
         super(owner, ownerId, WindowType.CSV_EXPORT, true, "Экспорт в CSV", recorder);
-        separators.put(";", new JRadioButton("Точка с запятой ( ; ) — для русского Excel", true));
+        separators.put(";", new JRadioButton("Точка с запятой ( ; ) - для русского Excel", true));
         separators.put(",", new JRadioButton("Запятая ( , )"));
         separators.put("TAB", new JRadioButton("Табуляция"));
-        ranges.put("PERIOD", new JRadioButton("Выбранный период: " + DateFormats.ru(start) + " – " + DateFormats.ru(periodEnd), true));
-        ranges.put("ALL", new JRadioButton("Весь прогноз: " + DateFormats.ru(start) + " – " + DateFormats.ru(forecastEnd)));
+        ranges.put("PERIOD", new JRadioButton("Выбранный период: " + DateFormats.ru(start) + " - " + DateFormats.ru(periodEnd), true));
+        ranges.put("ALL", new JRadioButton("Весь прогноз: " + DateFormats.ru(start) + " - " + DateFormats.ru(forecastEnd)));
 
         FormPanel form = new FormPanel();
         form.addRow("Разделитель", group(separators));

@@ -26,51 +26,51 @@ public final class LazyTableModel implements TableModel {
      * @return модель таблицы
      */
     public static TableModel build(AppState state, long revision) {
-        throw new UnsupportedOperationException("S1: core-views — LazyTableModel.build");
+        throw new UnsupportedOperationException("S1: core-views - LazyTableModel.build");
     }
 
     @Override
     public long revision() {
-        throw new UnsupportedOperationException("S1: core-views — LazyTableModel.revision");
+        throw new UnsupportedOperationException("S1: core-views - LazyTableModel.revision");
     }
 
     @Override
     public List<ColumnSpec> columns() {
-        throw new UnsupportedOperationException("S1: core-views — LazyTableModel.columns");
+        throw new UnsupportedOperationException("S1: core-views - LazyTableModel.columns");
     }
 
     @Override
     public int rowCount() {
-        throw new UnsupportedOperationException("S1: core-views — LazyTableModel.rowCount");
+        throw new UnsupportedOperationException("S1: core-views - LazyTableModel.rowCount");
     }
 
     @Override
     public TableRowView row(int index) {
-        throw new UnsupportedOperationException("S1: core-views — LazyTableModel.row");
+        throw new UnsupportedOperationException("S1: core-views - LazyTableModel.row");
     }
 
     @Override
     public String tooltip(int index, String columnId) {
-        throw new UnsupportedOperationException("S1: core-views — LazyTableModel.tooltip");
+        throw new UnsupportedOperationException("S1: core-views - LazyTableModel.tooltip");
     }
 
     @Override
     public int indexOf(String rowId) {
-        throw new UnsupportedOperationException("S1: core-views — LazyTableModel.indexOf");
+        throw new UnsupportedOperationException("S1: core-views - LazyTableModel.indexOf");
     }
 
     @Override
     public String selectedRowId() {
-        throw new UnsupportedOperationException("S1: core-views — LazyTableModel.selectedRowId");
+        throw new UnsupportedOperationException("S1: core-views - LazyTableModel.selectedRowId");
     }
 
     @Override
     public String scrollToRowId() {
-        throw new UnsupportedOperationException("S1: core-views — LazyTableModel.scrollToRowId");
+        throw new UnsupportedOperationException("S1: core-views - LazyTableModel.scrollToRowId");
     }
 
     @Override
     public Placeholder placeholder() {
-        throw new UnsupportedOperationException("S1: core-views — LazyTableModel.placeholder");
+        throw new UnsupportedOperationException("S1: core-views - LazyTableModel.placeholder");
     }
 }

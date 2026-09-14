@@ -27,6 +27,6 @@ public final class ChartLayout {
      * @return модель, раскладывающая сцену для любого размера
      */
     public static ChartModel model(AppState state, long revision) {
-        throw new UnsupportedOperationException("S1: core-chart — ChartLayout.model");
+        throw new UnsupportedOperationException("S1: core-chart - ChartLayout.model");
     }
 }

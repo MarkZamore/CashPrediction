@@ -125,7 +125,7 @@ public final class StateJson {
         m.put("file", document.file().map(p -> p.toAbsolutePath().toString()).orElse(null));
         m.put("fileName", document.file().map(p -> p.getFileName().toString()).orElse(null));
         m.put("settingsName", document.file().map(state::settingsName).orElse(null));
-        m.put("title", "CashPrediction — " + document.plan().name() + (document.isDirty() ? " *" : ""));
+        m.put("title", "CashPrediction - " + document.plan().name() + (document.isDirty() ? " *" : ""));
         m.put("canUndo", document.canUndo());
         m.put("canRedo", document.canRedo());
         m.put("undoText", document.undoDescription().orElse(null));

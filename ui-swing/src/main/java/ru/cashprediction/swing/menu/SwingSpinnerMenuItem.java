@@ -41,7 +41,7 @@ public final class SwingSpinnerMenuItem extends JPanel {
         add(spinner);
         add(new JLabel(suffix));
         // JavaFX: Tooltip → Swing: setToolTipText → Web: title
-        spinner.setToolTipText("Что-если: сколько дополнительно откладывать в конце каждого месяца (0 — выключено)");
+        spinner.setToolTipText("Что-если: сколько дополнительно откладывать в конце каждого месяца (0 - выключено)");
     }
 
     /**

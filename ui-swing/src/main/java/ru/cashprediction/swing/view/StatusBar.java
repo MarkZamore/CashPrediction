@@ -48,7 +48,7 @@ public final class StatusBar extends JPanel {
         add(messageLabel, BorderLayout.CENTER);
         add(right, BorderLayout.EAST);
         // JavaFX: Tooltip → Swing: setToolTipText → Web: title
-        fileLabel.setToolTipText("Файл открытого плана; «*» — есть несохранённые изменения (Ctrl+S — сохранить)");
+        fileLabel.setToolTipText("Файл открытого плана; «*» - есть несохранённые изменения (Ctrl+S - сохранить)");
         storesLabel.setToolTipText("Снимок сессии для восстановления после сбоя: реестр Windows и XML-файл в CashMemory");
     }
 
@@ -139,9 +139,9 @@ public final class StatusBar extends JPanel {
                 case "xml" -> "XML";
                 default -> s.storeId();
             };
-            String time = s.savedAt() == null ? "—" : TIME.format(s.savedAt());
+            String time = s.savedAt() == null ? "-" : TIME.format(s.savedAt());
             parts.add(title + (s.ok() ? " ✓ " + time : " ✗ " + time));
-            details.add(title + ": " + (s.ok() ? "записано " + time : "ошибка — " + s.message()));
+            details.add(title + ": " + (s.ok() ? "записано " + time : "ошибка - " + s.message()));
         }
         storesLabel.setText(String.join(" | ", parts));
         storesLabel.setForeground(statuses.values().stream().allMatch(StoreStatus::ok) ? getForeground() : Palette.EXPENSE);

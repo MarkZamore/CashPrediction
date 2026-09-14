@@ -74,7 +74,7 @@ public final class PlanSettingsDialog extends FxStatefulDialog<PlanParameters> {
         goalTitle.setText(goal == null ? "" : goal.title());
         goalTitle.setPromptText("например, Отпуск");
         goalTarget = FxInputs.moneyField(goal == null ? null : goal.target());
-        goalTarget.setPromptText("пусто — цели нет");
+        goalTarget.setPromptText("пусто - цели нет");
         goalDate = FxInputs.datePicker(goal == null ? null : goal.wishDate());
 
         FormGrid form = new FormGrid()

@@ -74,21 +74,21 @@ public final class FileBrowserForm implements FormLogic {
 
     @Override
     public FormSpec spec(FormContext context) {
-        throw new UnsupportedOperationException("S1: core-forms-framework — FileBrowserForm.spec");
+        throw new UnsupportedOperationException("S1: core-forms-framework - FileBrowserForm.spec");
     }
 
     @Override
     public Map<String, String> defaults(FormContext context) {
-        throw new UnsupportedOperationException("S1: core-forms-framework — FileBrowserForm.defaults");
+        throw new UnsupportedOperationException("S1: core-forms-framework - FileBrowserForm.defaults");
     }
 
     @Override
     public FormView evaluate(FormState state, FormContext context) {
-        throw new UnsupportedOperationException("S1: core-forms-framework — FileBrowserForm.evaluate");
+        throw new UnsupportedOperationException("S1: core-forms-framework - FileBrowserForm.evaluate");
     }
 
     @Override
     public FormOutcome onButton(String buttonId, FormState state, FormContext context) {
-        throw new UnsupportedOperationException("S1: core-forms-framework — FileBrowserForm.onButton");
+        throw new UnsupportedOperationException("S1: core-forms-framework - FileBrowserForm.onButton");
     }
 }

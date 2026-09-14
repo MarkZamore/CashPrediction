@@ -179,7 +179,7 @@ public final class FormSession implements StatefulWindow {
      * @param handle ручка
      */
     public void attach(WindowHandle handle) {
-        throw new UnsupportedOperationException("S1: core-forms-framework — FormSession.attach");
+        throw new UnsupportedOperationException("S1: core-forms-framework - FormSession.attach");
     }
 
     /**
@@ -188,22 +188,22 @@ public final class FormSession implements StatefulWindow {
      * @return ручка или {@code null}, пока {@link #attach(WindowHandle)} не вызван
      */
     public WindowHandle handle() {
-        throw new UnsupportedOperationException("S1: core-forms-framework — FormSession.handle");
+        throw new UnsupportedOperationException("S1: core-forms-framework - FormSession.handle");
     }
 
     /** @return раскладка формы (вычисляется один раз) */
     public FormSpec spec() {
-        throw new UnsupportedOperationException("S1: core-forms-framework — FormSession.spec");
+        throw new UnsupportedOperationException("S1: core-forms-framework - FormSession.spec");
     }
 
     /** @return текущая модель формы */
     public FormView view() {
-        throw new UnsupportedOperationException("S1: core-forms-framework — FormSession.view");
+        throw new UnsupportedOperationException("S1: core-forms-framework - FormSession.view");
     }
 
     /** @return текущие значения формы */
     public FormState state() {
-        throw new UnsupportedOperationException("S1: core-forms-framework — FormSession.state");
+        throw new UnsupportedOperationException("S1: core-forms-framework - FormSession.state");
     }
 
     /**
@@ -217,7 +217,7 @@ public final class FormSession implements StatefulWindow {
      * @return новая модель формы (она же уходит в {@code WindowHandle.update})
      */
     public FormView fieldChanged(String fieldId, String raw, boolean committed, long clientRev) {
-        throw new UnsupportedOperationException("S1: core-forms-framework — FormSession.fieldChanged");
+        throw new UnsupportedOperationException("S1: core-forms-framework - FormSession.fieldChanged");
     }
 
     /**
@@ -226,7 +226,7 @@ public final class FormSession implements StatefulWindow {
      * @param buttonId id кнопки; недоступная или скрытая кнопка игнорируется
      */
     public void buttonPressed(String buttonId) {
-        throw new UnsupportedOperationException("S1: core-forms-framework — FormSession.buttonPressed");
+        throw new UnsupportedOperationException("S1: core-forms-framework - FormSession.buttonPressed");
     }
 
     /**
@@ -237,7 +237,7 @@ public final class FormSession implements StatefulWindow {
      * @param activated двойной щелчок или пункт контекстного меню «Скорректировать эту дату…»
      */
     public void previewSelected(int index, boolean activated) {
-        throw new UnsupportedOperationException("S1: core-forms-framework — FormSession.previewSelected");
+        throw new UnsupportedOperationException("S1: core-forms-framework - FormSession.previewSelected");
     }
 
     /**
@@ -249,7 +249,7 @@ public final class FormSession implements StatefulWindow {
      * @param index   номер активированного элемента
      */
     public void fieldActivated(String fieldId, int index) {
-        throw new UnsupportedOperationException("S1: core-forms-framework — FormSession.fieldActivated");
+        throw new UnsupportedOperationException("S1: core-forms-framework - FormSession.fieldActivated");
     }
 
     /**
@@ -260,12 +260,12 @@ public final class FormSession implements StatefulWindow {
      * @param fieldId id поля
      */
     public void fieldSubmitted(String fieldId) {
-        throw new UnsupportedOperationException("S1: core-forms-framework — FormSession.fieldSubmitted");
+        throw new UnsupportedOperationException("S1: core-forms-framework - FormSession.fieldSubmitted");
     }
 
     /** Крестик окна, Esc или (для POPUP) щелчок вне окна: как кнопка роли CANCEL. */
     public void closeRequested() {
-        throw new UnsupportedOperationException("S1: core-forms-framework — FormSession.closeRequested");
+        throw new UnsupportedOperationException("S1: core-forms-framework - FormSession.closeRequested");
     }
 
     /**
@@ -274,17 +274,17 @@ public final class FormSession implements StatefulWindow {
      * @param bounds новые границы
      */
     public void boundsChanged(WindowBounds bounds) {
-        throw new UnsupportedOperationException("S1: core-forms-framework — FormSession.boundsChanged");
+        throw new UnsupportedOperationException("S1: core-forms-framework - FormSession.boundsChanged");
     }
 
     /** Клиент показал окно. */
     public void shown() {
-        throw new UnsupportedOperationException("S1: core-forms-framework — FormSession.shown");
+        throw new UnsupportedOperationException("S1: core-forms-framework - FormSession.shown");
     }
 
     /** Клиент закрыл окно (после {@code WindowHandle.close()} или системного закрытия). */
     public void closed() {
-        throw new UnsupportedOperationException("S1: core-forms-framework — FormSession.closed");
+        throw new UnsupportedOperationException("S1: core-forms-framework - FormSession.closed");
     }
 
     /**
@@ -293,16 +293,16 @@ public final class FormSession implements StatefulWindow {
      * @param newContext контекст с новым {@code AppState}
      */
     public void documentChanged(FormContext newContext) {
-        throw new UnsupportedOperationException("S1: core-forms-framework — FormSession.documentChanged");
+        throw new UnsupportedOperationException("S1: core-forms-framework - FormSession.documentChanged");
     }
 
     @Override
     public WindowState captureState() {
-        throw new UnsupportedOperationException("S1: core-forms-framework — FormSession.captureState");
+        throw new UnsupportedOperationException("S1: core-forms-framework - FormSession.captureState");
     }
 
     @Override
     public void applyState(WindowState state) {
-        throw new UnsupportedOperationException("S1: core-forms-framework — FormSession.applyState");
+        throw new UnsupportedOperationException("S1: core-forms-framework - FormSession.applyState");
     }
 }

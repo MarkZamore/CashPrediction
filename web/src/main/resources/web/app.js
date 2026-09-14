@@ -2,7 +2,7 @@
  * @file Загрузчик тонкого клиента: токен, обработчики ошибок, строка меню, панель инструментов, таблица, график,
  * сводка, строка состояния и первичная загрузка состояния с сервера.
  *
- * Сервер — единственный источник истины: страница показывает последний ответ GET /api/state (или ответ любой правки)
+ * Сервер - единственный источник истины: страница показывает последний ответ GET /api/state (или ответ любой правки)
  * и после каждого изменения просто перерисовывается. Числа считает ядро, поэтому они совпадают с JavaFX и Swing.
  */
 
@@ -21,9 +21,9 @@ import { alertDialog, buttonType, ButtonRole } from './dialogs.js';
 let reportingError = false;
 
 /**
- * Необработанная ошибка JavaScript — аналог необработанного исключения в UI-потоке desktop-клиентов:
+ * Необработанная ошибка JavaScript - аналог необработанного исключения в UI-потоке desktop-клиентов:
  * сервер сохраняет снимок (POST /api/debug/client-error), затем Alert(ERROR) со стеком. Браузер нельзя «аварийно
- * завершить», как Runtime.halt(2), поэтому предлагается перезагрузить страницу — окна вернутся с сервера.
+ * завершить», как Runtime.halt(2), поэтому предлагается перезагрузить страницу - окна вернутся с сервера.
  * @param {unknown} error ошибка
  * @returns {Promise<void>} завершение
  */
@@ -74,7 +74,7 @@ const refreshAfterAutosave = debounce(async () => {
     state.autosaveRefresh = true;
     store.set(state);
   } catch {
-    // Нет связи — экран «нет связи» покажет api.js.
+    // Нет связи - экран «нет связи» покажет api.js.
   }
 }, 1800);
 
@@ -106,7 +106,7 @@ function renderStatus(state, session) {
   bar.replaceChildren(...[
     h('span', { class: 'status-seg status-file', title: state.file || 'План ещё не сохранён в файл' },
       `${doc.fileName || 'не сохранён'}${state.dirty ? ' *' : ''}`),
-    h('span', { class: 'status-seg', text: `Период: до ${state.periodEndText || '—'}` }),
+    h('span', { class: 'status-seg', text: `Период: до ${state.periodEndText || '-'}` }),
     h('span', { class: 'status-seg', text: `Событий: ${state.rowsTotal ?? 0}` }),
     state.settings && state.settings.autosave
       ? h('span', { class: `status-seg${state.autosaveProblem ? ' warn' : ''}`, title: state.autosaveProblem || 'Автосохранение включено', text: 'Автосохранение' })

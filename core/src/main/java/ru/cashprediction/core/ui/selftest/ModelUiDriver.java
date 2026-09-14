@@ -55,17 +55,17 @@ public final class ModelUiDriver implements UiDriver {
 
     @Override
     public void execute(SelfTestCommand command) {
-        throw new UnsupportedOperationException("S2: core-protocol-dump — ModelUiDriver.execute");
+        throw new UnsupportedOperationException("S2: core-protocol-dump - ModelUiDriver.execute");
     }
 
     @Override
     public void awaitIdle(Duration timeout) {
-        throw new UnsupportedOperationException("S2: core-protocol-dump — ModelUiDriver.awaitIdle");
+        throw new UnsupportedOperationException("S2: core-protocol-dump - ModelUiDriver.awaitIdle");
     }
 
     @Override
     public UiDump dump(String step) {
-        throw new UnsupportedOperationException("S2: core-protocol-dump — ModelUiDriver.dump");
+        throw new UnsupportedOperationException("S2: core-protocol-dump - ModelUiDriver.dump");
     }
 
     @Override

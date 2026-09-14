@@ -51,21 +51,21 @@ public final class NewPlanWizardForm implements FormLogic {
 
     @Override
     public FormSpec spec(FormContext context) {
-        throw new UnsupportedOperationException("S1: core-forms-plan — NewPlanWizardForm.spec");
+        throw new UnsupportedOperationException("S1: core-forms-plan - NewPlanWizardForm.spec");
     }
 
     @Override
     public Map<String, String> defaults(FormContext context) {
-        throw new UnsupportedOperationException("S1: core-forms-plan — NewPlanWizardForm.defaults");
+        throw new UnsupportedOperationException("S1: core-forms-plan - NewPlanWizardForm.defaults");
     }
 
     @Override
     public FormView evaluate(FormState state, FormContext context) {
-        throw new UnsupportedOperationException("S1: core-forms-plan — NewPlanWizardForm.evaluate");
+        throw new UnsupportedOperationException("S1: core-forms-plan - NewPlanWizardForm.evaluate");
     }
 
     @Override
     public FormOutcome onButton(String buttonId, FormState state, FormContext context) {
-        throw new UnsupportedOperationException("S1: core-forms-plan — NewPlanWizardForm.onButton");
+        throw new UnsupportedOperationException("S1: core-forms-plan - NewPlanWizardForm.onButton");
     }
 }

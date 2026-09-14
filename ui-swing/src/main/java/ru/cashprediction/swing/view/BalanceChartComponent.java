@@ -263,15 +263,15 @@ public final class BalanceChartComponent extends JComponent {
         Point p = event.getPoint();
         Rectangle plot = plotArea();
         if (p.y < TOP) {
-            return "<html>Синяя линия — баланс на конец дня; оранжевая — подушка безопасности; зелёная — цель; "
-                    + "фиолетовая — сегодня.<br>Правая кнопка — действия с графиком.</html>";
+            return "<html>Синяя линия - баланс на конец дня; оранжевая - подушка безопасности; зелёная - цель; "
+                    + "фиолетовая - сегодня.<br>Правая кнопка - действия с графиком.</html>";
         }
         if (p.x < plot.x) {
             return "Ось баланса, " + data.currency() + ": деления кратны " + AXIS_FORMAT.format(
                     ChartScale.niceStep((axisMax - axisMin) / 100.0, 6));
         }
         if (p.y > plot.y + plot.height) {
-            return "Ось дат: " + DateFormats.ru(data.from()) + " – " + DateFormats.ru(data.to());
+            return "Ось дат: " + DateFormats.ru(data.from()) + " - " + DateFormats.ru(data.to());
         }
         // Внутри графика подсказку заменяет карточка дня.
         return null;
@@ -431,7 +431,7 @@ public final class BalanceChartComponent extends JComponent {
         g.setColor(Palette.BORDER);
         g.drawRect(plot.x, plot.y, plot.width, plot.height);
         g.setColor(Color.DARK_GRAY);
-        String legend = "Баланс, " + data.currency() + ": " + DateFormats.ru(data.from()) + " – " + DateFormats.ru(data.to())
+        String legend = "Баланс, " + data.currency() + ": " + DateFormats.ru(data.from()) + " - " + DateFormats.ru(data.to())
                 + "   ▲ доход  ▼ расход";
         g.drawString(legend, plot.x, TOP - 12);
     }

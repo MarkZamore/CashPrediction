@@ -60,7 +60,7 @@ public final class ForecastPopupMenu {
         if (rule) {
             menu.add(item("Перейти к правилу…", "Открыть регулярную операцию, к которой относится событие",
                     () -> actions.editRule(row.ruleId())));
-            menu.add(item("Отключить правило", "Правило останется в плане, но перестанет влиять на прогноз (Ctrl+Z — отменить)",
+            menu.add(item("Отключить правило", "Правило останется в плане, но перестанет влиять на прогноз (Ctrl+Z - отменить)",
                     () -> actions.disableRule(row.ruleId())));
         }
         menu.addSeparator();

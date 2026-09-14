@@ -43,6 +43,6 @@ public final class StartupFlow {
 
     /** Выполняет запуск (порядок — в описании класса). */
     public void start() {
-        throw new UnsupportedOperationException("S2: core-app-session — StartupFlow.start");
+        throw new UnsupportedOperationException("S2: core-app-session - StartupFlow.start");
     }
 }

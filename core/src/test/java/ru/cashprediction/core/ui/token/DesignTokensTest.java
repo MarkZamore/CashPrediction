@@ -121,7 +121,7 @@ class DesignTokensTest {
             assertTrue(DesignTokens.GLYPHS.contains(glyph), glyph);
         }
         for (String glyph : DesignTokens.GLYPHS) {
-            assertEquals(1, glyph.codePointCount(0, glyph.length()), "значок — один символ: " + glyph);
+            assertEquals(1, glyph.codePointCount(0, glyph.length()), "значок - один символ: " + glyph);
             int cp = glyph.codePointAt(0);
             assertTrue(cp < 0x1F000 && (cp < 0xFE00 || cp > 0xFE0F), "эмодзи запрещены: " + glyph);
             assertTrue(DesignTokens.isAllowedInText(cp));

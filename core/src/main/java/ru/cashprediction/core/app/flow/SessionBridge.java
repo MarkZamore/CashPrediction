@@ -41,36 +41,36 @@ public final class SessionBridge implements SnapshotSource, RestoreTarget {
 
     @Override
     public MainWindowState captureMain() {
-        throw new UnsupportedOperationException("S2: core-app-session — SessionBridge.captureMain");
+        throw new UnsupportedOperationException("S2: core-app-session - SessionBridge.captureMain");
     }
 
     @Override
     public PlanState capturePlan() {
-        throw new UnsupportedOperationException("S2: core-app-session — SessionBridge.capturePlan");
+        throw new UnsupportedOperationException("S2: core-app-session - SessionBridge.capturePlan");
     }
 
     @Override
     public void loadPlan(PlanState plan, String planPath, Consumer<String> warn) {
-        throw new UnsupportedOperationException("S2: core-app-session — SessionBridge.loadPlan");
+        throw new UnsupportedOperationException("S2: core-app-session - SessionBridge.loadPlan");
     }
 
     @Override
     public void applyMain(MainWindowState main) {
-        throw new UnsupportedOperationException("S2: core-app-session — SessionBridge.applyMain");
+        throw new UnsupportedOperationException("S2: core-app-session - SessionBridge.applyMain");
     }
 
     @Override
     public void showMainWindow() {
-        throw new UnsupportedOperationException("S2: core-app-session — SessionBridge.showMainWindow");
+        throw new UnsupportedOperationException("S2: core-app-session - SessionBridge.showMainWindow");
     }
 
     @Override
     public void selectRow(String rowId) {
-        throw new UnsupportedOperationException("S2: core-app-session — SessionBridge.selectRow");
+        throw new UnsupportedOperationException("S2: core-app-session - SessionBridge.selectRow");
     }
 
     @Override
     public Set<String> existingTargetIds() {
-        throw new UnsupportedOperationException("S2: core-app-session — SessionBridge.existingTargetIds");
+        throw new UnsupportedOperationException("S2: core-app-session - SessionBridge.existingTargetIds");
     }
 }

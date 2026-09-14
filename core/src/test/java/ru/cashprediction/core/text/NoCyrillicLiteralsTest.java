@@ -37,7 +37,7 @@ class NoCyrillicLiteralsTest {
                 .map(JavaSourceScanner.CodeLine::toString)
                 .toList();
         assertEquals(List.of(), found,
-                "русские строки берутся из каталога текстов (UiText/Texts), слова формата — из FormatWords, "
+                "русские строки берутся из каталога текстов (UiText/Texts), слова формата - из FormatWords, "
                         + "сообщения для разработчика пишутся латиницей");
     }
 
@@ -45,7 +45,7 @@ class NoCyrillicLiteralsTest {
     void scannedFoldersExistSoTheCheckIsNotEmpty() {
         assertTrue(CORE_MAIN.toFile().isDirectory(), CORE_MAIN.toString());
         assertTrue(CORE_UI.toFile().isDirectory(), CORE_UI.toString());
-        assertTrue(JavaSourceScanner.literals(CORE_UI).size() > 50, "в core.ui есть литералы — сканер их видит");
+        assertTrue(JavaSourceScanner.literals(CORE_UI).size() > 50, "в core.ui есть литералы - сканер их видит");
         assertTrue(JavaSourceScanner.literals(CORE_MAIN).size() > JavaSourceScanner.literals(CORE_UI).size(),
                 "проверяется всё ядро, а не один пакет");
         // Javadoc ядра русский: если бы сканер не убирал комментарии, в выводе теста выше была бы почти каждая строка.

@@ -22,7 +22,7 @@ public final class DumpNormalizer {
      * @return нормализованный дамп
      */
     public static UiDump normalize(UiDump dump, Path cashMemory, String registryNode) {
-        throw new UnsupportedOperationException("S2: core-protocol-dump — DumpNormalizer.normalize");
+        throw new UnsupportedOperationException("S2: core-protocol-dump - DumpNormalizer.normalize");
     }
 
     /**
@@ -34,6 +34,6 @@ public final class DumpNormalizer {
      * @return нормализованный текст
      */
     public static String normalizeText(String text, Path cashMemory, String registryNode) {
-        throw new UnsupportedOperationException("S2: core-protocol-dump — DumpNormalizer.normalizeText");
+        throw new UnsupportedOperationException("S2: core-protocol-dump - DumpNormalizer.normalizeText");
     }
 }

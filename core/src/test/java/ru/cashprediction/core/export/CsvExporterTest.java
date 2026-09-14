@@ -12,6 +12,7 @@ import org.junit.jupiter.api.Test;
 import ru.cashprediction.core.forecast.Forecast;
 import ru.cashprediction.core.forecast.ForecastEngine;
 import ru.cashprediction.core.forecast.WhatIf;
+import ru.cashprediction.core.format.DashFreeOutput;
 import ru.cashprediction.core.model.Adjustment;
 import ru.cashprediction.core.model.Horizon;
 import ru.cashprediction.core.model.Kind;
@@ -96,6 +97,22 @@ class CsvExporterTest {
         Forecast f = ForecastEngine.forecast(p, WhatIf.NONE, START, true);
         String csv = CsvExporter.toCsv(f, CsvOptions.DEFAULT);
         assertTrue(csv.contains(";пропущено;"), csv);
+    }
+
+    /** Решение 2026-09-14: CSV со всеми отметками при любом разделителе пишется без длинного и среднего тире. */
+    @Test
+    void csvHasNoDashes() {
+        Plan p = plan()
+                .withAdjustmentPut(new Adjustment(new OccurrenceKey(new RuleId("r2"), LocalDate.of(2026, 10, 1)), new Adjustment.Skip(), ""))
+                .withAdjustmentPut(new Adjustment(new OccurrenceKey(new RuleId("r2"), LocalDate.of(2026, 9, 1)),
+                        new Adjustment.MoveDate(LocalDate.of(2026, 9, 3)), "перенос"));
+        for (WhatIf whatIf : List.of(WhatIf.NONE, new WhatIf(BigDecimal.ONE, new BigDecimal("1.1"), Money.ZERO))) {
+            Forecast f = ForecastEngine.forecast(p, whatIf, START, true);
+            for (CsvOptions options : List.of(CsvOptions.DEFAULT, new CsvOptions(',', false, null, null),
+                    new CsvOptions('\t', true, null, null))) {
+                DashFreeOutput.assertNoDashes("CSV", CsvExporter.toCsv(f, options));
+            }
+        }
     }
 
     /** Экранирование ячеек по RFC 4180. */

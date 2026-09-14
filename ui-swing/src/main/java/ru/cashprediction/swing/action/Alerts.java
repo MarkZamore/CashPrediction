@@ -88,7 +88,7 @@ public final class Alerts {
      * @param details подробности или {@code null}
      */
     public void warning(String header, String content, String details) {
-        SwingAlert alert = create(SwingAlert.AlertType.WARNING, "CashPrediction — предупреждение", header, content);
+        SwingAlert alert = create(SwingAlert.AlertType.WARNING, "CashPrediction - предупреждение", header, content);
         if (details != null && !details.isBlank()) {
             alert.setDetailsText(details);
             alert.setExpanded(true);
@@ -103,7 +103,7 @@ public final class Alerts {
      * @param content причина
      */
     public void error(String header, String content) {
-        show(create(SwingAlert.AlertType.ERROR, "CashPrediction — ошибка", header, content), r -> { });
+        show(create(SwingAlert.AlertType.ERROR, "CashPrediction - ошибка", header, content), r -> { });
     }
 
     /**
@@ -113,7 +113,7 @@ public final class Alerts {
      * @param error  исключение
      */
     public void error(String header, Throwable error) {
-        SwingAlert alert = create(SwingAlert.AlertType.ERROR, "CashPrediction — ошибка", header,
+        SwingAlert alert = create(SwingAlert.AlertType.ERROR, "CashPrediction - ошибка", header,
                 Objects.requireNonNullElse(error.getMessage(), error.getClass().getSimpleName()));
         alert.setDetailsText(SwingText.stackTrace(error));
         show(alert, r -> { });

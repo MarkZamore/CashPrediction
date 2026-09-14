@@ -371,7 +371,7 @@ public final class ForecastTableView extends TableView<TableEntry> {
     }
 
     private String titleText(TableEntry e) {
-        return e.isTotal() ? DateFormats.monthTitle(e.month()) + " — итог" : e.row().title();
+        return e.isTotal() ? DateFormats.monthTitle(e.month()) + " - итог" : e.row().title();
     }
 
     private String categoryText(TableEntry e) {
@@ -386,7 +386,7 @@ public final class ForecastTableView extends TableView<TableEntry> {
         if (row.origin() == Origin.START || !row.isIncome()) {
             return "";
         }
-        return row.flags().skipped() ? "—" : row.amount().abs().format();
+        return row.flags().skipped() ? "-" : row.amount().abs().format();
     }
 
     private String expenseText(TableEntry e) {
@@ -397,7 +397,7 @@ public final class ForecastTableView extends TableView<TableEntry> {
         if (row.origin() == Origin.START || !row.isExpense()) {
             return "";
         }
-        return row.flags().skipped() ? "—" : row.amount().abs().format();
+        return row.flags().skipped() ? "-" : row.amount().abs().format();
     }
 
     private String balanceText(TableEntry e) {
@@ -547,7 +547,7 @@ public final class ForecastTableView extends TableView<TableEntry> {
                 getStyleClass().add(styleClass);
             }
             tooltip.setText(tooltipText(item) + (amount && !item.isTotal() && item.row().origin() == Origin.RULE
-                    ? "\n\nДвойной щелчок по сумме — быстрая правка" : ""));
+                    ? "\n\nДвойной щелчок по сумме - быстрая правка" : ""));
             setTooltip(tooltip);
         }
     }

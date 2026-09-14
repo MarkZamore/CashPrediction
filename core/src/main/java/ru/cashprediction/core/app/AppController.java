@@ -81,12 +81,12 @@ public final class AppController implements UiIntents {
      * потоке контроллера.
      */
     public void start() {
-        throw new UnsupportedOperationException("S2: core-app-file — AppController.start (StartupFlow)");
+        throw new UnsupportedOperationException("S2: core-app-file - AppController.start (StartupFlow)");
     }
 
     /** @return текущий неизменяемый снимок состояния */
     public AppState state() {
-        throw new UnsupportedOperationException("S2: core-app-file — AppController.state");
+        throw new UnsupportedOperationException("S2: core-app-file - AppController.state");
     }
 
     /**
@@ -96,96 +96,96 @@ public final class AppController implements UiIntents {
      * @return счётчик с начала работы
      */
     public int executedCount(CommandId command) {
-        throw new UnsupportedOperationException("S2: core-app-file — AppController.executedCount");
+        throw new UnsupportedOperationException("S2: core-app-file - AppController.executedCount");
     }
 
     @Override
     public void command(CommandId id, CommandArgs args, InvokeSource source) {
-        throw new UnsupportedOperationException("S2: core-app-file — AppController.command");
+        throw new UnsupportedOperationException("S2: core-app-file - AppController.command");
     }
 
     @Override
     public boolean key(KeyChord chord, FocusScope scope, String focusId) {
-        throw new UnsupportedOperationException("S2: core-app-file — AppController.key");
+        throw new UnsupportedOperationException("S2: core-app-file - AppController.key");
     }
 
     @Override
     public void selectRow(String rowId) {
-        throw new UnsupportedOperationException("S2: core-app-file — AppController.selectRow (delegates to ViewFlow)");
+        throw new UnsupportedOperationException("S2: core-app-file - AppController.selectRow (delegates to ViewFlow)");
     }
 
     @Override
     public void activateRow(String rowId, String columnId, Activation how) {
-        throw new UnsupportedOperationException("S2: core-app-file — AppController.activateRow (delegates to EditFlow/ViewFlow)");
+        throw new UnsupportedOperationException("S2: core-app-file - AppController.activateRow (delegates to EditFlow/ViewFlow)");
     }
 
     @Override
     public void filterText(String text) {
-        throw new UnsupportedOperationException("S2: core-app-file — AppController.filterText (delegates to ViewFlow)");
+        throw new UnsupportedOperationException("S2: core-app-file - AppController.filterText (delegates to ViewFlow)");
     }
 
     @Override
     public void sliderCommit(String itemId, int value) {
-        throw new UnsupportedOperationException("S2: core-app-file — AppController.sliderCommit (delegates to ViewFlow)");
+        throw new UnsupportedOperationException("S2: core-app-file - AppController.sliderCommit (delegates to ViewFlow)");
     }
 
     @Override
     public void spinnerCommit(String itemId, long value) {
-        throw new UnsupportedOperationException("S2: core-app-file — AppController.spinnerCommit (delegates to ToolsFlow)");
+        throw new UnsupportedOperationException("S2: core-app-file - AppController.spinnerCommit (delegates to ToolsFlow)");
     }
 
     @Override
     public void mainGeometry(WindowBounds bounds, boolean maximized) {
-        throw new UnsupportedOperationException("S2: core-app-file — AppController.mainGeometry (delegates to SessionBridge)");
+        throw new UnsupportedOperationException("S2: core-app-file - AppController.mainGeometry (delegates to SessionBridge)");
     }
 
     @Override
     public void menuHover(String itemIdOrNull) {
-        throw new UnsupportedOperationException("S2: core-app-file — AppController.menuHover");
+        throw new UnsupportedOperationException("S2: core-app-file - AppController.menuHover");
     }
 
     @Override
     public void closeMainRequested() {
-        throw new UnsupportedOperationException("S2: core-app-file — AppController.closeMainRequested (ExitFlow)");
+        throw new UnsupportedOperationException("S2: core-app-file - AppController.closeMainRequested (ExitFlow)");
     }
 
     @Override
     public void uncaught(Thread thread, Throwable error) {
-        throw new UnsupportedOperationException("S2: core-app-file — AppController.uncaught (delegates to RecoveryFlow)");
+        throw new UnsupportedOperationException("S2: core-app-file - AppController.uncaught (delegates to RecoveryFlow)");
     }
 
     @Override
     public List<MenuNode> contextMenu(ContextTarget target) {
-        throw new UnsupportedOperationException("S2: core-app-file — AppController.contextMenu");
+        throw new UnsupportedOperationException("S2: core-app-file - AppController.contextMenu");
     }
 
     @Override
     public String tableTooltip(long revision, int index, String columnId) {
-        throw new UnsupportedOperationException("S2: core-app-file — AppController.tableTooltip");
+        throw new UnsupportedOperationException("S2: core-app-file - AppController.tableTooltip");
     }
 
     @Override
     public ChartScene chartScene(double width, double height) {
-        throw new UnsupportedOperationException("S2: core-app-file — AppController.chartScene");
+        throw new UnsupportedOperationException("S2: core-app-file - AppController.chartScene");
     }
 
     @Override
     public Optional<ChartHover> chartHover(long revision, double x, double y, double width, double height) {
-        throw new UnsupportedOperationException("S2: core-app-file — AppController.chartHover");
+        throw new UnsupportedOperationException("S2: core-app-file - AppController.chartHover");
     }
 
     @Override
     public DayCardModel dayCard(LocalDate date) {
-        throw new UnsupportedOperationException("S2: core-app-file — AppController.dayCard");
+        throw new UnsupportedOperationException("S2: core-app-file - AppController.dayCard");
     }
 
     @Override
     public SparklineModel sparkline(String cardId) {
-        throw new UnsupportedOperationException("S2: core-app-file — AppController.sparkline");
+        throw new UnsupportedOperationException("S2: core-app-file - AppController.sparkline");
     }
 
     @Override
     public CalendarModel calendar(YearMonth month, LocalDate selected) {
-        throw new UnsupportedOperationException("S2: core-app-file — AppController.calendar");
+        throw new UnsupportedOperationException("S2: core-app-file - AppController.calendar");
     }
 }

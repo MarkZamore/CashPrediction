@@ -26,10 +26,27 @@
       <groupId>org.openjfx</groupId>
       <artifactId>javafx-controls</artifactId>
     </dependency>
+    <!-- JUnit 5 только для тестов; версия приходит из junit-bom родительского POM. -->
+    <dependency>
+      <groupId>org.junit.jupiter</groupId>
+      <artifactId>junit-jupiter</artifactId>
+      <scope>test</scope>
+    </dependency>
   </dependencies>
 
   <build>
     <plugins>
+      <plugin>
+        <!-- Настройки surefire (classpath вместо module path, русская локаль) наследуются от родителя. -->
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-surefire-plugin</artifactId>
+        <configuration>
+          <systemPropertyVariables>
+            <!-- Папка модуля для NoDashesInFxUiTest, который читает исходники и ресурсы ui-fx. -->
+            <fx.basedir>${project.basedir}</fx.basedir>
+          </systemPropertyVariables>
+        </configuration>
+      </plugin>
       <plugin>
         <groupId>org.openjfx</groupId>
         <artifactId>javafx-maven-plugin</artifactId>

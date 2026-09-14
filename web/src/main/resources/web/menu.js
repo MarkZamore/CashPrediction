@@ -6,7 +6,7 @@
  * Описание пункта меню (объект):
  *   { type: 'item' | 'check' | 'radio' | 'separator' | 'submenu' | 'custom',
  *     text, accel, action(), checked(), disabled(), items (массив или функция), render(close) → Node, title }
- * checked/disabled/text могут быть функциями — они вычисляются при каждом открытии меню, поэтому меню
+ * checked/disabled/text могут быть функциями - они вычисляются при каждом открытии меню, поэтому меню
  * всегда показывает текущее состояние с сервера.
  */
 
@@ -396,7 +396,7 @@ export class MenuBar {
     };
     this.popup = popup;
     popup.openBelow(button, focusFirst);
-    // openBelow закрыл предыдущее меню (и сбросил current) — выставляем текущее после этого.
+    // openBelow закрыл предыдущее меню (и сбросил current) - выставляем текущее после этого.
     this.current = i;
     this.buttons.forEach((b, j) => b.setAttribute('tabindex', j === i ? '0' : '-1'));
     button.setAttribute('aria-expanded', 'true');
@@ -585,7 +585,7 @@ const TEXT_EDITING = new Set(['Ctrl+Z', 'Ctrl+Y', 'Ctrl+A', 'Ctrl+C', 'Ctrl+V', 
 document.addEventListener('keydown', (e) => {
   if (e.defaultPrevented || e.isComposing) return;
   if (e.key === 'F10' && !e.shiftKey) {
-    // F10 — фокус на строку меню, как в настольных программах Windows.
+    // F10 - фокус на строку меню, как в настольных программах Windows.
     const bar = document.querySelector('.menubar-item');
     if (bar) {
       e.preventDefault();

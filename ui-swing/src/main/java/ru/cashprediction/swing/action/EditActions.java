@@ -404,7 +404,7 @@ final class EditActions extends ActionSupport {
         Plan plan = plan();
         if (!now.isAfter(plan.startDate())) {
             cannotOpen(request, "Актуализировать нечего", "План начинается " + DateFormats.ru(plan.startDate())
-                    + " — не раньше сегодняшнего дня.");
+                    + " - не раньше сегодняшнего дня.");
             return;
         }
         Money expected;
@@ -443,7 +443,7 @@ final class EditActions extends ActionSupport {
         LocalDate now = today();
         if (now.isBefore(plan.startDate()) || now.isAfter(plan.endDate())) {
             alerts().info("Сверка недоступна", "Сверить баланс можно только на дату внутри горизонта прогноза ("
-                    + DateFormats.ru(plan.startDate()) + " – " + DateFormats.ru(plan.endDate()) + ").");
+                    + DateFormats.ru(plan.startDate()) + " - " + DateFormats.ru(plan.endDate()) + ").");
             return;
         }
         reconcile(interactive());
@@ -461,7 +461,7 @@ final class EditActions extends ActionSupport {
         // JavaFX: TextInputDialog → Swing: SwingTextInputDialog → Web: <dialog> с <input>
         SwingTextInputDialog dialog = new SwingTextInputDialog(owner(request), request.ownerId(), recorder(), Purposes.RECONCILE,
                 true, "Сверить баланс",
-                "Сколько денег у вас на самом деле сегодня, " + DateFormats.ru(now) + "?\nПо прогнозу — "
+                "Сколько денег у вас на самом деле сегодня, " + DateFormats.ru(now) + "?\nПо прогнозу - "
                         + expected.format(plan.currency()) + ". Разница будет добавлена разовой операцией «Сверка баланса».",
                 "Фактический баланс", expected.formatPlain(), EditActions::moneyError);
         dialog.setOnResult(result -> result.ifPresent(text -> {

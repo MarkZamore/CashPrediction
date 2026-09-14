@@ -120,7 +120,7 @@ class CrashDetectorTest {
         assertEquals(CrashDetector.Status.CRASHED, detection.status(), "pid использован повторно");
         assertTrue(detection.anyRestorable());
         probe.started = null;
-        assertEquals(CrashDetector.Status.CRASHED, detect().status(), "момент запуска неизвестен — не тот экземпляр");
+        assertEquals(CrashDetector.Status.CRASHED, detect().status(), "момент запуска неизвестен - не тот экземпляр");
         probe.started = SessionFixtures.STARTED.plus(CrashDetector.START_TOLERANCE);
         assertEquals(CrashDetector.Status.ALREADY_RUNNING, detect().status(), "в пределах допуска");
         probe.started = SessionFixtures.STARTED.plus(CrashDetector.START_TOLERANCE).plusMillis(1);

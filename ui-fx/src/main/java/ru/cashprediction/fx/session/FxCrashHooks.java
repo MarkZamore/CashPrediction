@@ -123,7 +123,7 @@ public final class FxCrashHooks {
         try {
             // JavaFX: Alert(ERROR) + expandableContent → Swing: JOptionPane.showMessageDialog(ERROR_MESSAGE) + JTextArea → Web: <dialog class="alert error">
             Alert alert = new Alert(AlertType.ERROR);
-            alert.setTitle("CashPrediction — ошибка");
+            alert.setTitle("CashPrediction - ошибка");
             alert.setHeaderText(MESSAGE);
             alert.setContentText(Objects.requireNonNullElse(error.getMessage(), error.getClass().getName()));
             // JavaFX: DialogPane → Swing: SwingDialogPane (JPanel header/content/кнопки) → Web: <dialog><form method="dialog">

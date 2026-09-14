@@ -57,22 +57,22 @@ public final class GoalCalculatorForm implements FormLogic {
 
     @Override
     public FormSpec spec(FormContext context) {
-        throw new UnsupportedOperationException("S1: core-forms-plan — GoalCalculatorForm.spec");
+        throw new UnsupportedOperationException("S1: core-forms-plan - GoalCalculatorForm.spec");
     }
 
     @Override
     public Map<String, String> defaults(FormContext context) {
-        throw new UnsupportedOperationException("S1: core-forms-plan — GoalCalculatorForm.defaults");
+        throw new UnsupportedOperationException("S1: core-forms-plan - GoalCalculatorForm.defaults");
     }
 
     @Override
     public FormView evaluate(FormState state, FormContext context) {
-        throw new UnsupportedOperationException("S1: core-forms-plan — GoalCalculatorForm.evaluate");
+        throw new UnsupportedOperationException("S1: core-forms-plan - GoalCalculatorForm.evaluate");
     }
 
     @Override
     public FormOutcome onButton(String buttonId, FormState state, FormContext context) {
-        throw new UnsupportedOperationException("S1: core-forms-plan — GoalCalculatorForm.onButton");
+        throw new UnsupportedOperationException("S1: core-forms-plan - GoalCalculatorForm.onButton");
     }
 
     /** @return {@code true}: результаты пересчитываются при изменении плана */

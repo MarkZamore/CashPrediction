@@ -12,6 +12,7 @@ import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
+import ru.cashprediction.core.format.DashFreeOutput;
 import ru.cashprediction.core.json.JsonParser;
 import ru.cashprediction.core.session.MainWindowState;
 import ru.cashprediction.core.session.PlanState;
@@ -55,6 +56,46 @@ class SnapshotCodecsTest {
         SessionSnapshot emptyDirtyPlan = SessionSnapshot.of(SessionFixtures.SAVED, "web", MainWindowState.empty(),
                 PlanState.dirty(""), List.of());
         assertEquals(emptyDirtyPlan, codec.decode(codec.encode(emptyDirtyPlan)), codec.formatName());
+    }
+
+    /**
+     * Решение 2026-09-14: JSON-снимок реестра, session-fx.xml и session-swing.xml, web-session.md (с маркером, со
+     * встроенным и с вынесенным текстом плана) пишутся только с дефисом-минусом и читаются обратно без потерь;
+     * заголовок окна с длинным тире особым случаем не является и не распознаётся.
+     */
+    @Test
+    void writtenSnapshotsHaveNoDashesAndReadBack() throws SnapshotFormatException {
+        for (String client : List.of("web", "fx", "swing")) {
+            SessionSnapshot tricky = SessionFixtures.tricky(client);
+            for (SnapshotCodec<String> codec : codecs().toList()) {
+                String text = codec.encode(tricky);
+                DashFreeOutput.assertNoDashes(codec.formatName(), text);
+                assertEquals(tricky, codec.decode(text), codec.formatName());
+            }
+            SessionDocument document = new SessionDocument(client, SessionFixtures.running(client), tricky);
+            XmlSnapshotCodec xml = new XmlSnapshotCodec();
+            String xmlText = xml.encodeDocument(document);
+            DashFreeOutput.assertNoDashes("session-" + client + ".xml", xmlText);
+            assertEquals(document, xml.decodeDocument(xmlText));
+        }
+
+        MarkdownSnapshotCodec markdown = new MarkdownSnapshotCodec();
+        SessionSnapshot tricky = SessionFixtures.tricky("web");
+        SessionDocument document = new SessionDocument("web", SessionFixtures.running("web"), tricky);
+        String embedded = markdown.encodeDocument(document, null);
+        DashFreeOutput.assertNoDashes("web-session.md", embedded);
+        assertEquals(document, markdown.decodeDocument(embedded));
+        String external = markdown.encodeDocument(document, "web-session.plan.md");
+        DashFreeOutput.assertNoDashes("web-session.md", external);
+        SessionDocument externalBack = markdown.decodeDocument(external);
+        assertEquals(document.marker(), externalBack.marker());
+        assertEquals(new SessionSnapshot(tricky.schemaVersion(), tricky.savedAt(), tricky.client(), tricky.main(),
+                PlanState.dirty(""), tricky.windows()), externalBack.snapshot());
+
+        String dashed = markdown.encode(SessionFixtures.simple("web"))
+                .replace("### w1 - ", "### w1 " + DashFreeOutput.EM_DASH + " ");
+        SnapshotFormatException e = assertThrows(SnapshotFormatException.class, () -> markdown.decode(dashed));
+        assertTrue(e.getMessage().contains("некорректный заголовок окна"), e.getMessage());
     }
 
     @Test
@@ -159,7 +200,7 @@ class SnapshotCodecsTest {
 
                 ## Открытые окна
 
-                ### w1 — RULE_EDITOR (модальное, владелец: main)
+                ### w1 - RULE_EDITOR (модальное, владелец: main)
 
                 - Контекст: mode=edit; ruleId=r3
                 - Границы: x=400; y=300; width=520; height=480
@@ -185,8 +226,8 @@ class SnapshotCodecsTest {
         assertTrue(text.contains("- note: строка 1\\nстрока 2\\r\\nстрока 3\\tтаб\n"), text);
         assertTrue(text.contains("- value: \\sпробелы по краям\\s\n"), text);
         assertTrue(text.contains("- key\\:with;=chars: \\s\n"), text);
-        assertTrue(text.contains("### w4 — ? (модальное, владелец: w3)"), text);
-        assertTrue(text.contains("### w1 — GOAL_CALCULATOR (немодальное, владелец: main)"), text);
+        assertTrue(text.contains("### w4 - ? (модальное, владелец: w3)"), text);
+        assertTrue(text.contains("### w1 - GOAL_CALCULATOR (немодальное, владелец: main)"), text);
         assertTrue(text.contains("- Фильтры: showIncome=true; showExpense=false; фильтр\\;с\\=символами=true\n"), text);
         assertTrue(text.contains("## Несохранённый план\n\n`````\n# План: Семейный бюджет 2026\n"), text);
         assertTrue(text.contains("- Контекст:\n- Границы: нет\n- target: 1 000 000,00"), text);

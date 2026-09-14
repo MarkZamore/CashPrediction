@@ -81,7 +81,7 @@ class ApiHandlerTest {
         assertEquals("Отпуск", str(obj(plan, "goal"), "title"));
         assertEquals(LocalDate.now().withDayOfMonth(1).toString(), str(plan, "startDate"));
         assertEquals(Boolean.TRUE, state.get("dirty"));
-        assertEquals("CashPrediction — Пример *", str(state, "title"));
+        assertEquals("CashPrediction - Пример *", str(state, "title"));
         Map<String, Object> forecast = obj(state, "forecast");
         assertFalse(list(forecast, "rows").isEmpty());
         assertFalse(list(forecast, "chart").isEmpty());

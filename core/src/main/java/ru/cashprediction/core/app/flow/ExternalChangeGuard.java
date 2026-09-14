@@ -20,7 +20,7 @@ public final class ExternalChangeGuard {
      * @param file файл плана
      */
     public void remember(Path file) {
-        throw new UnsupportedOperationException("S2: core-app-file — ExternalChangeGuard.remember");
+        throw new UnsupportedOperationException("S2: core-app-file - ExternalChangeGuard.remember");
     }
 
     /**
@@ -30,11 +30,11 @@ public final class ExternalChangeGuard {
      * @return {@code true}, если время изменения отличается или файл исчез
      */
     public boolean changedExternally(Path file) {
-        throw new UnsupportedOperationException("S2: core-app-file — ExternalChangeGuard.changedExternally");
+        throw new UnsupportedOperationException("S2: core-app-file - ExternalChangeGuard.changedExternally");
     }
 
     /** Забывает файл (план без файла). */
     public void forget() {
-        throw new UnsupportedOperationException("S2: core-app-file — ExternalChangeGuard.forget");
+        throw new UnsupportedOperationException("S2: core-app-file - ExternalChangeGuard.forget");
     }
 }

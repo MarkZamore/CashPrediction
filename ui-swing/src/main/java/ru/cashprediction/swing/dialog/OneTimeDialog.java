@@ -109,7 +109,7 @@ public final class OneTimeDialog extends SwingDialog<OneTimeTransaction> {
     private String formWarning() {
         return date.value()
                 .filter(d -> d.isBefore(plan.startDate()) || d.isAfter(plan.endDate()))
-                .map(d -> "Дата вне горизонта прогноза (" + DateFormats.ru(plan.startDate()) + " – "
+                .map(d -> "Дата вне горизонта прогноза (" + DateFormats.ru(plan.startDate()) + " - "
                         + DateFormats.ru(plan.endDate()) + "): операция не попадёт в прогноз")
                 .orElse(null);
     }

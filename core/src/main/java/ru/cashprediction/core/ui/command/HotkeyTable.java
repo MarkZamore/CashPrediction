@@ -42,7 +42,7 @@ public final class HotkeyTable {
      * @return неизменяемый список в порядке таблицы §7
      */
     public static List<HotkeyBinding> bindings(ClientKind client) {
-        throw new UnsupportedOperationException("S1: core-menu — HotkeyTable.bindings");
+        throw new UnsupportedOperationException("S1: core-menu - HotkeyTable.bindings");
     }
 
     /**
@@ -53,7 +53,7 @@ public final class HotkeyTable {
      * @return сочетание или пусто, если у команды в меню нет ускорителя
      */
     public static Optional<KeyChord> shownAccelerator(CommandId command, ClientKind client) {
-        throw new UnsupportedOperationException("S1: core-menu — HotkeyTable.shownAccelerator");
+        throw new UnsupportedOperationException("S1: core-menu - HotkeyTable.shownAccelerator");
     }
 
     /**
@@ -65,7 +65,7 @@ public final class HotkeyTable {
      * @return привязка или пусто, если сочетание в этой области не действует
      */
     public static Optional<HotkeyBinding> find(KeyChord chord, FocusScope scope, ClientKind client) {
-        throw new UnsupportedOperationException("S1: core-menu — HotkeyTable.find");
+        throw new UnsupportedOperationException("S1: core-menu - HotkeyTable.find");
     }
 
     /**
@@ -74,6 +74,6 @@ public final class HotkeyTable {
      * @return текст с переводами строк LF, без завершающего перевода строки
      */
     public static String text() {
-        throw new UnsupportedOperationException("S1: core-menu — HotkeyTable.text");
+        throw new UnsupportedOperationException("S1: core-menu - HotkeyTable.text");
     }
 }

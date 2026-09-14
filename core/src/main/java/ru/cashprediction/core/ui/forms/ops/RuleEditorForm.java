@@ -35,26 +35,26 @@ public final class RuleEditorForm implements FormLogic {
 
     @Override
     public FormSpec spec(FormContext context) {
-        throw new UnsupportedOperationException("S1: core-forms-ops — RuleEditorForm.spec");
+        throw new UnsupportedOperationException("S1: core-forms-ops - RuleEditorForm.spec");
     }
 
     @Override
     public Map<String, String> defaults(FormContext context) {
-        throw new UnsupportedOperationException("S1: core-forms-ops — RuleEditorForm.defaults");
+        throw new UnsupportedOperationException("S1: core-forms-ops - RuleEditorForm.defaults");
     }
 
     @Override
     public FormView evaluate(FormState state, FormContext context) {
-        throw new UnsupportedOperationException("S1: core-forms-ops — RuleEditorForm.evaluate");
+        throw new UnsupportedOperationException("S1: core-forms-ops - RuleEditorForm.evaluate");
     }
 
     @Override
     public FormOutcome onButton(String buttonId, FormState state, FormContext context) {
-        throw new UnsupportedOperationException("S1: core-forms-ops — RuleEditorForm.onButton");
+        throw new UnsupportedOperationException("S1: core-forms-ops - RuleEditorForm.onButton");
     }
 
     @Override
     public FormOutcome onPreview(int index, boolean activated, FormState state, FormContext context) {
-        throw new UnsupportedOperationException("S1: core-forms-ops — RuleEditorForm.onPreview");
+        throw new UnsupportedOperationException("S1: core-forms-ops - RuleEditorForm.onPreview");
     }
 }

@@ -74,7 +74,7 @@ public final class QuickEditPopup extends Popup implements StatefulWindow {
         this.recorder = Objects.requireNonNull(recorder, "recorder");
         this.key = Objects.requireNonNull(key, "key");
 
-        Label caption = new Label("«" + title + "», " + DateFormats.ru(key.originalDate()) + " — новая сумма, " + currency);
+        Label caption = new Label("«" + title + "», " + DateFormats.ru(key.originalDate()) + " - новая сумма, " + currency);
         caption.setStyle("-fx-font-weight: bold;");
         amount.setText(current == null ? "" : current.abs().format());
         amount.setPrefColumnCount(14);
@@ -83,7 +83,7 @@ public final class QuickEditPopup extends Popup implements StatefulWindow {
         // Пустая строка ошибки не занимает места: иначе под полем суммы оставался пустой промежуток.
         problem.managedProperty().bind(problem.textProperty().isNotEmpty());
         problem.visibleProperty().bind(problem.textProperty().isNotEmpty());
-        Label hint = new Label("Enter — сохранить корректировку, Esc — закрыть");
+        Label hint = new Label("Enter - сохранить корректировку, Esc - закрыть");
         hint.setStyle("-fx-text-fill: #57606a; -fx-font-size: 11px;");
 
         VBox box = new VBox(6, caption, amount, problem, hint);

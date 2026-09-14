@@ -63,7 +63,7 @@ public final class AlertCatalog {
      * @return сообщение
      */
     public static AlertSpec unsavedChanges(String planName) {
-        throw new UnsupportedOperationException("S1: core-forms-framework — AlertCatalog.unsavedChanges");
+        throw new UnsupportedOperationException("S1: core-forms-framework - AlertCatalog.unsavedChanges");
     }
 
     /**
@@ -73,7 +73,7 @@ public final class AlertCatalog {
      * @return сообщение
      */
     public static AlertSpec overwriteOnFirstSave(String fileBaseName) {
-        throw new UnsupportedOperationException("S1: core-forms-framework — AlertCatalog.overwriteOnFirstSave");
+        throw new UnsupportedOperationException("S1: core-forms-framework - AlertCatalog.overwriteOnFirstSave");
     }
 
     /**
@@ -83,7 +83,7 @@ public final class AlertCatalog {
      * @return сообщение
      */
     public static AlertSpec replaceFile(String fileName) {
-        throw new UnsupportedOperationException("S1: core-forms-framework — AlertCatalog.replaceFile");
+        throw new UnsupportedOperationException("S1: core-forms-framework - AlertCatalog.replaceFile");
     }
 
     /**
@@ -93,7 +93,7 @@ public final class AlertCatalog {
      * @return сообщение
      */
     public static AlertSpec externalChange(String fileBaseName) {
-        throw new UnsupportedOperationException("S1: core-forms-framework — AlertCatalog.externalChange");
+        throw new UnsupportedOperationException("S1: core-forms-framework - AlertCatalog.externalChange");
     }
 
     /**
@@ -109,7 +109,7 @@ public final class AlertCatalog {
      */
     public static AlertSpec deleteRule(String ruleId, String title, Money amount, String currency, String recurrence,
                                        int adjustments) {
-        throw new UnsupportedOperationException("S1: core-forms-framework — AlertCatalog.deleteRule");
+        throw new UnsupportedOperationException("S1: core-forms-framework - AlertCatalog.deleteRule");
     }
 
     /**
@@ -123,7 +123,7 @@ public final class AlertCatalog {
      * @return сообщение
      */
     public static AlertSpec deleteOneTime(String txId, String title, LocalDate date, Money amount, String currency) {
-        throw new UnsupportedOperationException("S1: core-forms-framework — AlertCatalog.deleteOneTime");
+        throw new UnsupportedOperationException("S1: core-forms-framework - AlertCatalog.deleteOneTime");
     }
 
     /**
@@ -134,7 +134,7 @@ public final class AlertCatalog {
      * @return сообщение
      */
     public static AlertSpec loadDiagnostics(String fileBaseName, List<Diagnostic> diagnostics) {
-        throw new UnsupportedOperationException("S1: core-forms-framework — AlertCatalog.loadDiagnostics");
+        throw new UnsupportedOperationException("S1: core-forms-framework - AlertCatalog.loadDiagnostics");
     }
 
     /**
@@ -144,7 +144,7 @@ public final class AlertCatalog {
      * @return сообщение
      */
     public static AlertSpec validation(List<String> lines) {
-        throw new UnsupportedOperationException("S1: core-forms-framework — AlertCatalog.validation");
+        throw new UnsupportedOperationException("S1: core-forms-framework - AlertCatalog.validation");
     }
 
     /**
@@ -154,7 +154,7 @@ public final class AlertCatalog {
      * @return сообщение
      */
     public static AlertSpec cleanup(int removed) {
-        throw new UnsupportedOperationException("S1: core-forms-framework — AlertCatalog.cleanup");
+        throw new UnsupportedOperationException("S1: core-forms-framework - AlertCatalog.cleanup");
     }
 
     /**
@@ -167,7 +167,7 @@ public final class AlertCatalog {
      * @return сообщение
      */
     public static AlertSpec about(String displayVersion, ClientProfile profile, String javaVersion, Path cashMemory) {
-        throw new UnsupportedOperationException("S1: core-forms-framework — AlertCatalog.about");
+        throw new UnsupportedOperationException("S1: core-forms-framework - AlertCatalog.about");
     }
 
     /**
@@ -177,7 +177,7 @@ public final class AlertCatalog {
      * @return сообщение
      */
     public static AlertSpec hotkeys(String hotkeysText) {
-        throw new UnsupportedOperationException("S1: core-forms-framework — AlertCatalog.hotkeys");
+        throw new UnsupportedOperationException("S1: core-forms-framework - AlertCatalog.hotkeys");
     }
 
     /**
@@ -187,7 +187,7 @@ public final class AlertCatalog {
      * @return сообщение
      */
     public static AlertSpec fileFormat(String userGuide) {
-        throw new UnsupportedOperationException("S1: core-forms-framework — AlertCatalog.fileFormat");
+        throw new UnsupportedOperationException("S1: core-forms-framework - AlertCatalog.fileFormat");
     }
 
     /**
@@ -198,7 +198,7 @@ public final class AlertCatalog {
      * @return сообщение
      */
     public static AlertSpec cashMemoryFolder(Path cashMemory, Path otherFolderOrNull) {
-        throw new UnsupportedOperationException("S1: core-forms-framework — AlertCatalog.cashMemoryFolder");
+        throw new UnsupportedOperationException("S1: core-forms-framework - AlertCatalog.cashMemoryFolder");
     }
 
     /**
@@ -210,7 +210,7 @@ public final class AlertCatalog {
      * @return сообщение
      */
     public static AlertSpec actualize(LocalDate today, Money balance, String currency) {
-        throw new UnsupportedOperationException("S1: core-forms-framework — AlertCatalog.actualize");
+        throw new UnsupportedOperationException("S1: core-forms-framework - AlertCatalog.actualize");
     }
 
     /**
@@ -220,7 +220,7 @@ public final class AlertCatalog {
      * @return сообщение
      */
     public static AlertSpec applyWhatIf(List<String> parts) {
-        throw new UnsupportedOperationException("S1: core-forms-framework — AlertCatalog.applyWhatIf");
+        throw new UnsupportedOperationException("S1: core-forms-framework - AlertCatalog.applyWhatIf");
     }
 
     /**
@@ -231,12 +231,12 @@ public final class AlertCatalog {
      * @return сообщение
      */
     public static AlertSpec lastSnapshot(List<String> contentLines, String details) {
-        throw new UnsupportedOperationException("S1: core-forms-framework — AlertCatalog.lastSnapshot");
+        throw new UnsupportedOperationException("S1: core-forms-framework - AlertCatalog.lastSnapshot");
     }
 
     /** @return §6.27 «Очистить снимки» (восстанавливается) */
     public static AlertSpec clearSnapshots() {
-        throw new UnsupportedOperationException("S1: core-forms-framework — AlertCatalog.clearSnapshots");
+        throw new UnsupportedOperationException("S1: core-forms-framework - AlertCatalog.clearSnapshots");
     }
 
     /**
@@ -246,7 +246,7 @@ public final class AlertCatalog {
      * @return сообщение
      */
     public static AlertSpec simulateHalt(ClientProfile profile) {
-        throw new UnsupportedOperationException("S1: core-forms-framework — AlertCatalog.simulateHalt");
+        throw new UnsupportedOperationException("S1: core-forms-framework - AlertCatalog.simulateHalt");
     }
 
     /**
@@ -256,7 +256,7 @@ public final class AlertCatalog {
      * @return сообщение
      */
     public static AlertSpec alreadyRunning(ClientProfile profile) {
-        throw new UnsupportedOperationException("S1: core-forms-framework — AlertCatalog.alreadyRunning");
+        throw new UnsupportedOperationException("S1: core-forms-framework - AlertCatalog.alreadyRunning");
     }
 
     /**
@@ -266,7 +266,7 @@ public final class AlertCatalog {
      * @return сообщение
      */
     public static AlertSpec startupError(Throwable error) {
-        throw new UnsupportedOperationException("S1: core-forms-framework — AlertCatalog.startupError");
+        throw new UnsupportedOperationException("S1: core-forms-framework - AlertCatalog.startupError");
     }
 
     /**
@@ -283,7 +283,7 @@ public final class AlertCatalog {
      */
     public static AlertSpec crashRecovery(CrashDetector.Detection detection, SessionSnapshot preview, String defaultStore,
                                           ClientProfile profile) {
-        throw new UnsupportedOperationException("S1: core-forms-framework — AlertCatalog.crashRecovery");
+        throw new UnsupportedOperationException("S1: core-forms-framework - AlertCatalog.crashRecovery");
     }
 
     /**
@@ -294,7 +294,7 @@ public final class AlertCatalog {
      * @return сообщение
      */
     public static AlertSpec restoreReport(int windowsRestored, List<String> warnings) {
-        throw new UnsupportedOperationException("S1: core-forms-framework — AlertCatalog.restoreReport");
+        throw new UnsupportedOperationException("S1: core-forms-framework - AlertCatalog.restoreReport");
     }
 
     /**
@@ -304,7 +304,7 @@ public final class AlertCatalog {
      * @return сообщение
      */
     public static AlertSpec recorderNotStarted(String planMarkdown) {
-        throw new UnsupportedOperationException("S1: core-forms-framework — AlertCatalog.recorderNotStarted");
+        throw new UnsupportedOperationException("S1: core-forms-framework - AlertCatalog.recorderNotStarted");
     }
 
     /**
@@ -316,7 +316,7 @@ public final class AlertCatalog {
      * @return сообщение
      */
     public static AlertSpec uncaught(Throwable error, boolean jsError) {
-        throw new UnsupportedOperationException("S1: core-forms-framework — AlertCatalog.uncaught");
+        throw new UnsupportedOperationException("S1: core-forms-framework - AlertCatalog.uncaught");
     }
 
     /**
@@ -328,7 +328,7 @@ public final class AlertCatalog {
      * @return сообщение
      */
     public static AlertSpec info(String key, Object... args) {
-        throw new UnsupportedOperationException("S1: core-forms-framework — AlertCatalog.info");
+        throw new UnsupportedOperationException("S1: core-forms-framework - AlertCatalog.info");
     }
 
     /**
@@ -341,7 +341,7 @@ public final class AlertCatalog {
      * @return сообщение
      */
     public static AlertSpec quickEditUnavailable(String missingRowOrEmpty) {
-        throw new UnsupportedOperationException("S1: core-forms-framework — AlertCatalog.quickEditUnavailable");
+        throw new UnsupportedOperationException("S1: core-forms-framework - AlertCatalog.quickEditUnavailable");
     }
 
     /**
@@ -355,6 +355,6 @@ public final class AlertCatalog {
      * @return сообщение
      */
     public static AlertSpec error(String key, Throwable error, Object... args) {
-        throw new UnsupportedOperationException("S1: core-forms-framework — AlertCatalog.error");
+        throw new UnsupportedOperationException("S1: core-forms-framework - AlertCatalog.error");
     }
 }

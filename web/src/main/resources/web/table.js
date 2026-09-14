@@ -2,10 +2,10 @@
  * @file Таблица событий прогноза: Дата | День | Операция | Категория | Доход | Расход | Баланс | Отметки.
  *
  * JavaFX: TableView → Swing: JTable + AbstractTableModel → Web: <table> с липкой шапкой.
- * Доход зелёный, расход красный; фон строки с балансом меньше нуля — светло-красный, ниже подушки — светло-жёлтый;
+ * Доход зелёный, расход красный; фон строки с балансом меньше нуля - светло-красный, ниже подушки - светло-жёлтый;
  * прошедшие события серые; пропущенные зачёркнуты. Отметки: ✎ сумма изменена, → перенесено, ⇄ сдвиг с выходного,
- * ≡ разовая, Δ «что-если». Строки «итог месяца» — при флажке «Итоги по месяцам».
- * Подсказки ячеек — div.tooltip, контекстное меню строки — по событию contextmenu, двойной щелчок по сумме —
+ * ≡ разовая, Δ «что-если». Строки «итог месяца» - при флажке «Итоги по месяцам».
+ * Подсказки ячеек - div.tooltip, контекстное меню строки - по событию contextmenu, двойной щелчок по сумме -
  * быстрая правка (Popup).
  */
 
@@ -27,7 +27,7 @@ const COLUMNS = [
   { title: 'Баланс', cls: 'col-money col-balance', tip: 'Сколько денег останется после события' },
   {
     title: 'Отметки', cls: 'col-marks',
-    tip: '✎ сумма изменена · → перенесено · ⇄ сдвиг с выходного · ≡ разовая · Δ что-если; зачёркнуто — пропущено',
+    tip: '✎ сумма изменена · → перенесено · ⇄ сдвиг с выходного · ≡ разовая · Δ что-если; зачёркнуто - пропущено',
   },
 ];
 
@@ -60,7 +60,7 @@ export class ForecastTable {
       this.tbody);
     this.wrap = h('div', {
       class: 'table-wrap', tabindex: '0',
-      'aria-label': 'Таблица событий: стрелки — выбор строки, Enter — изменить, Delete — удалить, Shift+F10 — меню',
+      'aria-label': 'Таблица событий: стрелки - выбор строки, Enter - изменить, Delete - удалить, Shift+F10 - меню',
     }, this.table);
     this.footer = h('div', { class: 'table-footer', hidden: true });
     container.append(this.wrap, this.footer);
@@ -154,7 +154,7 @@ export class ForecastTable {
   totalElement(m) {
     const sign = String(m.net).startsWith('-') ? '' : '+';
     return h('tr', { class: 'month-total', dataset: { month: m.month } },
-      h('td', { colspan: '4', class: 'total-title', dataset: { col: 'total' }, text: `${m.title} — итог: ${sign}${m.netText}` }),
+      h('td', { colspan: '4', class: 'total-title', dataset: { col: 'total' }, text: `${m.title} - итог: ${sign}${m.netText}` }),
       h('td', { class: 'col-money col-income', dataset: { col: 'total' }, text: m.incomeText }),
       h('td', { class: 'col-money col-expense', dataset: { col: 'total' }, text: m.expenseText }),
       h('td', { class: 'col-money col-balance', dataset: { col: 'total' }, text: m.closingBalanceText }),
@@ -335,7 +335,7 @@ export class ForecastTable {
         if (flags.amountChanged && rule) lines.push(`По правилу: ${rule.amountText} ${cur}`);
         if (flags.whatIf) lines.push('Сумма изменена сценарием «что-если»');
         if (flags.skipped) lines.push('Событие пропущено и не влияет на баланс');
-        if (row.origin === 'RULE' && !flags.skipped) lines.push('Двойной щелчок — быстрая правка суммы');
+        if (row.origin === 'RULE' && !flags.skipped) lines.push('Двойной щелчок - быстрая правка суммы');
         break;
       case 'balance':
         lines.push(`Баланс после события: ${row.balanceAfterText} ${cur}`);
@@ -343,8 +343,8 @@ export class ForecastTable {
         else if (row.belowCushion) lines.push(`Ниже подушки безопасности (${this.state.plan.cushionText} ${cur})`);
         break;
       case 'marks':
-        for (const mark of td.textContent.split(' ').filter(Boolean)) lines.push(`${mark} — ${MARK_HELP[mark] || ''}`);
-        if (flags.skipped) lines.push('зачёркнуто — событие пропущено');
+        for (const mark of td.textContent.split(' ').filter(Boolean)) lines.push(`${mark} - ${MARK_HELP[mark] || ''}`);
+        if (flags.skipped) lines.push('зачёркнуто - событие пропущено');
         if (!lines.length) return null;
         break;
       default:

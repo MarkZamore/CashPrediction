@@ -108,7 +108,7 @@ public final class MainFrame implements SwingAppContext, SnapshotSource, Restore
     /** Имя пустого плана, если открыть нечего. */
     public static final String DEFAULT_PLAN_NAME = "Мой план";
     /** Префикс заголовка окна. */
-    public static final String TITLE_PREFIX = "CashPrediction — ";
+    public static final String TITLE_PREFIX = "CashPrediction - ";
 
     private static final String CARD_TABLE = "table";
     private static final String CARD_CHART = "chart";
@@ -571,7 +571,7 @@ public final class MainFrame implements SwingAppContext, SnapshotSource, Restore
         if (!actions.loadPlanForRestore(file, warn)) {
             openPlanDocument(Plan.empty(DEFAULT_PLAN_NAME, today()), null, false, List.of());
             actions.trackFile(null);
-            warn.accept("План «" + planPath + "» не открылся — открыт пустой план «" + DEFAULT_PLAN_NAME + "»");
+            warn.accept("План «" + planPath + "» не открылся - открыт пустой план «" + DEFAULT_PLAN_NAME + "»");
         }
     }
 

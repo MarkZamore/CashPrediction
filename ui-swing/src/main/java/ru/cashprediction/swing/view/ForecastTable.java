@@ -344,11 +344,11 @@ public final class ForecastTable extends JTable {
         return switch (column) {
             case ForecastTableModel.COL_DATE, ForecastTableModel.COL_DAY -> RuText.weekdayFull(row.date().getDayOfWeek()) + ", "
                     + DateFormats.ru(row.date()) + (row.originalDate().equals(row.date()) ? "" : "\nПо правилу: " + DateFormats.ru(row.originalDate()));
-            case ForecastTableModel.COL_TITLE, ForecastTableModel.COL_CATEGORY -> row.title() + " — " + row.origin().title()
+            case ForecastTableModel.COL_TITLE, ForecastTableModel.COL_CATEGORY -> row.title() + " - " + row.origin().title()
                     + (row.note().isBlank() ? "" : "\nЗаметка: " + row.note())
-                    + (row.origin() == Origin.RULE ? "\nДвойной щелчок — изменить правило, правая кнопка — действия с событием" : "");
+                    + (row.origin() == Origin.RULE ? "\nДвойной щелчок - изменить правило, правая кнопка - действия с событием" : "");
             case ForecastTableModel.COL_INCOME, ForecastTableModel.COL_EXPENSE -> row.origin() == Origin.START ? null
-                    : row.amount().format(currency) + (row.origin() == Origin.RULE ? "\nДвойной щелчок — быстрая правка суммы этого события" : "");
+                    : row.amount().format(currency) + (row.origin() == Origin.RULE ? "\nДвойной щелчок - быстрая правка суммы этого события" : "");
             case ForecastTableModel.COL_BALANCE -> "Баланс после события: " + row.balanceAfter().format(currency)
                     + (row.balanceAfter().isNegative() ? "\nБаланс ниже нуля!"
                     : model.cushion().isPositive() && row.balanceAfter().compareTo(model.cushion()) < 0

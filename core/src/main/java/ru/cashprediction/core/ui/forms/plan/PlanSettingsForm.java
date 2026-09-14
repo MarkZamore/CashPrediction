@@ -29,21 +29,21 @@ public final class PlanSettingsForm implements FormLogic {
 
     @Override
     public FormSpec spec(FormContext context) {
-        throw new UnsupportedOperationException("S1: core-forms-plan — PlanSettingsForm.spec");
+        throw new UnsupportedOperationException("S1: core-forms-plan - PlanSettingsForm.spec");
     }
 
     @Override
     public Map<String, String> defaults(FormContext context) {
-        throw new UnsupportedOperationException("S1: core-forms-plan — PlanSettingsForm.defaults");
+        throw new UnsupportedOperationException("S1: core-forms-plan - PlanSettingsForm.defaults");
     }
 
     @Override
     public FormView evaluate(FormState state, FormContext context) {
-        throw new UnsupportedOperationException("S1: core-forms-plan — PlanSettingsForm.evaluate");
+        throw new UnsupportedOperationException("S1: core-forms-plan - PlanSettingsForm.evaluate");
     }
 
     @Override
     public FormOutcome onButton(String buttonId, FormState state, FormContext context) {
-        throw new UnsupportedOperationException("S1: core-forms-plan — PlanSettingsForm.onButton");
+        throw new UnsupportedOperationException("S1: core-forms-plan - PlanSettingsForm.onButton");
     }
 }

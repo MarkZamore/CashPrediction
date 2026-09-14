@@ -56,7 +56,7 @@ public final class DateField extends JPanel {
         text.setColumns(9);
         text.setFocusLostBehavior(JFormattedTextField.PERSIST);
         // JavaFX: Tooltip → Swing: setToolTipText → Web: title
-        text.setToolTipText("Дата в формате дд.мм.гггг; ↑/↓ — день, PgUp/PgDn — месяц");
+        text.setToolTipText("Дата в формате дд.мм.гггг; ↑/↓ - день, PgUp/PgDn - месяц");
         text.getDocument().addDocumentListener(new DocumentListener() {
             /** Символы вставлены в поле: обрабатывается как любое изменение текста. */
             @Override

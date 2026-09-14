@@ -58,6 +58,12 @@
         <!-- Настройки surefire (classpath вместо module path, русская локаль) наследуются от родителя. -->
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-surefire-plugin</artifactId>
+        <configuration>
+          <systemPropertyVariables>
+            <!-- Папка модуля для NoDashesInWebUiTest, читающего ресурсы и исходники: не зависит от рабочей папки IDE. -->
+            <web.basedir>${project.basedir}</web.basedir>
+          </systemPropertyVariables>
+        </configuration>
       </plugin>
       <plugin>
         <groupId>org.codehaus.mojo</groupId>

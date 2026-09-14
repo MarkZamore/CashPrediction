@@ -38,6 +38,6 @@ public final class FormCatalog {
      * @throws IllegalArgumentException если окно восстановить нельзя; сообщение — готовый текст {@code restore.warn.*}
      */
     public static FormRequest forRestore(WindowState state, AppState app) {
-        throw new UnsupportedOperationException("S2: core-app-session — FormCatalog.forRestore");
+        throw new UnsupportedOperationException("S2: core-app-session - FormCatalog.forRestore");
     }
 }

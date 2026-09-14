@@ -36,32 +36,32 @@ public final class RecoveryFlow {
      * @param store хранилище
      */
     public void setDefaultStore(RecoveryStoreKind store) {
-        throw new UnsupportedOperationException("S2: core-app-session — RecoveryFlow.setDefaultStore");
+        throw new UnsupportedOperationException("S2: core-app-session - RecoveryFlow.setDefaultStore");
     }
 
     /** {@code recovery.snapshotNow}: {@code status.msg.snapshot} или {@code info.recordingOff}. */
     public void snapshotNow() {
-        throw new UnsupportedOperationException("S2: core-app-session — RecoveryFlow.snapshotNow");
+        throw new UnsupportedOperationException("S2: core-app-session - RecoveryFlow.snapshotNow");
     }
 
     /** {@code recovery.showLast}: §6.27 «Последний снимок», хранилище по умолчанию первым. */
     public void showLast() {
-        throw new UnsupportedOperationException("S2: core-app-session — RecoveryFlow.showLast");
+        throw new UnsupportedOperationException("S2: core-app-session - RecoveryFlow.showLast");
     }
 
     /** {@code recovery.clear}: подтверждение §6.27, {@code recorder.clearSnapshots}. */
     public void clear() {
-        throw new UnsupportedOperationException("S2: core-app-session — RecoveryFlow.clear");
+        throw new UnsupportedOperationException("S2: core-app-session - RecoveryFlow.clear");
     }
 
     /** {@code recovery.simulate.halt}: подтверждение, затем {@code port.exit(HALT, 3)} (web — {@code WEB_CRASHED}). */
     public void simulateHalt() {
-        throw new UnsupportedOperationException("S2: core-app-session — RecoveryFlow.simulateHalt");
+        throw new UnsupportedOperationException("S2: core-app-session - RecoveryFlow.simulateHalt");
     }
 
     /** {@code recovery.simulate.exception}: бросает исключение в потоке интерфейса → §6.33. */
     public void simulateException() {
-        throw new UnsupportedOperationException("S2: core-app-session — RecoveryFlow.simulateException");
+        throw new UnsupportedOperationException("S2: core-app-session - RecoveryFlow.simulateException");
     }
 
     /**
@@ -71,6 +71,6 @@ public final class RecoveryFlow {
      * @param error  исключение
      */
     public void uncaught(Thread thread, Throwable error) {
-        throw new UnsupportedOperationException("S2: core-app-session — RecoveryFlow.uncaught");
+        throw new UnsupportedOperationException("S2: core-app-session - RecoveryFlow.uncaught");
     }
 }

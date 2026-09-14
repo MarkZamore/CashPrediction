@@ -38,6 +38,6 @@ public final class CoreWindowFactory implements WindowFactory {
 
     @Override
     public void open(WindowState state, String ownerId, Consumer<StatefulWindow> onShown, Consumer<String> onFailed) {
-        throw new UnsupportedOperationException("S2: core-app-session — CoreWindowFactory.open");
+        throw new UnsupportedOperationException("S2: core-app-session - CoreWindowFactory.open");
     }
 }

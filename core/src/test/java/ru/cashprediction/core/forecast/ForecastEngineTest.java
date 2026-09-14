@@ -112,7 +112,7 @@ class ForecastEngineTest {
         assertFalse(oct.flags().moved());
 
         ForecastRow nov = f.findRow("r1@2026-11-05").orElseThrow();
-        assertEquals(d("2026-12-19"), nov.date(), "суббота, но дата точная — без сдвига");
+        assertEquals(d("2026-12-19"), nov.date(), "суббота, но дата точная - без сдвига");
         assertEquals(DayOfWeek.SATURDAY, nov.date().getDayOfWeek());
         assertEquals(d("2026-11-05"), nov.originalDate());
         assertTrue(nov.flags().moved());
@@ -243,8 +243,8 @@ class ForecastEngineTest {
         assertEquals(150_000, daily[4], "05.09.2026 на конец дня");
         assertEquals(Money.ofMajor(1500), f.balanceAt(d("2026-10-04")));
         assertEquals(Money.ofMajor(2000), f.balanceAt(d("2026-10-05")));
-        assertEquals(Money.ofMajor(1000), f.balanceAt(d("2026-08-31")), "до начала — начальный баланс");
-        assertEquals(Money.ofMajor(7000), f.balanceAt(d("2030-01-01")), "после конца — конечный");
+        assertEquals(Money.ofMajor(1000), f.balanceAt(d("2026-08-31")), "до начала - начальный баланс");
+        assertEquals(Money.ofMajor(7000), f.balanceAt(d("2030-01-01")), "после конца - конечный");
         assertEquals(d("2027-08-31"), f.endDate());
         assertEquals(f.endBalance(), f.rows().get(f.rows().size() - 1).balanceAfter());
 
@@ -355,7 +355,7 @@ class ForecastEngineTest {
 
         Forecast incomeOnly = ForecastEngine.forecast(p, WhatIf.ofPercent(10, 0, Money.ZERO), START, false);
         assertEquals(Money.ofMajor(-500), incomeOnly.findRow("r2@2026-09-06").orElseThrow().amount());
-        assertFalse(incomeOnly.findRow("r2@2026-09-06").orElseThrow().flags().whatIf(), "коэффициент 1 — без отметки");
+        assertFalse(incomeOnly.findRow("r2@2026-09-06").orElseThrow().flags().whatIf(), "коэффициент 1 - без отметки");
 
         assertTrue(WhatIf.NONE.isNone());
         assertTrue(new WhatIf(new BigDecimal("1.00"), BigDecimal.ONE, Money.ZERO).isNone());
@@ -385,7 +385,7 @@ class ForecastEngineTest {
         assertEquals(List.of("t1", "whatif@2026-10-31", "r1@2026-10-31"), oct31);
 
         assertEquals(12, ForecastEngine.forecast(p, saving, START, false).rows().stream()
-                .filter(r -> r.origin() == Origin.WHAT_IF).count(), "с начала плана — включая 30.09");
+                .filter(r -> r.origin() == Origin.WHAT_IF).count(), "с начала плана - включая 30.09");
     }
 
     /** Разовые операции вне горизонта исключаются с предупреждением. */
@@ -425,7 +425,7 @@ class ForecastEngineTest {
         Forecast never = run(base.withGoal(new Goal("Дом", Money.ofMajor(1_000_000), null)));
         assertTrue(never.summary().goalReachDate().isEmpty());
         assertEquals(1, warningsOf(never, WarningType.GOAL_NOT_REACHED).size());
-        assertTrue(run(base).summary().goalReachDate().isEmpty(), "без цели — пусто");
+        assertTrue(run(base).summary().goalReachDate().isEmpty(), "без цели - пусто");
     }
 
     /** Итоги согласованы с балансом; средний итог месяца. */
@@ -563,7 +563,7 @@ class ForecastEngineTest {
         ForecastRow fromFuture = f.findRow("r1@2027-09-05").orElseThrow();
         assertEquals(d("2027-08-20"), fromFuture.date());
         assertEquals(Money.ofMajor(70), fromFuture.amount());
-        assertTrue(f.findRow("r1@2026-08-06").isEmpty(), "06.08 — не дата правила");
+        assertTrue(f.findRow("r1@2026-08-06").isEmpty(), "06.08 - не дата правила");
         assertTrue(f.findRow("r1@2026-07-05").isEmpty(), "перенос в прошлое за горизонт");
         assertEquals(14, ruleRows(f).size());
         assertEquals(Money.ofMajor(1_370), f.endBalance());

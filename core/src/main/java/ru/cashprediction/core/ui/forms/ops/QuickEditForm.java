@@ -30,21 +30,21 @@ public final class QuickEditForm implements FormLogic {
 
     @Override
     public FormSpec spec(FormContext context) {
-        throw new UnsupportedOperationException("S1: core-forms-ops — QuickEditForm.spec");
+        throw new UnsupportedOperationException("S1: core-forms-ops - QuickEditForm.spec");
     }
 
     @Override
     public Map<String, String> defaults(FormContext context) {
-        throw new UnsupportedOperationException("S1: core-forms-ops — QuickEditForm.defaults");
+        throw new UnsupportedOperationException("S1: core-forms-ops - QuickEditForm.defaults");
     }
 
     @Override
     public FormView evaluate(FormState state, FormContext context) {
-        throw new UnsupportedOperationException("S1: core-forms-ops — QuickEditForm.evaluate");
+        throw new UnsupportedOperationException("S1: core-forms-ops - QuickEditForm.evaluate");
     }
 
     @Override
     public FormOutcome onButton(String buttonId, FormState state, FormContext context) {
-        throw new UnsupportedOperationException("S1: core-forms-ops — QuickEditForm.onButton");
+        throw new UnsupportedOperationException("S1: core-forms-ops - QuickEditForm.onButton");
     }
 }

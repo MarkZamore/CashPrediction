@@ -30,7 +30,7 @@ public final class MenuModels {
      * @return модель шести меню
      */
     public static MenuBarModel menuBar(AppState state, ClientKind client) {
-        throw new UnsupportedOperationException("S1: core-menu — MenuModels.menuBar");
+        throw new UnsupportedOperationException("S1: core-menu - MenuModels.menuBar");
     }
 
     /**
@@ -41,7 +41,7 @@ public final class MenuModels {
      * @return модель тулбара
      */
     public static ToolbarModel toolbar(AppState state, ClientKind client) {
-        throw new UnsupportedOperationException("S1: core-menu — MenuModels.toolbar");
+        throw new UnsupportedOperationException("S1: core-menu - MenuModels.toolbar");
     }
 
     /**
@@ -53,6 +53,6 @@ public final class MenuModels {
      * @return пункты меню; пустой список — меню не показывается (например, щелчок в пустом месте таблицы)
      */
     public static List<MenuNode> contextMenu(AppState state, ContextTarget target, ClientKind client) {
-        throw new UnsupportedOperationException("S1: core-menu — MenuModels.contextMenu");
+        throw new UnsupportedOperationException("S1: core-menu - MenuModels.contextMenu");
     }
 }

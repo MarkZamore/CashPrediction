@@ -118,7 +118,7 @@ public final class SwingCrashHooks {
     private static void showAndHalt(Throwable error) {
         try {
             // JavaFX: Alert(ERROR) с expandableContent → Swing: SwingAlert (JOptionPane.createDialog) → Web: <dialog class="alert">
-            SwingAlert alert = new SwingAlert(null, SwingAlert.AlertType.ERROR, "CashPrediction — ошибка", MESSAGE,
+            SwingAlert alert = new SwingAlert(null, SwingAlert.AlertType.ERROR, "CashPrediction - ошибка", MESSAGE,
                     error.getClass().getSimpleName() + ": " + Objects.requireNonNullElse(error.getMessage(), "без описания"));
             alert.setDetailsText(SwingText.stackTrace(error));
             alert.prepareForShow();

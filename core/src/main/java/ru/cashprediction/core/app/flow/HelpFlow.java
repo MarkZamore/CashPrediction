@@ -27,16 +27,16 @@ public final class HelpFlow {
 
     /** {@code help.about}: §6.18 ({@code AlertCatalog.about}). */
     public void about() {
-        throw new UnsupportedOperationException("S2: core-app-edit — HelpFlow.about");
+        throw new UnsupportedOperationException("S2: core-app-edit - HelpFlow.about");
     }
 
     /** {@code help.hotkeys}: §6.19 ({@code HotkeyTable.text()}). */
     public void hotkeys() {
-        throw new UnsupportedOperationException("S2: core-app-edit — HelpFlow.hotkeys");
+        throw new UnsupportedOperationException("S2: core-app-edit - HelpFlow.hotkeys");
     }
 
     /** {@code help.format}: §6.20 ({@code MarkdownFormat.userGuide()}). */
     public void format() {
-        throw new UnsupportedOperationException("S2: core-app-edit — HelpFlow.format");
+        throw new UnsupportedOperationException("S2: core-app-edit - HelpFlow.format");
     }
 }

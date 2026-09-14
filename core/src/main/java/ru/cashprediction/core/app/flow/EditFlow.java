@@ -44,7 +44,7 @@ public final class EditFlow {
      * @return {@code true}, если изменение применено
      */
     public boolean edit(String undoText, String statusKey, UnaryOperator<Plan> change) {
-        throw new UnsupportedOperationException("S2: core-app-edit — EditFlow.edit");
+        throw new UnsupportedOperationException("S2: core-app-edit - EditFlow.edit");
     }
 
     /**
@@ -53,7 +53,7 @@ public final class EditFlow {
      * @param kind вид по умолчанию
      */
     public void addRule(Kind kind) {
-        throw new UnsupportedOperationException("S2: core-app-edit — EditFlow.addRule");
+        throw new UnsupportedOperationException("S2: core-app-edit - EditFlow.addRule");
     }
 
     /**
@@ -62,7 +62,7 @@ public final class EditFlow {
      * @param date дата по умолчанию или {@code null}
      */
     public void addOneTime(LocalDate date) {
-        throw new UnsupportedOperationException("S2: core-app-edit — EditFlow.addOneTime");
+        throw new UnsupportedOperationException("S2: core-app-edit - EditFlow.addOneTime");
     }
 
     /**
@@ -71,7 +71,7 @@ public final class EditFlow {
      * @param rowId id строки
      */
     public void editRow(String rowId) {
-        throw new UnsupportedOperationException("S2: core-app-edit — EditFlow.editRow");
+        throw new UnsupportedOperationException("S2: core-app-edit - EditFlow.editRow");
     }
 
     /**
@@ -80,7 +80,7 @@ public final class EditFlow {
      * @param rowId id строки
      */
     public void deleteRow(String rowId) {
-        throw new UnsupportedOperationException("S2: core-app-edit — EditFlow.deleteRow");
+        throw new UnsupportedOperationException("S2: core-app-edit - EditFlow.deleteRow");
     }
 
     /**
@@ -89,7 +89,7 @@ public final class EditFlow {
      * @param rowId id строки RULE
      */
     public void adjust(String rowId) {
-        throw new UnsupportedOperationException("S2: core-app-edit — EditFlow.adjust");
+        throw new UnsupportedOperationException("S2: core-app-edit - EditFlow.adjust");
     }
 
     /**
@@ -98,7 +98,7 @@ public final class EditFlow {
      * @param rowId id строки RULE
      */
     public void skip(String rowId) {
-        throw new UnsupportedOperationException("S2: core-app-edit — EditFlow.skip");
+        throw new UnsupportedOperationException("S2: core-app-edit - EditFlow.skip");
     }
 
     /**
@@ -107,7 +107,7 @@ public final class EditFlow {
      * @param rowId id строки RULE
      */
     public void reset(String rowId) {
-        throw new UnsupportedOperationException("S2: core-app-edit — EditFlow.reset");
+        throw new UnsupportedOperationException("S2: core-app-edit - EditFlow.reset");
     }
 
     /**
@@ -119,7 +119,7 @@ public final class EditFlow {
      * @param columnId {@code income} или {@code expense}
      */
     public void quickEdit(String rowId, String columnId) {
-        throw new UnsupportedOperationException("S2: core-app-edit — EditFlow.quickEdit");
+        throw new UnsupportedOperationException("S2: core-app-edit - EditFlow.quickEdit");
     }
 
     /**
@@ -128,7 +128,7 @@ public final class EditFlow {
      * @param rowId id строки RULE
      */
     public void goToRule(String rowId) {
-        throw new UnsupportedOperationException("S2: core-app-edit — EditFlow.goToRule");
+        throw new UnsupportedOperationException("S2: core-app-edit - EditFlow.goToRule");
     }
 
     /**
@@ -137,7 +137,7 @@ public final class EditFlow {
      * @param rowId id строки RULE
      */
     public void disableRule(String rowId) {
-        throw new UnsupportedOperationException("S2: core-app-edit — EditFlow.disableRule");
+        throw new UnsupportedOperationException("S2: core-app-edit - EditFlow.disableRule");
     }
 
     /**
@@ -146,7 +146,7 @@ public final class EditFlow {
      * @param rowId id строки
      */
     public void copyRow(String rowId) {
-        throw new UnsupportedOperationException("S2: core-app-edit — EditFlow.copyRow");
+        throw new UnsupportedOperationException("S2: core-app-edit - EditFlow.copyRow");
     }
 
     /**
@@ -155,31 +155,31 @@ public final class EditFlow {
      * @param rowId id строки итога
      */
     public void copyTotal(String rowId) {
-        throw new UnsupportedOperationException("S2: core-app-edit — EditFlow.copyTotal");
+        throw new UnsupportedOperationException("S2: core-app-edit - EditFlow.copyTotal");
     }
 
     /** {@code edit.undo}: {@code status.msg.undone}. */
     public void undo() {
-        throw new UnsupportedOperationException("S2: core-app-edit — EditFlow.undo");
+        throw new UnsupportedOperationException("S2: core-app-edit - EditFlow.undo");
     }
 
     /** {@code edit.redo}: {@code status.msg.redone}. */
     public void redo() {
-        throw new UnsupportedOperationException("S2: core-app-edit — EditFlow.redo");
+        throw new UnsupportedOperationException("S2: core-app-edit - EditFlow.redo");
     }
 
     /** {@code edit.planSettings}: форма §6.2. */
     public void planSettings() {
-        throw new UnsupportedOperationException("S2: core-app-edit — EditFlow.planSettings");
+        throw new UnsupportedOperationException("S2: core-app-edit - EditFlow.planSettings");
     }
 
     /** {@code edit.actualize}: §6.25. */
     public void actualize() {
-        throw new UnsupportedOperationException("S2: core-app-edit — EditFlow.actualize");
+        throw new UnsupportedOperationException("S2: core-app-edit - EditFlow.actualize");
     }
 
     /** {@code edit.reconcile}: §6.7 (иначе {@code info.reconcileUnavailable}). */
     public void reconcile() {
-        throw new UnsupportedOperationException("S2: core-app-edit — EditFlow.reconcile");
+        throw new UnsupportedOperationException("S2: core-app-edit - EditFlow.reconcile");
     }
 }

@@ -39,8 +39,8 @@ class UiTextTest {
     @Test
     void readsUtf8AndSubstitutes() {
         assertEquals("Мой план", UiText.get("plan.defaultName"));
-        assertEquals("CashPrediction — Пример", UiText.get("main.title", "Пример"));
-        assertEquals("CashPrediction — План «Отпуск» *", UiText.get("main.title.dirty", "План «Отпуск»"));
+        assertEquals("CashPrediction - Пример", UiText.get("main.title", "Пример"));
+        assertEquals("CashPrediction - План «Отпуск» *", UiText.get("main.title.dirty", "План «Отпуск»"));
         assertTrue(UiText.has("format.million"));
         assertFalse(UiText.has("нет.такого.ключа"));
         assertEquals(Optional.of("app"), UiText.area("plan.defaultName"));
@@ -68,7 +68,7 @@ class UiTextTest {
     void lenientModeShowsKeyAndKeepsPlaceholder() {
         System.setProperty(UiText.STRICT_PROPERTY, "false");
         assertEquals("!нет.такого.ключа!", UiText.get("нет.такого.ключа"));
-        assertEquals("CashPrediction — {0}", UiText.get("main.title"));
+        assertEquals("CashPrediction - {0}", UiText.get("main.title"));
     }
 
     @Test

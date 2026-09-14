@@ -75,7 +75,7 @@ class DocumentTextsTest {
     @Test
     void commandErrors() {
         PlanDocument doc = document(List.of());
-        assertEquals("Сверить баланс можно только на дату внутри горизонта прогноза (01.09.2026 – 31.08.2027)",
+        assertEquals("Сверить баланс можно только на дату внутри горизонта прогноза (01.09.2026 - 31.08.2027)",
                 assertThrows(IllegalArgumentException.class, () -> doc.reconcile(LocalDate.of(2030, 1, 1), Money.ZERO)).getMessage());
 
         assertEquals("Нельзя применить «что-если»: сумма правила r1 «Копейка» округляется до нуля, а у его корректировки от 05.10.2026 "

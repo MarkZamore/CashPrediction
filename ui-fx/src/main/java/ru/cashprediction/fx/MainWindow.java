@@ -141,10 +141,10 @@ public final class MainWindow {
         updateTitle();
     }
 
-    /** Обновляет заголовок: «CashPrediction — имя плана», звёздочка при несохранённых изменениях. */
+    /** Обновляет заголовок: «CashPrediction - имя плана», звёздочка при несохранённых изменениях. */
     public void updateTitle() {
         PlanDocument document = shell.document();
-        stage.setTitle("CashPrediction — " + document.plan().name() + (document.isDirty() ? "*" : ""));
+        stage.setTitle("CashPrediction - " + document.plan().name() + (document.isDirty() ? "*" : ""));
     }
 
     /**

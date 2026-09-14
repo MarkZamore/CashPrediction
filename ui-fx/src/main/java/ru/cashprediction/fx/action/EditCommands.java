@@ -271,7 +271,7 @@ final class EditCommands {
             case ONE_TIME -> editOneTime(row.get().txId(), OpenRequest.fromMain());
             case START -> planSettings(OpenRequest.fromMain());
             case WHAT_IF -> support.info("Строка режима «что-если»",
-                    "Эта строка — гипотетическая экономия. Изменить её можно в меню Инструменты → Что-если.");
+                    "Эта строка - гипотетическая экономия. Изменить её можно в меню Инструменты → Что-если.");
         }
     }
 
@@ -353,7 +353,7 @@ final class EditCommands {
         Plan plan = support.plan();
         if (!today.isAfter(plan.startDate())) {
             support.cannotOpen(request, "Актуализировать нечего",
-                    "План начинается " + DateFormats.ru(plan.startDate()) + " — это не раньше сегодняшнего дня.");
+                    "План начинается " + DateFormats.ru(plan.startDate()) + " - это не раньше сегодняшнего дня.");
             return;
         }
         String balance;
@@ -433,7 +433,7 @@ final class EditCommands {
         // JavaFX: TextInputDialog → Swing: JOptionPane.showInputDialog → Web: <dialog> с <input>
         StatefulTextInputDialog dialog = new StatefulTextInputDialog("customMonths", "Горизонт плана",
                 "На сколько месяцев вперёд считать прогноз? Сейчас: до " + DateFormats.ru(plan.endDate()) + ".",
-                "Месяцев (1–600):", Long.toString(current), AppButtonTypes.APPLY,
+                "Месяцев (1-600):", Long.toString(current), AppButtonTypes.APPLY,
                 text -> FieldValues.parseInt(text).filter(n -> n >= 1 && n <= 600).isPresent()
                         ? Optional.empty() : Optional.of("Целое число от 1 до 600"),
                 false);

@@ -103,7 +103,7 @@ class FormatWordsTest {
 
         TextCatalog cp1251 = FormatWords.load(name -> FormatWords.FILE_NAME.equals(name)
                 ? new ByteArrayInputStream("plan.a=да\n".getBytes(Charset.forName("windows-1251"))) : null);
-        assertFalse(cp1251.loadProblems().isEmpty(), "файл не в UTF-8 — проблема загрузки");
+        assertFalse(cp1251.loadProblems().isEmpty(), "файл не в UTF-8 - проблема загрузки");
 
         TextCatalog suffixed = FormatWords.load(name -> "format_ru.properties".equals(name)
                 ? new ByteArrayInputStream("plan.a=да\n".getBytes(StandardCharsets.UTF_8)) : null);
@@ -148,7 +148,7 @@ class FormatWordsTest {
                     .toList();
             assertEquals(List.of("ru/cashprediction/core/format/format.properties"), formatFiles);
         }
-        assertFalse(Texts.AREAS.contains("format"), "словарь формата — не область каталога текстов");
+        assertFalse(Texts.AREAS.contains("format"), "словарь формата - не область каталога текстов");
     }
 
     @Test
@@ -161,6 +161,10 @@ class FormatWordsTest {
                 .map(name -> name + "=" + FormatWords.get(name) + "\n")
                 .collect(java.util.stream.Collectors.joining());
         assertEquals(FROZEN_GRAMMAR, actual);
+        // Решение пользователя 2026-09-14 («Замени все знаки длинного тире в интерфейсе всех клиентов на "-"»): в файлах
+        // CashMemory только дефис-минус, старые файлы с тире не поддерживаются. Слов с тире в словаре нет, а разделитель
+        // заголовка окна web-session.md, который добавляет MarkdownSnapshotCodec, изменён с длинного тире на « - ».
+        DashFreeOutput.assertNoDashes("format.properties", actual);
     }
 
     /** Замороженная грамматика формата: {@code имя=значение}, имена по алфавиту ({@link FormatWords#names()}). */

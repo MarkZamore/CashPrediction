@@ -41,7 +41,7 @@ public final class ViewFlow {
      * @param mode режим
      */
     public void setMode(ViewMode mode) {
-        throw new UnsupportedOperationException("S2: core-app-edit — ViewFlow.setMode");
+        throw new UnsupportedOperationException("S2: core-app-edit - ViewFlow.setMode");
     }
 
     /**
@@ -50,7 +50,7 @@ public final class ViewFlow {
      * @param flag команда флажка
      */
     public void toggleFlag(CommandId flag) {
-        throw new UnsupportedOperationException("S2: core-app-edit — ViewFlow.toggleFlag");
+        throw new UnsupportedOperationException("S2: core-app-edit - ViewFlow.toggleFlag");
     }
 
     /**
@@ -59,7 +59,7 @@ public final class ViewFlow {
      * @param period период
      */
     public void setPeriod(PeriodChoice period) {
-        throw new UnsupportedOperationException("S2: core-app-edit — ViewFlow.setPeriod");
+        throw new UnsupportedOperationException("S2: core-app-edit - ViewFlow.setPeriod");
     }
 
     /**
@@ -69,12 +69,12 @@ public final class ViewFlow {
      * @param value месяцев 1..120
      */
     public void horizonSliderCommit(int value) {
-        throw new UnsupportedOperationException("S2: core-app-edit — ViewFlow.horizonSliderCommit");
+        throw new UnsupportedOperationException("S2: core-app-edit - ViewFlow.horizonSliderCommit");
     }
 
     /** {@code view.horizonMonths}: TEXT_INPUT customMonths §6.23. */
     public void customMonths() {
-        throw new UnsupportedOperationException("S2: core-app-edit — ViewFlow.customMonths");
+        throw new UnsupportedOperationException("S2: core-app-edit - ViewFlow.customMonths");
     }
 
     /**
@@ -83,27 +83,27 @@ public final class ViewFlow {
      * @param text текст поля
      */
     public void filterText(String text) {
-        throw new UnsupportedOperationException("S2: core-app-edit — ViewFlow.filterText");
+        throw new UnsupportedOperationException("S2: core-app-edit - ViewFlow.filterText");
     }
 
     /** {@code filter.clear}: очистить фильтр. */
     public void clearFilter() {
-        throw new UnsupportedOperationException("S2: core-app-edit — ViewFlow.clearFilter");
+        throw new UnsupportedOperationException("S2: core-app-edit - ViewFlow.clearFilter");
     }
 
     /** {@code view.focusFilter}: {@code port.focus(FILTER)}. */
     public void focusFilter() {
-        throw new UnsupportedOperationException("S2: core-app-edit — ViewFlow.focusFilter");
+        throw new UnsupportedOperationException("S2: core-app-edit - ViewFlow.focusFilter");
     }
 
     /** {@code filter.focusTable}: применить текст фильтра немедленно и {@code port.focus(TABLE)}. */
     public void focusTable() {
-        throw new UnsupportedOperationException("S2: core-app-edit — ViewFlow.focusTable");
+        throw new UnsupportedOperationException("S2: core-app-edit - ViewFlow.focusTable");
     }
 
     /** {@code past.toggle}: развернуть или свернуть группу «Прошедшие события». */
     public void togglePast() {
-        throw new UnsupportedOperationException("S2: core-app-edit — ViewFlow.togglePast");
+        throw new UnsupportedOperationException("S2: core-app-edit - ViewFlow.togglePast");
     }
 
     /**
@@ -112,7 +112,7 @@ public final class ViewFlow {
      * @param date дата
      */
     public void showInTable(LocalDate date) {
-        throw new UnsupportedOperationException("S2: core-app-edit — ViewFlow.showInTable");
+        throw new UnsupportedOperationException("S2: core-app-edit - ViewFlow.showInTable");
     }
 
     /**
@@ -121,11 +121,11 @@ public final class ViewFlow {
      * @param rowId id строки или пустая строка
      */
     public void selectRow(String rowId) {
-        throw new UnsupportedOperationException("S2: core-app-edit — ViewFlow.selectRow");
+        throw new UnsupportedOperationException("S2: core-app-edit - ViewFlow.selectRow");
     }
 
     /** Прокрутка к первой строке с датой ≥ сегодня (открытие плана, смена периода). */
     public void scrollToToday() {
-        throw new UnsupportedOperationException("S2: core-app-edit — ViewFlow.scrollToToday");
+        throw new UnsupportedOperationException("S2: core-app-edit - ViewFlow.scrollToToday");
     }
 }

@@ -1,7 +1,7 @@
 /**
  * @file Диалоги тонкого клиента.
  *
- * Базовый диалог AppDialog поверх элемента <dialog> и <form method="dialog"> — аналог Dialog<R> + DialogPane:
+ * Базовый диалог AppDialog поверх элемента <dialog> и <form method="dialog"> - аналог Dialog<R> + DialogPane:
  * заголовок, текст шапки, содержимое, раскрываемые подробности (expandableContent), строка проверки, кнопки со
  * значениями (ButtonType), преобразователь результата (resultConverter) и Promise вместо resultProperty.
  * Поверх него построены сообщения (Alert), ввод строки (TextInputDialog), выбор из списка (ChoiceDialog)
@@ -34,7 +34,7 @@ export const ButtonRole = Object.freeze({
  * @param {string} text подпись
  * @param {string} value значение, которое вернёт диалог
  * @param {string} [role=ButtonRole.OTHER] роль
- * @param {object} [extra] {title} — подсказка
+ * @param {object} [extra] {title} - подсказка
  * @returns {Readonly<{text:string, value:string, role:string, title?:string}>} тип кнопки
  */
 export function buttonType(text, value, role = ButtonRole.OTHER, extra = {}) {
@@ -89,13 +89,13 @@ export class AppDialog {
    * @param {boolean} [options.modal=true] модальный (showModal) или немодальный (show)
    * @param {string} [options.className] дополнительный CSS-класс
    * @param {string} [options.width] ширина (CSS)
-   * @param {string} [options.windowType] тип восстанавливаемого окна — диалог регистрируется на сервере
+   * @param {string} [options.windowType] тип восстанавливаемого окна - диалог регистрируется на сервере
    * @param {object} [options.context] контекст окна
    * @param {string} [options.ownerId] владелец окна
    * @param {object|null} [options.existing] состояние окна с сервера при восстановлении
    * @param {() => object} [options.collect] текущие поля формы в канонической форме
    * @param {(value: string, dialog: AppDialog) => (boolean|void|Promise<boolean|void>)} [options.onButton]
-   *   обработчик кнопки; false — диалог остаётся открытым
+   *   обработчик кнопки; false - диалог остаётся открытым
    * @param {(value: string, dialog: AppDialog) => any} [options.resultConverter] результат диалога по кнопке
    * @param {string|(() => string)} [options.defaultButton] значение кнопки для Enter в поле ввода
    * @param {HTMLElement|string} [options.initialFocus] элемент или селектор первого фокуса
@@ -197,7 +197,7 @@ export class AppDialog {
       const value = submitter && submitter.value ? submitter.value : this.defaultValue();
       if (value) this.handle(value);
     });
-    // Enter в поле ввода — кнопка по умолчанию (а не первая кнопка формы, как решил бы браузер).
+    // Enter в поле ввода - кнопка по умолчанию (а не первая кнопка формы, как решил бы браузер).
     this.form.addEventListener('keydown', (e) => {
       const target = /** @type {HTMLElement} */ (e.target);
       if (e.key === 'Enter' && !e.isComposing && target instanceof HTMLInputElement
@@ -211,7 +211,7 @@ export class AppDialog {
         this.cancel();
       }
     });
-    // Esc у модального <dialog>: событие cancel — выполняем кнопку отмены.
+    // Esc у модального <dialog>: событие cancel - выполняем кнопку отмены.
     this.el.addEventListener('cancel', (e) => {
       e.preventDefault();
       this.cancel();
@@ -232,7 +232,7 @@ export class AppDialog {
     return ok ? ok.value : '';
   }
 
-  /** @returns {string} значение кнопки отмены ('' — нет кнопки отмены) */
+  /** @returns {string} значение кнопки отмены ('' - нет кнопки отмены) */
   cancelValue() {
     const cancel = this.options.buttons.find((b) => b.role === ButtonRole.CANCEL_CLOSE);
     if (cancel) return cancel.value;
@@ -537,7 +537,7 @@ const ALERT_KINDS = {
  * @param {string} [o.header] текст шапки
  * @param {string|Node} [o.content] текст сообщения
  * @param {string|Node} [o.details] раскрываемые подробности
- * @param {Array<object>} [o.buttons] кнопки (по умолчанию OK, у CONFIRMATION — OK и Отмена)
+ * @param {Array<object>} [o.buttons] кнопки (по умолчанию OK, у CONFIRMATION - OK и Отмена)
  * @param {object} [o.rest] остальные параметры AppDialog (windowType, context, existing, onButton)
  * @returns {Promise<string>} значение нажатой кнопки
  */
@@ -583,7 +583,7 @@ export function errorAlert(error, header = 'Операция не выполне
  * @param {string} [o.placeholder] подсказка в поле
  * @param {string} [o.inputMode] inputmode ("decimal" для сумм)
  * @param {string} [o.hint] пояснение под полем
- * @param {string} o.purpose назначение окна (rename, reconcile, customCurrency) — контекст TEXT_INPUT
+ * @param {string} o.purpose назначение окна (rename, reconcile, customCurrency) - контекст TEXT_INPUT
  * @param {object|null} [o.existing] состояние окна с сервера
  * @param {(text: string) => (string|null)} [o.validate] проверка: текст ошибки или null
  * @param {(text: string) => string} [o.toCanonical] перевод введённого текста в каноническую форму
@@ -652,8 +652,8 @@ export function textInputDialog(o) {
  * @param {string} o.label подпись списка
  * @param {Array<{value:string, text:string}>} o.choices варианты
  * @param {string} [o.value] выбранный вариант
- * @param {number} [o.listSize] высота списка в строках (0 — выпадающий список)
- * @param {string} o.purpose назначение окна (currency, openPlan) — контекст CHOICE
+ * @param {number} [o.listSize] высота списка в строках (0 - выпадающий список)
+ * @param {string} o.purpose назначение окна (currency, openPlan) - контекст CHOICE
  * @param {object|null} [o.existing] состояние окна с сервера
  * @param {(value: string, dialog: AppDialog) => Promise<void>} [o.onSubmit] применение
  * @param {string} [o.okText] подпись кнопки OK
@@ -703,14 +703,14 @@ export function choiceDialog(o) {
  * JavaFX: FileChooser (ExtensionFilter "*.md", initialDirectory = CashMemory) → Swing: JFileChooser(FILES_ONLY)
  * + FileNameExtensionFilter → Web: этот диалог поверх GET /api/fs?mode=md.
  * JavaFX: DirectoryChooser → Swing: JFileChooser(DIRECTORIES_ONLY) → Web: этот диалог поверх GET /api/fs?mode=dirs.
- * Браузер не видит диски компьютера, поэтому список папок отдаёт сервер; окно не восстанавливается после сбоя —
+ * Браузер не видит диски компьютера, поэтому список папок отдаёт сервер; окно не восстанавливается после сбоя -
  * как и нативные окна выбора файлов в desktop-клиентах.
  * @param {object} o параметры
  * @param {'md'|'dirs'} [o.mode='md'] файлы планов или только папки
  * @param {string} o.title заголовок
  * @param {boolean} [o.save=false] режим сохранения: поле имени файла
  * @param {string} [o.fileName] начальное имя файла (без .md)
- * @param {string} [o.startPath] начальная папка ('' — CashMemory)
+ * @param {string} [o.startPath] начальная папка ('' - CashMemory)
  * @param {string} [o.okText] подпись кнопки подтверждения
  * @returns {Promise<{path:string, folder:string, name:string}|null>} выбор или null
  */
@@ -778,7 +778,7 @@ export function fileChooserDialog(o) {
 
   /**
    * Загружает содержимое папки с сервера.
-   * @param {string} path полный путь ('' — CashMemory)
+   * @param {string} path полный путь ('' - CashMemory)
    * @returns {Promise<void>} завершение
    */
   const load = async (path) => {
@@ -811,7 +811,7 @@ export function fileChooserDialog(o) {
    */
   const renderList = (res) => {
     clear(list);
-    // Служебные файлы CashMemory (settings.md, web-session*.md) — тоже .md, но это не планы: в списке они только
+    // Служебные файлы CashMemory (settings.md, web-session*.md) - тоже .md, но это не планы: в списке они только
     // мешали бы и позволили бы случайно «открыть» или перезаписать настройки и снимок сессии.
     const inCashMemory = !!res.cashMemory && String(res.path).toLowerCase() === String(res.cashMemory).toLowerCase();
     const entries = res.entries.filter((entry) => !(inCashMemory && !entry.dir

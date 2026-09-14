@@ -28,21 +28,21 @@ public final class CsvExportForm implements FormLogic {
 
     @Override
     public FormSpec spec(FormContext context) {
-        throw new UnsupportedOperationException("S1: core-forms-framework — CsvExportForm.spec");
+        throw new UnsupportedOperationException("S1: core-forms-framework - CsvExportForm.spec");
     }
 
     @Override
     public Map<String, String> defaults(FormContext context) {
-        throw new UnsupportedOperationException("S1: core-forms-framework — CsvExportForm.defaults");
+        throw new UnsupportedOperationException("S1: core-forms-framework - CsvExportForm.defaults");
     }
 
     @Override
     public FormView evaluate(FormState state, FormContext context) {
-        throw new UnsupportedOperationException("S1: core-forms-framework — CsvExportForm.evaluate");
+        throw new UnsupportedOperationException("S1: core-forms-framework - CsvExportForm.evaluate");
     }
 
     @Override
     public FormOutcome onButton(String buttonId, FormState state, FormContext context) {
-        throw new UnsupportedOperationException("S1: core-forms-framework — CsvExportForm.onButton");
+        throw new UnsupportedOperationException("S1: core-forms-framework - CsvExportForm.onButton");
     }
 }

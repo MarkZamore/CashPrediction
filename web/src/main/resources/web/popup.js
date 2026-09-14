@@ -17,7 +17,7 @@ let tooltipTimer = null;
  * Устанавливает кастомную подсказку на элемент (для ячеек таблицы и точек графика, где title неудобен).
  * JavaFX: Tooltip.install → Swing: getToolTipText(MouseEvent) / ToolTipManager → Web: <div class="tooltip">
  * @param {HTMLElement|SVGElement} el элемент
- * @param {(event: MouseEvent) => (string|Node|null)} content функция содержимого (null — без подсказки)
+ * @param {(event: MouseEvent) => (string|Node|null)} content функция содержимого (null - без подсказки)
  */
 export function installTooltip(el, content) {
   el.addEventListener('mouseenter', (e) => scheduleTooltip(e, content));
@@ -307,7 +307,7 @@ export class QuickEditPopup {
       this.sync.cancel();
       if (this.inflight) await this.inflight;
       await this.options.onSubmit(canonicalMoney(this.input.value), this.id);
-      // Правка ушла с windowId — сервер уже закрыл окно, повторный DELETE не нужен.
+      // Правка ушла с windowId - сервер уже закрыл окно, повторный DELETE не нужен.
       this.serverClosed = !!this.id;
       await this.close();
     } catch (e) {

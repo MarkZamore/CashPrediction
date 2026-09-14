@@ -2,8 +2,8 @@
  * @file Редакторы операций плана: диалог 3 «Регулярная операция» (с живым предпросмотром «Ближайшие даты»),
  * диалог 4 «Разовая операция», диалог 5 «Корректировка события» и диалог 11 «Удаление правила/операции».
  *
- * Все правки идут на сервер в PlanDocument (история отмены, флаг «изменён», автосохранение — как в desktop-клиентах).
- * Каждый диалог — восстанавливаемое окно (RULE_EDITOR, ONE_TIME_EDITOR, ADJUSTMENT_EDITOR, ALERT): при открытии
+ * Все правки идут на сервер в PlanDocument (история отмены, флаг «изменён», автосохранение - как в desktop-клиентах).
+ * Каждый диалог - восстанавливаемое окно (RULE_EDITOR, ONE_TIME_EDITOR, ADJUSTMENT_EDITOR, ALERT): при открытии
  * регистрируется на сервере, при вводе отправляет поля, а правка передаёт windowId, чтобы сервер закрыл окно в том же
  * запросе.
  */
@@ -103,7 +103,7 @@ export function ruleEditor({ mode = 'create', ruleId = '', kind = 'INCOME', exis
   let warning = '';
   if (ctxMode === 'edit' && !rule) {
     // Правило исчезло из плана (например, после отмены правки): поля сохраняются, операция будет создана заново.
-    warning = `Операция «${id}» не найдена в плане — при сохранении она будет создана заново.`;
+    warning = `Операция «${id}» не найдена в плане - при сохранении она будет создана заново.`;
     ctxMode = 'create';
     id = '';
   }
@@ -116,9 +116,9 @@ export function ruleEditor({ mode = 'create', ruleId = '', kind = 'INCOME', exis
   const initial = { ...defaults, ...(rule ? ruleToFields(rule) : {}), ...((existing && existing.fields) || {}) };
 
   const preview = h('div', { class: 'preview-dates', 'aria-live': 'polite' });
-  /** Номинальная дата события, выбранного в «Ближайших датах» (ISO; '' — ничего не выбрано). */
+  /** Номинальная дата события, выбранного в «Ближайших датах» (ISO; '' - ничего не выбрано). */
   let selectedNominal = '';
-  // «Скорректировать событие…» — как в JavaFX и Swing: корректировка выбранной даты открывается поверх редактора.
+  // «Скорректировать событие…» - как в JavaFX и Swing: корректировка выбранной даты открывается поверх редактора.
   const adjustButton = h('button', {
     type: 'button', class: 'btn preview-adjust', text: 'Скорректировать событие…',
     // JavaFX: Tooltip → Swing: setToolTipText → Web: title
@@ -133,7 +133,7 @@ export function ruleEditor({ mode = 'create', ruleId = '', kind = 'INCOME', exis
   form.add('category', { label: 'Категория', list: categories(), placeholder: 'Необязательно' });
   form.section('Расписание');
   form.add('recurrenceKind', { label: 'Повтор', type: 'select', options: RECURRENCE_OPTIONS });
-  form.add('dayOfMonth', { label: 'День месяца', type: 'number', min: 1, max: 31, hint: '31 — последний день месяца' });
+  form.add('dayOfMonth', { label: 'День месяца', type: 'number', min: 1, max: 31, hint: '31 - последний день месяца' });
   form.add('weekday', { label: 'День недели', type: 'select', options: WEEKDAYS });
   form.add('monthDay', { label: 'День года', placeholder: 'ММ-ДД', title: 'Месяц и день через дефис, например 03-08' });
   form.add('everyN', { label: 'Каждые N месяцев', type: 'number', min: 1, max: 999 });
@@ -162,23 +162,23 @@ export function ruleEditor({ mode = 'create', ruleId = '', kind = 'INCOME', exis
 
   /**
    * Проверка формы.
-   * @returns {string} текст первой ошибки ('' — форма верна)
+   * @returns {string} текст первой ошибки ('' - форма верна)
    */
   const validate = () => {
     if (!form.text('title').trim()) return 'Введите название операции';
-    if (!isValidMoney(form.text('amount'), { positive: true })) return 'Сумма — число больше нуля, например 45 000,00';
+    if (!isValidMoney(form.text('amount'), { positive: true })) return 'Сумма - число больше нуля, например 45 000,00';
     const rk = form.value('recurrenceKind');
     const n = Number(form.text('everyN') || '1');
     if (rk === 'MONTHLY') {
       const day = Number(form.text('dayOfMonth'));
-      if (!Number.isInteger(day) || day < 1 || day > 31) return 'День месяца — число от 1 до 31';
+      if (!Number.isInteger(day) || day < 1 || day > 31) return 'День месяца - число от 1 до 31';
     }
-    if (rk !== 'YEARLY' && (!Number.isInteger(n) || n < 1)) return '«Каждые N» — целое число от 1';
+    if (rk !== 'YEARLY' && (!Number.isInteger(n) || n < 1)) return '«Каждые N» - целое число от 1';
     if (rk === 'YEARLY' && !/^(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/.test(form.text('monthDay').trim())) {
-      return 'День года — месяц и день через дефис, например 03-08';
+      return 'День года - месяц и день через дефис, например 03-08';
     }
-    if (form.value('fromEnabled') === 'true' && !isValidDate(form.text('from'))) return 'Дата «С» — в виде ДД.ММ.ГГГГ';
-    if (form.value('untilEnabled') === 'true' && !isValidDate(form.text('until'))) return 'Дата «По» — в виде ДД.ММ.ГГГГ';
+    if (form.value('fromEnabled') === 'true' && !isValidDate(form.text('from'))) return 'Дата «С» - в виде ДД.ММ.ГГГГ';
+    if (form.value('untilEnabled') === 'true' && !isValidDate(form.text('until'))) return 'Дата «По» - в виде ДД.ММ.ГГГГ';
     return '';
   };
 
@@ -198,7 +198,7 @@ export function ruleEditor({ mode = 'create', ruleId = '', kind = 'INCOME', exis
   };
 
   /**
-   * Открывает корректировку выбранного события поверх редактора правила (владелец окна — этот редактор, поэтому
+   * Открывает корректировку выбранного события поверх редактора правила (владелец окна - этот редактор, поэтому
    * после перезагрузки страницы или сбоя сервера оба окна вернутся в том же порядке).
    * @returns {Promise<void>} завершение
    */
@@ -234,7 +234,7 @@ export function ruleEditor({ mode = 'create', ruleId = '', kind = 'INCOME', exis
         const tips = [];
         if (d.shifted) tips.push(`Сдвинуто с выходного: по правилу ${d.nominalText}`);
         if (adjusted) tips.push('У события есть корректировка');
-        if (ctxMode === 'edit') tips.push('Щелчок — выбрать, двойной щелчок — скорректировать');
+        if (ctxMode === 'edit') tips.push('Щелчок - выбрать, двойной щелчок - скорректировать');
         // JavaFX: Tooltip → Swing: setToolTipText → Web: title
         const chip = h('button', {
           type: 'button',
@@ -277,7 +277,7 @@ export function ruleEditor({ mode = 'create', ruleId = '', kind = 'INCOME', exis
   }
 
   const titleText = ctxMode === 'edit'
-    ? `Регулярная операция — ${rule.title}`
+    ? `Регулярная операция - ${rule.title}`
     : (form.value('kind') === 'EXPENSE' ? 'Новый регулярный расход' : 'Новый регулярный доход');
   dialog = new AppDialog({
     title: titleText,
@@ -334,7 +334,7 @@ export function oneTimeEditor({ mode = 'create', txId = '', date = '', kind = 'E
   let tx = ctxMode === 'edit' ? store.oneTime(id) : null;
   let warning = '';
   if (ctxMode === 'edit' && !tx) {
-    warning = `Операция «${id}» не найдена в плане — при сохранении она будет создана заново.`;
+    warning = `Операция «${id}» не найдена в плане - при сохранении она будет создана заново.`;
     ctxMode = 'create';
     id = '';
   }
@@ -357,9 +357,9 @@ export function oneTimeEditor({ mode = 'create', txId = '', date = '', kind = 'E
 
   /** @returns {string} текст первой ошибки или '' */
   const validate = () => {
-    if (!isValidDate(form.text('date'))) return 'Дата — в виде ДД.ММ.ГГГГ';
+    if (!isValidDate(form.text('date'))) return 'Дата - в виде ДД.ММ.ГГГГ';
     if (!form.text('title').trim()) return 'Введите название операции';
-    if (!isValidMoney(form.text('amount'), { positive: true })) return 'Сумма — число больше нуля, например 60 000,00';
+    if (!isValidMoney(form.text('amount'), { positive: true })) return 'Сумма - число больше нуля, например 60 000,00';
     return '';
   };
 
@@ -374,7 +374,7 @@ export function oneTimeEditor({ mode = 'create', txId = '', date = '', kind = 'E
   }
 
   dialog = new AppDialog({
-    title: ctxMode === 'edit' ? `Разовая операция — ${tx.title}` : 'Новая разовая операция',
+    title: ctxMode === 'edit' ? `Разовая операция - ${tx.title}` : 'Новая разовая операция',
     header: warning || 'Доход или расход, который случится один раз в указанный день.',
     icon: warning ? '⚠' : '≡',
     content: form.el,
@@ -456,9 +456,9 @@ export function adjustmentEditor({ ruleId = '', originalDate = '', existing = nu
     const action = form.value('action');
     if (!action) return 'Выберите, что сделать с событием';
     if ((action === 'CHANGE_AMOUNT' || action === 'REPLACE') && !isValidMoney(form.text('amount'), { positive: true })) {
-      return 'Новая сумма — число больше нуля';
+      return 'Новая сумма - число больше нуля';
     }
-    if ((action === 'MOVE_DATE' || action === 'REPLACE') && !isValidDate(form.text('date'))) return 'Новая дата — в виде ДД.ММ.ГГГГ';
+    if ((action === 'MOVE_DATE' || action === 'REPLACE') && !isValidDate(form.text('date'))) return 'Новая дата - в виде ДД.ММ.ГГГГ';
     return '';
   };
 

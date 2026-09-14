@@ -99,9 +99,9 @@ final class RecoveryActions extends ActionSupport {
         for (SessionStore store : ordered) {
             summary.add(store.title() + ": " + store.lastSavedAt().map(TIME::format).map(t -> "сохранено " + t).orElse("снимка нет"));
             if (store instanceof XmlSessionStore xml) {
-                parts.add("=== " + store.title() + " — " + xml.file() + " ===\n" + readXml(xml));
+                parts.add("=== " + store.title() + " - " + xml.file() + " ===\n" + readXml(xml));
             } else if (store instanceof RegistrySessionStore) {
-                parts.add("=== " + store.title() + " — HKCU\\Software\\JavaSoft\\Prefs\\ru\\cashprediction\\session\\"
+                parts.add("=== " + store.title() + " - HKCU\\Software\\JavaSoft\\Prefs\\ru\\cashprediction\\session\\"
                         + SnapshotSchema.CLIENT_SWING + " (JSON) ===\n" + readRegistry(store));
             } else {
                 parts.add("=== " + store.title() + " ===");
@@ -164,7 +164,7 @@ final class RecoveryActions extends ActionSupport {
         SwingAlert alert = alerts().create(SwingAlert.AlertType.WARNING, "Симуляция сбоя",
                 "Завершить процесс аварийно, без сохранения?",
                 "Процесс будет остановлен немедленно (Runtime.halt). При следующем запуске появится диалог восстановления: "
-                        + "снимок в реестре и XML-файле записан не позже чем 0,4–5 секунд назад.",
+                        + "снимок в реестре и XML-файле записан не позже чем 0,4-5 секунд назад.",
                 AppButtons.HALT, AppButtons.CANCEL);
         alerts().show(alert, result -> {
             if (result.filter(AppButtons.HALT::equals).isPresent()) {
@@ -223,7 +223,7 @@ final class RecoveryActions extends ActionSupport {
         try {
             snapshot = store.load().orElseThrow(() -> new SessionStoreException("в хранилище нет снимка"));
         } catch (SessionStoreException | RuntimeException e) {
-            SwingAlert alert = alerts().create(SwingAlert.AlertType.ERROR, "CashPrediction — восстановление",
+            SwingAlert alert = alerts().create(SwingAlert.AlertType.ERROR, "CashPrediction - восстановление",
                     "Не удалось прочитать снимок: " + store.title(),
                     Objects.requireNonNullElse(e.getMessage(), e.toString()) + "\nПрограмма откроется без восстановления.");
             alerts().show(alert, r -> onLoadFailed.run());
@@ -246,7 +246,7 @@ final class RecoveryActions extends ActionSupport {
     private void offerSavingSnapshotPlan(SessionSnapshot snapshot, Runnable then) {
         String markdown = snapshot.plan().markdown();
         // JavaFX: Alert(WARNING) + expandableContent → Swing: SwingAlert + «Подробнее» → Web: баннер с <pre>
-        SwingAlert alert = alerts().create(SwingAlert.AlertType.WARNING, "CashPrediction — восстановление",
+        SwingAlert alert = alerts().create(SwingAlert.AlertType.WARNING, "CashPrediction - восстановление",
                 "Несохранённый план из снимка не открылся",
                 "Текст плана из снимка можно сохранить в файл .md и открыть позже или поправить в Блокноте.\n"
                         + "После этого вопроса начнётся запись сессии, и снимок заменится текущим состоянием.",
@@ -271,7 +271,7 @@ final class RecoveryActions extends ActionSupport {
                 status("План из снимка сохранён: " + chosen.get().getFileName());
                 then.run();
             } catch (IOException e) {
-                SwingAlert error = alerts().create(SwingAlert.AlertType.ERROR, "CashPrediction — ошибка",
+                SwingAlert error = alerts().create(SwingAlert.AlertType.ERROR, "CashPrediction - ошибка",
                         "Не удалось сохранить план в «" + chosen.get() + "»", Objects.requireNonNullElse(e.getMessage(), e.toString()));
                 alerts().show(error, r -> offerSavingSnapshotPlan(snapshot, then));
             }

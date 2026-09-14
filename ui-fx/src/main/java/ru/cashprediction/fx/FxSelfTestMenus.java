@@ -122,7 +122,7 @@ final class FxSelfTestMenus {
     private void menuBar() {
         section("Строка меню");
         var bar = app.window().menuBar();
-        line(0, describeClass(bar) + " — меню: " + bar.getMenus().size());
+        line(0, describeClass(bar) + " - меню: " + bar.getMenus().size());
         mark(bar, "строка меню главного окна");
         for (Menu menu : bar.getMenus()) {
             menuItem(menu, 1, "строка меню");
@@ -182,7 +182,7 @@ final class FxSelfTestMenus {
     private void toolBar() {
         section("Панель инструментов");
         ToolBar toolBar = app.window().toolBar();
-        line(0, describeClass(toolBar) + " — элементов: " + toolBar.getItems().size());
+        line(0, describeClass(toolBar) + " - элементов: " + toolBar.getItems().size());
         for (Node node : toolBar.getItems()) {
             StringBuilder text = new StringBuilder(describeClass(node));
             if (node instanceof Labeled labeled && labeled.getText() != null && !labeled.getText().isEmpty()) {
@@ -232,14 +232,14 @@ final class FxSelfTestMenus {
         if (ruleRow.isPresent()) {
             contextMenu(ForecastContextMenu.forRow(app, ruleRow.get(), () -> { }), "строка таблицы " + ruleRow.get().id());
         } else {
-            line(0, "(в таблице нет строки правила — меню строки не построено)");
+            line(0, "(в таблице нет строки правила - меню строки не построено)");
         }
         contextMenu(ForecastContextMenu.forChart(app, app.today()), "график");
         contextMenu(ForecastContextMenu.forSummaryCard(app, app.today(), false), "карточка сводки");
     }
 
     private void contextMenu(ContextMenu menu, String where) {
-        line(0, describeClass(menu) + " для: " + where + " — пунктов: " + menu.getItems().size());
+        line(0, describeClass(menu) + " для: " + where + " - пунктов: " + menu.getItems().size());
         mark(menu, where);
         for (MenuItem item : menu.getItems()) {
             menuItem(item, 1, "контекстное меню: " + where);

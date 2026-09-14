@@ -35,22 +35,22 @@ public final class TextInputForms {
 
     /** @return логика §6.9 */
     public static FormLogic rename() {
-        throw new UnsupportedOperationException("S1: core-forms-framework — TextInputForms.rename");
+        throw new UnsupportedOperationException("S1: core-forms-framework - TextInputForms.rename");
     }
 
     /** @return логика §6.7 */
     public static FormLogic reconcile() {
-        throw new UnsupportedOperationException("S1: core-forms-framework — TextInputForms.reconcile");
+        throw new UnsupportedOperationException("S1: core-forms-framework - TextInputForms.reconcile");
     }
 
     /** @return логика §6.23 */
     public static FormLogic customMonths() {
-        throw new UnsupportedOperationException("S1: core-forms-framework — TextInputForms.customMonths");
+        throw new UnsupportedOperationException("S1: core-forms-framework - TextInputForms.customMonths");
     }
 
     /** @return логика §6.8 «Своя валюта» */
     public static FormLogic customCurrency() {
-        throw new UnsupportedOperationException("S1: core-forms-framework — TextInputForms.customCurrency");
+        throw new UnsupportedOperationException("S1: core-forms-framework - TextInputForms.customCurrency");
     }
 
     /**
@@ -61,6 +61,6 @@ public final class TextInputForms {
      * @throws IllegalArgumentException если назначение неизвестно (текст {@code restore.warn.unknownPurpose})
      */
     public static FormLogic forPurpose(String purpose) {
-        throw new UnsupportedOperationException("S1: core-forms-framework — TextInputForms.forPurpose");
+        throw new UnsupportedOperationException("S1: core-forms-framework - TextInputForms.forPurpose");
     }
 }

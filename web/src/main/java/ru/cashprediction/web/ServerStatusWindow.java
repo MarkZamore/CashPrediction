@@ -37,7 +37,7 @@ public final class ServerStatusWindow {
 
     private final WebServer server;
     private final ServerLog log;
-    private final JFrame frame = new JFrame("CashPrediction Web — сервер");
+    private final JFrame frame = new JFrame("CashPrediction Web - сервер");
     private final JTextArea logArea = new JTextArea(12, 60);
     private final Consumer<String> logListener = line -> SwingUtilities.invokeLater(() -> append(line));
 

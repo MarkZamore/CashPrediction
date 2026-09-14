@@ -7,8 +7,8 @@ const SVG_NS = 'http://www.w3.org/2000/svg';
 
 /**
  * Создаёт HTML-элемент.
- * Свойства: class, text, html запрещён (только текст — защита от XSS), style (строка или объект), dataset (объект),
- * on<Событие> (функция-обработчик), остальные — атрибуты; значения false/null/undefined пропускаются.
+ * Свойства: class, text, html запрещён (только текст - защита от XSS), style (строка или объект), dataset (объект),
+ * on<Событие> (функция-обработчик), остальные - атрибуты; значения false/null/undefined пропускаются.
  * @param {string} tag имя тега
  * @param {object} [props] свойства и атрибуты
  * @param {...(Node|string|number|null|undefined|Array)} children дочерние узлы или текст
@@ -24,7 +24,7 @@ export function h(tag, props = {}, ...children) {
 /**
  * Создаёт SVG-элемент с атрибутами.
  * @param {string} tag имя SVG-тега
- * @param {object} [attrs] атрибуты (class, text и on<Событие> — как у h)
+ * @param {object} [attrs] атрибуты (class, text и on<Событие> - как у h)
  * @param {...(Node|string|null|Array)} children дочерние узлы
  * @returns {SVGElement} элемент
  */
@@ -85,7 +85,7 @@ export function clear(el) {
 
 /**
  * Отложенный вызов: функция выполнится через ms после последнего обращения.
- * У результата есть flush() — выполнить немедленно, если вызов ожидается, и cancel().
+ * У результата есть flush() - выполнить немедленно, если вызов ожидается, и cancel().
  * @param {Function} fn функция
  * @param {number} ms задержка, мс
  * @returns {Function & {flush: Function, cancel: Function}} обёртка
@@ -137,7 +137,7 @@ export function parseMoney(text) {
 }
 
 /**
- * Каноническая форма суммы для снимка: "95000,00"; некорректный текст — как введён.
+ * Каноническая форма суммы для снимка: "95000,00"; некорректный текст - как введён.
  * @param {string} text введённый текст
  * @returns {string} каноническое значение
  */
@@ -172,7 +172,7 @@ export function formatMoney(minor) {
 }
 
 /**
- * Каноническое значение суммы для показа в поле: "95000,00" → "95 000,00"; иное — как есть.
+ * Каноническое значение суммы для показа в поле: "95000,00" → "95 000,00"; иное - как есть.
  * @param {string} value каноническое значение или введённый текст
  * @returns {string} текст для поля
  */
@@ -220,7 +220,7 @@ export function parseDate(text) {
 }
 
 /**
- * Каноническая форма даты для снимка: ISO; пусто — ""; некорректный текст — как введён.
+ * Каноническая форма даты для снимка: ISO; пусто - ""; некорректный текст - как введён.
  * @param {string} text введённый текст
  * @returns {string} значение
  */
@@ -231,7 +231,7 @@ export function canonicalDate(text) {
 }
 
 /**
- * ISO-дата → ДД.ММ.ГГГГ; иное — как есть.
+ * ISO-дата → ДД.ММ.ГГГГ; иное - как есть.
  * @param {string} iso дата
  * @returns {string} текст
  */
@@ -276,8 +276,8 @@ export const WEEKDAYS = [
  * Русское склонение числительного: plural(3, 'месяц', 'месяца', 'месяцев') → 'месяца'.
  * @param {number} n число
  * @param {string} one форма для 1
- * @param {string} few форма для 2–4
- * @param {string} many форма для 5–20
+ * @param {string} few форма для 2-4
+ * @param {string} many форма для 5-20
  * @returns {string} форма
  */
 export function plural(n, one, few, many) {
@@ -292,7 +292,7 @@ export function plural(n, one, few, many) {
 // ------------------------------------------------------------------ прочее
 
 /**
- * Скачивает файл по адресу (ссылка с атрибутом download) — web-аналог FileChooser.showSaveDialog.
+ * Скачивает файл по адресу (ссылка с атрибутом download) - web-аналог FileChooser.showSaveDialog.
  * @param {string} url адрес (с токеном)
  */
 export function downloadUrl(url) {
@@ -358,7 +358,7 @@ export function writeLocal(key, value) {
   try {
     localStorage.setItem(key, value);
   } catch {
-    // Хранилище недоступно — удобство просто не запомнится.
+    // Хранилище недоступно - удобство просто не запомнится.
   }
 }
 
@@ -381,7 +381,7 @@ const WINDOWS_DEVICE_NAMES = new Set(['con', 'prn', 'aux', 'nul',
  * в ядре. Проверка повторена в браузере, чтобы ошибка показывалась сразу при вводе, как в JavaFX и Swing, а не только
  * после ответа сервера; окончательно имя всё равно проверяет сервер.
  * @param {string} name имя плана
- * @returns {string} текст ошибки на русском или '' — имя допустимо
+ * @returns {string} текст ошибки на русском или '' - имя допустимо
  */
 export function planNameProblem(name) {
   const n = String(name ?? '').trim();

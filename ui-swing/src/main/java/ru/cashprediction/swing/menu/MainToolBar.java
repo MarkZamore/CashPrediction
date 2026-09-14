@@ -68,7 +68,7 @@ public final class MainToolBar {
                 actions::customMonths));
         toolBar.add(period);
 
-        SwingMenuButton whatIf = new SwingMenuButton("Что-если", "Доходы −10 %, расходы +10 %, дополнительная экономия — без изменения плана");
+        SwingMenuButton whatIf = new SwingMenuButton("Что-если", "Доходы −10 %, расходы +10 %, дополнительная экономия - без изменения плана");
         AppMenuBar.fillWhatIf(whatIf.popup(), actions, models);
         toolBar.add(whatIf);
         toolBar.addSeparator();

@@ -47,21 +47,21 @@ public final class OpenPlanForm implements FormLogic {
 
     @Override
     public FormSpec spec(FormContext context) {
-        throw new UnsupportedOperationException("S1: core-forms-framework — OpenPlanForm.spec");
+        throw new UnsupportedOperationException("S1: core-forms-framework - OpenPlanForm.spec");
     }
 
     @Override
     public Map<String, String> defaults(FormContext context) {
-        throw new UnsupportedOperationException("S1: core-forms-framework — OpenPlanForm.defaults");
+        throw new UnsupportedOperationException("S1: core-forms-framework - OpenPlanForm.defaults");
     }
 
     @Override
     public FormView evaluate(FormState state, FormContext context) {
-        throw new UnsupportedOperationException("S1: core-forms-framework — OpenPlanForm.evaluate");
+        throw new UnsupportedOperationException("S1: core-forms-framework - OpenPlanForm.evaluate");
     }
 
     @Override
     public FormOutcome onButton(String buttonId, FormState state, FormContext context) {
-        throw new UnsupportedOperationException("S1: core-forms-framework — OpenPlanForm.onButton");
+        throw new UnsupportedOperationException("S1: core-forms-framework - OpenPlanForm.onButton");
     }
 }

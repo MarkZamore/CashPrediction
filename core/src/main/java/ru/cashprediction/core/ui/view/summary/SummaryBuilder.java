@@ -24,6 +24,6 @@ public final class SummaryBuilder {
      * @return модель сводки
      */
     public static SummaryModel build(AppState state) {
-        throw new UnsupportedOperationException("S1: core-views — SummaryBuilder.build");
+        throw new UnsupportedOperationException("S1: core-views - SummaryBuilder.build");
     }
 }

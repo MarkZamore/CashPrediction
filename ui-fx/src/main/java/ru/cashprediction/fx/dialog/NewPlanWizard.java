@@ -97,7 +97,7 @@ public final class NewPlanWizard extends FxStatefulDialog<Plan> {
                 .row("Баланс на эту дату", startBalance)
                 .row("Горизонт прогноза", horizon.node())
                 .row("Подушка безопасности", cushion)
-                .wide(hint("Подушка — сумма, ниже которой баланс опускаться не должен: такие дни подсвечиваются."));
+                .wide(hint("Подушка - сумма, ниже которой баланс опускаться не должен: такие дни подсвечиваются."));
         FormGrid third = new FormGrid()
                 .section("Ежемесячный доход")
                 .row("Название", quickIncomeTitle)
@@ -107,7 +107,7 @@ public final class NewPlanWizard extends FxStatefulDialog<Plan> {
                 .row("Название", quickExpenseTitle)
                 .row("Сумма", quickExpenseAmount)
                 .row("День месяца", quickExpenseDay)
-                .wide(hint("Пустая сумма — операция не создаётся. Остальное добавите позже: Правка → Добавить доход/расход."));
+                .wide(hint("Пустая сумма - операция не создаётся. Остальное добавите позже: Правка → Добавить доход/расход."));
         pages.addAll(List.of(first, second, third));
         appPane().setForm(new StackPane(first, second, third));
         // JavaFX: ButtonType → Swing: SwingButtonType (текст + роль) + JOptionPane.showOptionDialog → Web: <button value> → returnValue
@@ -201,7 +201,7 @@ public final class NewPlanWizard extends FxStatefulDialog<Plan> {
                 if (nameError.isPresent()) {
                     errors.add(nameError.get());
                 } else if (nameTaken.test(name.getText().strip())) {
-                    errors.add("План «" + name.getText().strip() + "» уже есть в CashMemory — выберите другое имя");
+                    errors.add("План «" + name.getText().strip() + "» уже есть в CashMemory - выберите другое имя");
                 }
                 if (FxInputs.isBlank(currency.getEditor())) {
                     errors.add("Укажите валюту");
@@ -244,7 +244,7 @@ public final class NewPlanWizard extends FxStatefulDialog<Plan> {
             errors.add("Укажите название " + what);
         }
         if (FxInputs.integer(day).filter(d -> d >= 1 && d <= 31).isEmpty()) {
-            errors.add("День " + what + " — число от 1 до 31");
+            errors.add("День " + what + " - число от 1 до 31");
         }
     }
 

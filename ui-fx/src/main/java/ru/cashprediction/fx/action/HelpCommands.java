@@ -36,7 +36,7 @@ final class HelpCommands {
             Ctrl+G          Калькулятор цели
             F1              О программе
 
-            В быстрой правке суммы (двойной щелчок по сумме): Enter — сохранить, Esc — закрыть.
+            В быстрой правке суммы (двойной щелчок по сумме): Enter - сохранить, Esc - закрыть.
             В веб-клиенте занятые браузером сочетания (Ctrl+N, Ctrl+T, Ctrl+W, Ctrl+O)
             заменены на Alt+Shift+буква.""";
 
@@ -49,7 +49,7 @@ final class HelpCommands {
     /** Диалог 19 «О программе». */
     void about() {
         String javafx = System.getProperty("javafx.runtime.version", "?");
-        support.info("CashPrediction " + VERSION + " — прогноз бюджета",
+        support.info("CashPrediction " + VERSION + " - прогноз бюджета",
                 "Сколько денег будет через месяц, полгода, год при текущем плане доходов и расходов.\n\n"
                         + "Клиент: JavaFX " + javafx + ", Java " + System.getProperty("java.version") + ".\n"
                         + "Все данные хранятся в папке CashMemory:\n" + support.context().layout().dir());
@@ -59,7 +59,7 @@ final class HelpCommands {
     void hotkeys() {
         // JavaFX: Alert → Swing: JOptionPane.showMessageDialog → Web: <dialog class="alert">
         Alert alert = Dialogs.withDetails(AlertType.INFORMATION, "Горячие клавиши", "Горячие клавиши CashPrediction",
-                "Полный список — ниже.", HOTKEYS);
+                "Полный список - ниже.", HOTKEYS);
         // JavaFX: DialogPane → Swing: SwingDialogPane (JPanel header/content/кнопки) → Web: <dialog><form method="dialog">
         alert.getDialogPane().setExpanded(true);
         support.host().show(alert, WindowState.MAIN_OWNER, r -> { });
@@ -71,7 +71,7 @@ final class HelpCommands {
         String guide = MarkdownFormat.userGuide();
         // JavaFX: Alert → Swing: JOptionPane.showMessageDialog + JTextArea → Web: <dialog class="alert"> с <pre>
         Alert alert = Dialogs.withDetails(AlertType.INFORMATION, "Формат файла .md", "Формат файла плана CashPrediction",
-                "Файл плана — обычный текст Markdown: его можно править в Блокноте. Руководство — ниже.", guide);
+                "Файл плана - обычный текст Markdown: его можно править в Блокноте. Руководство - ниже.", guide);
         // JavaFX: DialogPane → Swing: SwingDialogPane (JPanel header/content/кнопки) → Web: <dialog><form method="dialog">
         alert.getDialogPane().setExpanded(true);
         support.host().show(alert, WindowState.MAIN_OWNER, r -> { });

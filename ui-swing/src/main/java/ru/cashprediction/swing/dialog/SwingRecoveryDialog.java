@@ -75,7 +75,7 @@ public final class SwingRecoveryDialog extends SwingDialog<SwingRecoveryDialog.C
      */
     public SwingRecoveryDialog(Window owner, CrashDetector.Detection detection, List<SessionStore> stores,
                                RecoveryStoreKind defaultKind) {
-        super(owner, null, null, true, "CashPrediction — восстановление сеанса", null);
+        super(owner, null, null, true, "CashPrediction - восстановление сеанса", null);
 
         List<SwingButtonType> types = new ArrayList<>();
         JPanel statusLines = new JPanel(new GridLayout(0, 1, 0, 2));
@@ -141,7 +141,7 @@ public final class SwingRecoveryDialog extends SwingDialog<SwingRecoveryDialog.C
         }
         if (!info.available()) {
             String reason = !info.problem().isBlank() ? info.problem() : store.unavailableReason();
-            return "недоступно" + (reason == null || reason.isBlank() ? "" : " — " + reason);
+            return "недоступно" + (reason == null || reason.isBlank() ? "" : " - " + reason);
         }
         if (!info.problem().isBlank()) {
             return info.problem();

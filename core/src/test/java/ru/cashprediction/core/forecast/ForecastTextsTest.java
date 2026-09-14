@@ -53,13 +53,13 @@ class ForecastTextsTest {
                 single(run(plan(0, YEAR, List.of(salary), List.of(), List.of(
                         adjust("r1", "2026-10-05", new Adjustment.Skip()), adjust("r1", "2026-10-05", new Adjustment.Skip())))),
                         WarningType.DUPLICATE_ADJUSTMENT));
-        assertEquals("Правило r2 «Потом» не действует в пределах горизонта прогноза (01.09.2026 – 31.08.2027)",
+        assertEquals("Правило r2 «Потом» не действует в пределах горизонта прогноза (01.09.2026 - 31.08.2027)",
                 single(run(plan(0, rule("r2", "Потом", Kind.EXPENSE, Money.ofMajor(1), new Recurrence.Monthly(5, 1),
                         d("2030-01-01"), null, WeekendPolicy.NONE))), WarningType.RULE_OUTSIDE_HORIZON));
-        assertEquals("Правило r3 не действует в пределах горизонта прогноза (01.09.2026 – 31.08.2027)",
+        assertEquals("Правило r3 не действует в пределах горизонта прогноза (01.09.2026 - 31.08.2027)",
                 single(run(plan(0, rule("r3", "", Kind.EXPENSE, Money.ofMajor(1), new Recurrence.Monthly(5, 1),
                         d("2030-01-01"), null, WeekendPolicy.NONE))), WarningType.RULE_OUTSIDE_HORIZON));
-        assertEquals("Событие r1 «Зарплата» от 05.10.2026 перенесено на 10.01.2028 — за пределы горизонта, в прогноз не попало",
+        assertEquals("Событие r1 «Зарплата» от 05.10.2026 перенесено на 10.01.2028 - за пределы горизонта, в прогноз не попало",
                 single(run(plan(0, YEAR, List.of(salary), List.of(),
                         List.of(adjust("r1", "2026-10-05", new Adjustment.MoveDate(d("2028-01-10")))))), WarningType.MOVED_OUT_OF_HORIZON));
         assertEquals("Корректировка события r9 от 05.10.2026 ни к чему не относится: правила r9 нет в плане",

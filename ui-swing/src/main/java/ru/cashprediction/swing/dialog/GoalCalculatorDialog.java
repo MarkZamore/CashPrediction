@@ -143,7 +143,7 @@ public final class GoalCalculatorDialog extends SwingDialog<Void> {
             Money balance = GoalCalculator.balanceAt(forecast, d);
             String text = GoalCalculator.requiredExtraMonthly(forecast, money, d)
                     .map(extra -> extra.isZero()
-                            ? "К " + DateFormats.ru(d) + " будет " + balance.format(currency) + " — цель достигается без дополнительной экономии."
+                            ? "К " + DateFormats.ru(d) + " будет " + balance.format(currency) + " - цель достигается без дополнительной экономии."
                             : "Чтобы успеть к " + DateFormats.ru(d) + ", откладывайте дополнительно " + extra.format(currency)
                             + " в месяц (без этого к дате будет " + balance.format(currency) + ").")
                     .orElse("К " + DateFormats.ru(d) + " рассчитать нельзя: дата позже конца горизонта или до неё нет ни одного конца месяца.");

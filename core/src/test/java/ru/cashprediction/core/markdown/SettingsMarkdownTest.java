@@ -15,6 +15,7 @@ import ru.cashprediction.core.document.AppSettings;
 import ru.cashprediction.core.document.PeriodChoice;
 import ru.cashprediction.core.document.RecoveryStoreKind;
 import ru.cashprediction.core.document.ViewMode;
+import ru.cashprediction.core.format.DashFreeOutput;
 
 /**
  * Тесты файла настроек: канонический вид, круговое преобразование, терпимость к мусору.
@@ -82,6 +83,25 @@ class SettingsMarkdownTest {
         assertEquals(settings, SettingsMarkdown.read(text));
     }
 
+    /** Решение 2026-09-14: settings.md со всеми значениями пишется только с дефисом-минусом и читается обратно. */
+    @Test
+    void writtenSettingsHaveNoDashesAndReadBack() {
+        List<AppSettings> all = new ArrayList<>(List.of(AppSettings.defaults(), SettingsMarkdown.read(SAMPLE)));
+        for (RecoveryStoreKind store : RecoveryStoreKind.values()) {
+            for (ViewMode view : ViewMode.values()) {
+                for (PeriodChoice period : PeriodChoice.values()) {
+                    all.add(new AppSettings("C:\\Планы\\a;b.md", List.of("C:\\Планы\\a;b.md", "второй-план.md"),
+                            store, true, view, period, false, true, false, true, false, true, false, true));
+                }
+            }
+        }
+        for (AppSettings settings : all) {
+            String text = SettingsMarkdown.write(settings);
+            DashFreeOutput.assertNoDashes("settings.md", text);
+            assertEquals(settings, SettingsMarkdown.read(text), text);
+        }
+    }
+
     @Test
     void everyPeriodRoundTrips() {
         for (PeriodChoice period : PeriodChoice.values()) {
@@ -102,7 +122,7 @@ class SettingsMarkdownTest {
                 - Показывать доходы: может быть
                 - Хранилище восстановления: облако
                 - Автосохранение плана:
-                - Недавние планы: —
+                - Недавние планы: -
                 - Последний план: -
                 """));
     }
@@ -141,11 +161,11 @@ class SettingsMarkdownTest {
     @Test
     void loadAndSaveFiles(@TempDir Path dir) throws IOException {
         Path file = dir.resolve("settings.md");
-        assertEquals(AppSettings.defaults(), SettingsMarkdown.load(file), "нет файла — умолчания");
+        assertEquals(AppSettings.defaults(), SettingsMarkdown.load(file), "нет файла - умолчания");
         AppSettings settings = AppSettings.defaults().withView(ViewMode.CHART).withPlanOpened("a.md");
         SettingsMarkdown.save(file, settings);
         assertEquals(SettingsMarkdown.write(settings), Files.readString(file));
         assertEquals(settings, SettingsMarkdown.load(file));
-        assertFalse(SettingsMarkdown.load(dir).autosave(), "папка вместо файла — умолчания");
+        assertFalse(SettingsMarkdown.load(dir).autosave(), "папка вместо файла - умолчания");
     }
 }

@@ -132,7 +132,7 @@ public final class OneTimeDialog extends FxStatefulDialog<OneTimeTransaction> {
             return Optional.empty();
         }
         if (day.get().isBefore(plan.startDate()) || day.get().isAfter(plan.endDate())) {
-            warnings.add("Дата вне горизонта плана (" + DateFormats.ru(plan.startDate()) + " — "
+            warnings.add("Дата вне горизонта плана (" + DateFormats.ru(plan.startDate()) + " - "
                     + DateFormats.ru(plan.endDate()) + "): операция не попадёт в прогноз");
         }
         TxId id = existing != null ? existing.id() : plan.nextTxId();

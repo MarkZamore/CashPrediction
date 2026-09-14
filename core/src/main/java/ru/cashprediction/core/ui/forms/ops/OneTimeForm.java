@@ -32,21 +32,21 @@ public final class OneTimeForm implements FormLogic {
 
     @Override
     public FormSpec spec(FormContext context) {
-        throw new UnsupportedOperationException("S1: core-forms-ops — OneTimeForm.spec");
+        throw new UnsupportedOperationException("S1: core-forms-ops - OneTimeForm.spec");
     }
 
     @Override
     public Map<String, String> defaults(FormContext context) {
-        throw new UnsupportedOperationException("S1: core-forms-ops — OneTimeForm.defaults");
+        throw new UnsupportedOperationException("S1: core-forms-ops - OneTimeForm.defaults");
     }
 
     @Override
     public FormView evaluate(FormState state, FormContext context) {
-        throw new UnsupportedOperationException("S1: core-forms-ops — OneTimeForm.evaluate");
+        throw new UnsupportedOperationException("S1: core-forms-ops - OneTimeForm.evaluate");
     }
 
     @Override
     public FormOutcome onButton(String buttonId, FormState state, FormContext context) {
-        throw new UnsupportedOperationException("S1: core-forms-ops — OneTimeForm.onButton");
+        throw new UnsupportedOperationException("S1: core-forms-ops - OneTimeForm.onButton");
     }
 }

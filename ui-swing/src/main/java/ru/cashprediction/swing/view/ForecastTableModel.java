@@ -171,7 +171,7 @@ public final class ForecastTableModel extends AbstractTableModel {
             };
             case PAST_HEADER -> columnIndex == COL_TITLE
                     ? (item.expanded() ? "▾ " : "▸ ") + "Прошедшие события: " + item.pastCount()
-                    + (item.expanded() ? " — свернуть" : " — показать")
+                    + (item.expanded() ? " - свернуть" : " - показать")
                     : "";
         };
     }
@@ -195,7 +195,7 @@ public final class ForecastTableModel extends AbstractTableModel {
     /** У пропущенного события сумма нулевая: показываем прочерк в колонке его типа. */
     private static String skippedAmount(ForecastRow row, boolean incomeColumn) {
         if (row.flags().skipped() && row.origin() != Origin.START && row.isIncome() == incomeColumn) {
-            return "—";
+            return "-";
         }
         return "";
     }

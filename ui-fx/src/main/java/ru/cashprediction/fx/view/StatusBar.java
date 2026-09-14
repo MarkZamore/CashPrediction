@@ -105,7 +105,7 @@ public final class StatusBar extends HBox {
             };
             parts.add(title + (status.ok() ? " ✓ " + time(status.savedAt()) : " ✗"));
             details.add(title + ": " + (status.ok() ? "записано " + time(status.savedAt()) : "ошибка")
-                    + (status.message().isBlank() ? "" : " — " + status.message()));
+                    + (status.message().isBlank() ? "" : " - " + status.message()));
         }
         stores.setText(String.join(" | ", parts));
         // JavaFX: Tooltip → Swing: setToolTipText → Web: title
@@ -131,6 +131,6 @@ public final class StatusBar extends HBox {
     }
 
     private static String time(Instant instant) {
-        return instant == null ? "—" : TIME.format(instant.atZone(ZoneId.systemDefault()));
+        return instant == null ? "-" : TIME.format(instant.atZone(ZoneId.systemDefault()));
     }
 }

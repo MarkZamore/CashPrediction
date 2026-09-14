@@ -83,6 +83,6 @@ public final class SelfTestRunner {
      * @return отчёт
      */
     public Report run(SelfTestScript script) {
-        throw new UnsupportedOperationException("S2: core-protocol-dump — SelfTestRunner.run");
+        throw new UnsupportedOperationException("S2: core-protocol-dump - SelfTestRunner.run");
     }
 }

@@ -54,7 +54,7 @@ class MoneyTest {
     @Test
     void groupingErrorExplainsTheRule() {
         IllegalArgumentException e = assertThrows(IllegalArgumentException.class, () -> Money.parse("12 3"));
-        assertEquals("Некорректная сумма: «12 3» — разряды разделяются группами по три цифры, например 1 234 567,89",
+        assertEquals("Некорректная сумма: «12 3» - разряды разделяются группами по три цифры, например 1 234 567,89",
                 e.getMessage());
     }
 

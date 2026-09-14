@@ -46,6 +46,6 @@ public final class CommandAvailability {
      * @return доступность и ключ подсказки
      */
     public static Availability of(CommandId command, CommandArgs args, AppState state) {
-        throw new UnsupportedOperationException("S1: core-menu — CommandAvailability.of");
+        throw new UnsupportedOperationException("S1: core-menu - CommandAvailability.of");
     }
 }

@@ -185,7 +185,7 @@ public final class GoalCalculatorDialog extends FxStatefulDialog<Void> {
                 Forecast withSaving = ForecastEngine.forecast(document.plan(),
                         base.withExtraMonthlySaving(base.extraMonthlySaving().plus(extra.get())), document.today(), false);
                 extraLine.setText(GoalCalculator.reachDate(withSaving, goal.get())
-                        .map(date -> "Если откладывать ещё " + extra.get().format(currency) + " в месяц — цель "
+                        .map(date -> "Если откладывать ещё " + extra.get().format(currency) + " в месяц - цель "
                                 + DateFormats.ru(date) + monthsFrom(anchor, date))
                         .orElse("Даже с доп. экономией " + extra.get().format(currency) + " цель в горизонте не достигается"));
             } catch (RuntimeException e) {

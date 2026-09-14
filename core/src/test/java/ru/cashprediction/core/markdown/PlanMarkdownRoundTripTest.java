@@ -11,6 +11,7 @@ import java.time.LocalDate;
 import java.time.MonthDay;
 import java.util.List;
 import org.junit.jupiter.api.Test;
+import ru.cashprediction.core.format.DashFreeOutput;
 import ru.cashprediction.core.model.Adjustment;
 import ru.cashprediction.core.model.Goal;
 import ru.cashprediction.core.model.Horizon;
@@ -129,6 +130,26 @@ class PlanMarkdownRoundTripTest {
         assertEquals(List.of(), back.diagnostics());
         assertEquals(plan, back.plan());
         assertEquals(text, PlanMarkdownWriter.write(back.plan()), "повторная запись стабильна");
+    }
+
+    /**
+     * Решение 2026-09-14: файл плана (и web-session.plan.md, который пишет тот же писатель) со всеми секциями, видами
+     * повторов, выходных, корректировок, горизонтов и своей секцией пишется только с дефисом-минусом и читается обратно.
+     */
+    @Test
+    void writtenPlanHasNoDashesAndReadsBack() {
+        Plan sample = PlanMarkdownReader.read(PlanSamples.FAMILY_BUDGET, "x", TODAY).plan();
+        Plan withOwnSection = PlanMarkdownReader.read(PlanSamples.FAMILY_BUDGET + "\n## Мои заметки\n\nсвой текст\n",
+                "x", TODAY).plan();
+        for (Plan plan : List.of(sample, withOwnSection,
+                sample.withHorizon(new Horizon.Until(LocalDate.of(2030, 12, 31))),
+                sample.withHorizon(new Horizon.Years(3)).withNote("Строка 1\n## Не секция\nСтрока 3"))) {
+            String text = PlanMarkdownWriter.write(plan);
+            DashFreeOutput.assertNoDashes(plan.name(), text);
+            ReadResult back = PlanMarkdownReader.read(text, "x", TODAY);
+            assertEquals(plan, back.plan(), text);
+            assertEquals(text, PlanMarkdownWriter.write(back.plan()));
+        }
     }
 
     @Test

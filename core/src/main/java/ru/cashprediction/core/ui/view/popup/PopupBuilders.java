@@ -28,7 +28,7 @@ public final class PopupBuilders {
      * @return модель карточки
      */
     public static DayCardModel dayCard(AppState state, LocalDate date) {
-        throw new UnsupportedOperationException("S1: core-views — PopupBuilders.dayCard");
+        throw new UnsupportedOperationException("S1: core-views - PopupBuilders.dayCard");
     }
 
     /**
@@ -39,7 +39,7 @@ public final class PopupBuilders {
      * @return модель спарклайна
      */
     public static SparklineModel sparkline(AppState state, String cardId) {
-        throw new UnsupportedOperationException("S1: core-views — PopupBuilders.sparkline");
+        throw new UnsupportedOperationException("S1: core-views - PopupBuilders.sparkline");
     }
 
     /**
@@ -51,6 +51,6 @@ public final class PopupBuilders {
      * @return модель календаря
      */
     public static CalendarModel calendar(YearMonth month, LocalDate selected, LocalDate today) {
-        throw new UnsupportedOperationException("S1: core-views — PopupBuilders.calendar");
+        throw new UnsupportedOperationException("S1: core-views - PopupBuilders.calendar");
     }
 }

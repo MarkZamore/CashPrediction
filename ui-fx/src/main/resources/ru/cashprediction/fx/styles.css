@@ -62,7 +62,7 @@
     -fx-strikethrough: true;
 }
 
-/* Строка «что-если» — курсив. */
+/* Строка «что-если» - курсив. */
 .forecast-table .table-row-cell.what-if .table-cell {
     -fx-font-style: italic;
 }

@@ -262,7 +262,7 @@ class SessionRecorderTest {
         SessionRecorder recorder = recorder(notUi);
         recorder.start();
         recorder.saveNow();
-        assertEquals(0, registry.saved.size(), "снимков ещё не снимали — писать нечего");
+        assertEquals(0, registry.saved.size(), "снимков ещё не снимали - писать нечего");
         source.select("r1@2026-10-05");
         recorder.touch();
         scheduler.advance(SessionRecorder.DEBOUNCE);

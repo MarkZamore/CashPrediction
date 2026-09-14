@@ -180,7 +180,7 @@ public final class PlanSettingsDialog extends SwingDialog<PlanSettingsDialog.Val
 
     private String formWarning() {
         if (renameSavesFile && !name.getText().strip().equals(originalName)) {
-            return "Файл плана будет переименован, а план — сохранён под новым именем";
+            return "Файл плана будет переименован, а план - сохранён под новым именем";
         }
         return horizon.longHorizonWarning(startDate.value().orElse(null)).orElse(null);
     }

@@ -4,10 +4,10 @@
  * Web-аналог связки StatefulWindow + SessionRecorder.register/unregister/touch из ядра. Каждое окно, открытое
  * в браузере (диалог, калькулятор цели, быстрая правка суммы), регистрируется на сервере
  * (POST /api/session/windows), каждое изменение поля уходит на сервер с задержкой 300 мс
- * (PUT /api/session/windows/{id}), закрытие окна — DELETE. Поэтому состояние окон хранится на сервере:
+ * (PUT /api/session/windows/{id}), закрытие окна - DELETE. Поэтому состояние окон хранится на сервере:
  * после перезагрузки страницы или сбоя сервера окна открываются заново с теми же введёнными значениями.
  *
- * Нативные окна выбора файла браузера и серверный обозреватель файлов не регистрируются — как FileChooser и
+ * Нативные окна выбора файла браузера и серверный обозреватель файлов не регистрируются - как FileChooser и
  * DirectoryChooser в desktop-клиентах, они не восстанавливаются (раздел 5.1 плана).
  */
 
@@ -15,7 +15,7 @@ import { api } from './api.js';
 import { debounce } from './util.js';
 import { windowFactories, notifyShown, waitShown } from './store.js';
 
-/** Задержка отправки введённых значений на сервер, мс (раздел 5.2 плана: Web — событие input + debounce 300 мс). */
+/** Задержка отправки введённых значений на сервер, мс (раздел 5.2 плана: Web - событие input + debounce 300 мс). */
 export const FIELD_SYNC_DELAY_MS = 300;
 
 /**
@@ -30,7 +30,7 @@ export class TrackedWindow {
    * @param {boolean} [options.modal=true] модальное ли окно
    * @param {string} [options.ownerId='main'] владелец: main или идентификатор другого окна
    * @param {object} [options.context] контекст окна (mode, ruleId, purpose…)
-   * @param {object|null} [options.existing] состояние окна с сервера (при восстановлении) — повторная регистрация не нужна
+   * @param {object|null} [options.existing] состояние окна с сервера (при восстановлении) - повторная регистрация не нужна
    */
   constructor(type, { modal = true, ownerId = 'main', context = {}, existing = null } = {}) {
     this.type = type;
@@ -40,7 +40,7 @@ export class TrackedWindow {
     this.context = existing ? { ...(existing.context || {}) } : { ...context };
     /** Идентификатор окна на сервере (null до ответа на регистрацию). */
     this.id = null;
-    /** Promise с идентификатором окна (null — регистрация не удалась). */
+    /** Promise с идентификатором окна (null - регистрация не удалась). */
     this.ready = null;
     this.closed = false;
     this.serverClosed = false;
@@ -54,7 +54,7 @@ export class TrackedWindow {
   }
 
   /**
-   * Регистрирует окно на сервере в момент показа (для восстановленного окна — просто берёт его идентификатор).
+   * Регистрирует окно на сервере в момент показа (для восстановленного окна - просто берёт его идентификатор).
    * @param {object} [fields] начальные значения полей в канонической форме
    * @param {object|null} [bounds] границы окна {x, y, width, height}
    * @returns {Promise<string|null>} идентификатор окна
@@ -145,7 +145,7 @@ export class TrackedWindow {
   }
 
   /**
-   * Окно закрыто: удаляет его на сервере (кроме случая, когда сервер уже закрыл его сам — правка с windowId).
+   * Окно закрыто: удаляет его на сервере (кроме случая, когда сервер уже закрыл его сам - правка с windowId).
    * @param {object} [options] параметры
    * @param {boolean} [options.serverClosed=false] сервер уже закрыл окно в запросе правки
    * @returns {Promise<void>} завершение
@@ -197,7 +197,7 @@ export function abandonWindow(win) {
 
 /**
  * Открывает заново окна, которые хранит сервер: сначала немодальные, затем модальные, в порядке открытия
- * (порядок раздела 5.6 плана). Следующее окно открывается после показа предыдущего — как цепочка invokeLater в Swing.
+ * (порядок раздела 5.6 плана). Следующее окно открывается после показа предыдущего - как цепочка invokeLater в Swing.
  * Аналог WindowFactory.create + applyState + DialogHost.show в RestoreCoordinator.
  * @param {Array<object>} windows окна {id, type, modal, ownerId, context, fields, bounds}
  * @returns {Promise<number>} сколько окон открыто

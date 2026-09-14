@@ -178,11 +178,11 @@ public final class RuFormats {
      * Проверяет, означает ли ячейка «значение не задано».
      *
      * @param text текст ячейки
-     * @return {@code true} для пустой ячейки, {@code -}, {@code —} (длинное тире) и {@code –} (короткое)
+     * @return {@code true} для пустой ячейки и {@code -}
      */
     public static boolean isEmptyValue(String text) {
         String t = normalize(text);
-        return t.isEmpty() || t.equals("-") || t.equals("—") || t.equals("–");
+        return t.isEmpty() || t.equals("-");
     }
 
     // ------------------------------------------------------------------ повтор

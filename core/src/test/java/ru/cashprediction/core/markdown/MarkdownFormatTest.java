@@ -72,7 +72,7 @@ class MarkdownFormatTest {
                     .filter(name -> name.toLowerCase(Locale.ROOT).endsWith(".md"))
                     .toList();
         }
-        assertEquals(List.of(GUIDE_PATH), documents, "справка о формате — один документ с суффиксом языка");
+        assertEquals(List.of(GUIDE_PATH), documents, "справка о формате - один документ с суффиксом языка");
         assertFalse(Files.exists(resources.resolve("ru/cashprediction/core/FORMAT.md")), "FORMAT.md без суффикса удалён");
 
         assertEquals("help-format_" + Texts.LANGUAGE + ".md",
@@ -113,7 +113,7 @@ class MarkdownFormatTest {
             default -> null;
         };
         assertThrows(IOException.class, () -> TextCatalog.loadDocument("guide", "md", "ru", cp1251),
-                "файл языка не в UTF-8 — ошибка, а не молча запасной файл");
+                "файл языка не в UTF-8 - ошибка, а не молча запасной файл");
         assertTrue(Texts.document("no-such-document", "md").isEmpty());
     }
 

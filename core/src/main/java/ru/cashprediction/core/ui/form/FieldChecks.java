@@ -45,7 +45,7 @@ public final class FieldChecks {
      * @return текст ошибки или пусто
      */
     public static Optional<String> money(String label, String raw, MoneyRule rule) {
-        throw new UnsupportedOperationException("S1: core-forms-framework — FieldChecks.money");
+        throw new UnsupportedOperationException("S1: core-forms-framework - FieldChecks.money");
     }
 
     /**
@@ -57,7 +57,7 @@ public final class FieldChecks {
      * @return текст ошибки или пусто
      */
     public static Optional<String> date(String label, String raw, boolean required) {
-        throw new UnsupportedOperationException("S1: core-forms-framework — FieldChecks.date");
+        throw new UnsupportedOperationException("S1: core-forms-framework - FieldChecks.date");
     }
 
     /**
@@ -68,6 +68,6 @@ public final class FieldChecks {
      * @return текст ошибки или пусто
      */
     public static Optional<String> requiredText(String label, String raw) {
-        throw new UnsupportedOperationException("S1: core-forms-framework — FieldChecks.requiredText");
+        throw new UnsupportedOperationException("S1: core-forms-framework - FieldChecks.requiredText");
     }
 }

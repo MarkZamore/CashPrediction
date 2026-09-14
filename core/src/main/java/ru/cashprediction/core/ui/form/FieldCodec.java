@@ -37,7 +37,7 @@ public final class FieldCodec {
      * @return каноническое значение или сырой текст, если он некорректен
      */
     public static String canonical(FieldKind kind, String raw) {
-        throw new UnsupportedOperationException("S1: core-forms-framework — FieldCodec.canonical");
+        throw new UnsupportedOperationException("S1: core-forms-framework - FieldCodec.canonical");
     }
 
     /**
@@ -48,7 +48,7 @@ public final class FieldCodec {
      * @return показываемый текст
      */
     public static String display(FieldKind kind, String canonical) {
-        throw new UnsupportedOperationException("S1: core-forms-framework — FieldCodec.display");
+        throw new UnsupportedOperationException("S1: core-forms-framework - FieldCodec.display");
     }
 
     /**
@@ -60,6 +60,6 @@ public final class FieldCodec {
      * @return каноническое значение (некорректное — как есть)
      */
     public static String acceptLegacy(WindowType type, String fieldId, String value) {
-        throw new UnsupportedOperationException("S1: core-forms-framework — FieldCodec.acceptLegacy");
+        throw new UnsupportedOperationException("S1: core-forms-framework - FieldCodec.acceptLegacy");
     }
 }

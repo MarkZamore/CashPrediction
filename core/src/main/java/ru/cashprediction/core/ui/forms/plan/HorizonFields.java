@@ -34,7 +34,7 @@ public final class HorizonFields {
 
     /** @return две строки сетки «Горизонт прогноза» */
     public static java.util.List<FormRow> rows() {
-        throw new UnsupportedOperationException("S1: core-forms-plan — HorizonFields.rows");
+        throw new UnsupportedOperationException("S1: core-forms-plan - HorizonFields.rows");
     }
 
     /**
@@ -44,7 +44,7 @@ public final class HorizonFields {
      * @return значения {@link #KIND}, {@link #VALUE}, {@link #UNTIL}
      */
     public static Map<String, String> values(Horizon horizon) {
-        throw new UnsupportedOperationException("S1: core-forms-plan — HorizonFields.values");
+        throw new UnsupportedOperationException("S1: core-forms-plan - HorizonFields.values");
     }
 
     /**
@@ -54,7 +54,7 @@ public final class HorizonFields {
      * @return модели трёх полей
      */
     public static Map<String, FieldView> views(FormState state) {
-        throw new UnsupportedOperationException("S1: core-forms-plan — HorizonFields.views");
+        throw new UnsupportedOperationException("S1: core-forms-plan - HorizonFields.views");
     }
 
     /**
@@ -65,7 +65,7 @@ public final class HorizonFields {
      * @return текст ошибки или пусто
      */
     public static Optional<String> error(FormState state, LocalDate start) {
-        throw new UnsupportedOperationException("S1: core-forms-plan — HorizonFields.error");
+        throw new UnsupportedOperationException("S1: core-forms-plan - HorizonFields.error");
     }
 
     /**
@@ -76,7 +76,7 @@ public final class HorizonFields {
      * @return текст предупреждения или пусто
      */
     public static Optional<String> warning(FormState state, LocalDate start) {
-        throw new UnsupportedOperationException("S1: core-forms-plan — HorizonFields.warning");
+        throw new UnsupportedOperationException("S1: core-forms-plan - HorizonFields.warning");
     }
 
     /**
@@ -86,6 +86,6 @@ public final class HorizonFields {
      * @return горизонт
      */
     public static Horizon toHorizon(FormState state) {
-        throw new UnsupportedOperationException("S1: core-forms-plan — HorizonFields.toHorizon");
+        throw new UnsupportedOperationException("S1: core-forms-plan - HorizonFields.toHorizon");
     }
 }

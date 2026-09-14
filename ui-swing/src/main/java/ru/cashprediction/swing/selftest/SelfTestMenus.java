@@ -95,7 +95,7 @@ public final class SelfTestMenus {
             out.append("row ").append(ruleRow.rowId()).append('\n');
             popup(ForecastPopupMenu.forRow(app.actions(), ruleRow), 1);
         } else {
-            out.append("  (в таблице нет события правила — откройте пример)\n");
+            out.append("  (в таблице нет события правила - откройте пример)\n");
         }
 
         out.append("\n# Контекстное меню графика\n");

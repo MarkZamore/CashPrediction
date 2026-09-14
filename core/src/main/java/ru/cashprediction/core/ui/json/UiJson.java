@@ -38,7 +38,7 @@ public final class UiJson {
      * @return дерево для {@code JsonWriter}
      */
     public static Object toTree(Object value) {
-        throw new UnsupportedOperationException("S2: core-protocol-dump — UiJson.toTree");
+        throw new UnsupportedOperationException("S2: core-protocol-dump - UiJson.toTree");
     }
 
     /**
@@ -48,7 +48,7 @@ public final class UiJson {
      * @return компактный JSON
      */
     public static String write(Object value) {
-        throw new UnsupportedOperationException("S2: core-protocol-dump — UiJson.write");
+        throw new UnsupportedOperationException("S2: core-protocol-dump - UiJson.write");
     }
 
     /**
@@ -59,7 +59,7 @@ public final class UiJson {
      * @return дерево JSON
      */
     public static Map<String, Object> effect(long seq, WebEffect effect) {
-        throw new UnsupportedOperationException("S2: core-protocol-dump — UiJson.effect");
+        throw new UnsupportedOperationException("S2: core-protocol-dump - UiJson.effect");
     }
 
     /**
@@ -70,7 +70,7 @@ public final class UiJson {
      * @throws IllegalArgumentException если тип неизвестен или поля некорректны
      */
     public static WebIntent readIntent(Map<String, Object> json) {
-        throw new UnsupportedOperationException("S2: core-protocol-dump — UiJson.readIntent");
+        throw new UnsupportedOperationException("S2: core-protocol-dump - UiJson.readIntent");
     }
 
     /**
@@ -81,6 +81,6 @@ public final class UiJson {
      * @throws IllegalArgumentException если тип неизвестен или поля некорректны
      */
     public static WebQuery readQuery(Map<String, Object> json) {
-        throw new UnsupportedOperationException("S2: core-protocol-dump — UiJson.readQuery");
+        throw new UnsupportedOperationException("S2: core-protocol-dump - UiJson.readQuery");
     }
 }

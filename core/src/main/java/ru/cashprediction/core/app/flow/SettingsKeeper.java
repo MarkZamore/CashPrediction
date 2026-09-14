@@ -29,11 +29,11 @@ public final class SettingsKeeper {
 
     /** Настройки изменились: перезапустить таймер 700 мс. */
     public void changed() {
-        throw new UnsupportedOperationException("S2: core-app-file — SettingsKeeper.changed");
+        throw new UnsupportedOperationException("S2: core-app-file - SettingsKeeper.changed");
     }
 
     /** Записать немедленно (выход) и остановить таймер. */
     public void flushNow() {
-        throw new UnsupportedOperationException("S2: core-app-file — SettingsKeeper.flushNow");
+        throw new UnsupportedOperationException("S2: core-app-file - SettingsKeeper.flushNow");
     }
 }

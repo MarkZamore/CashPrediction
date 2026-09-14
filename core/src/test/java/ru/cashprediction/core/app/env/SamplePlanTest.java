@@ -76,7 +76,7 @@ class SamplePlanTest {
 
     @Test
     void sampleDependsOnlyOnTodayAndForecastsWithoutErrors() {
-        assertEquals(SamplePlan.create(TODAY), SamplePlan.create(LocalDate.of(2026, 9, 30)), "тот же месяц — тот же план");
+        assertEquals(SamplePlan.create(TODAY), SamplePlan.create(LocalDate.of(2026, 9, 30)), "тот же месяц - тот же план");
         assertEquals(LocalDate.of(2027, 1, 1), SamplePlan.create(LocalDate.of(2027, 1, 31)).startDate());
 
         Plan plan = SamplePlan.create(TODAY);

@@ -129,7 +129,7 @@ final class SessionCommands {
         Alert alert = Dialogs.alert(AlertType.WARNING, "Симуляция сбоя",
                 "Завершить процесс аварийно, без сохранения?",
                 "Процесс будет убит немедленно (Runtime.halt). При следующем запуске появится диалог восстановления: "
-                        + "снимок в реестре и XML-файле записан не позже чем 0,4–5 секунд назад.",
+                        + "снимок в реестре и XML-файле записан не позже чем 0,4-5 секунд назад.",
                 AppButtonTypes.HALT, AppButtonTypes.CANCEL);
         support.host().show(alert, WindowState.MAIN_OWNER, result -> {
             if (result.orElse(AppButtonTypes.CANCEL) == AppButtonTypes.HALT) {
@@ -225,7 +225,7 @@ final class SessionCommands {
                 // JavaFX: Alert → Swing: JOptionPane.showMessageDialog(WARNING_MESSAGE) → Web: баннер с предупреждениями
                 Alert alert = Dialogs.withDetails(AlertType.WARNING, "Восстановление сеанса",
                         "Сеанс восстановлен с замечаниями",
-                        "Восстановлено окон: " + report.windowsRestored() + ". Подробности — ниже.", String.join("\n", others));
+                        "Восстановлено окон: " + report.windowsRestored() + ". Подробности - ниже.", String.join("\n", others));
                 // JavaFX: DialogPane → Swing: SwingDialogPane (JPanel header/content/кнопки) → Web: <dialog><form method="dialog">
                 alert.getDialogPane().setExpanded(true);
                 support.host().show(alert, WindowState.MAIN_OWNER, r -> finish.run());
@@ -261,7 +261,7 @@ final class SessionCommands {
         Alert alert = Dialogs.withDetails(AlertType.WARNING, "Восстановление сеанса",
                 "Несохранённый план из снимка не удалось открыть",
                 "Его текст сохранился только в снимке сеанса. Сохраните его в файл, чтобы не потерять: "
-                        + "как только начнётся запись нового сеанса, снимок будет перезаписан. Текст плана — ниже.",
+                        + "как только начнётся запись нового сеанса, снимок будет перезаписан. Текст плана - ниже.",
                 markdown);
         // JavaFX: ButtonType → Swing: SwingButtonType (текст + роль) + JOptionPane.showOptionDialog → Web: <button value> → returnValue
         alert.getButtonTypes().setAll(AppButtonTypes.SAVE_SNAPSHOT_PLAN, AppButtonTypes.SKIP);

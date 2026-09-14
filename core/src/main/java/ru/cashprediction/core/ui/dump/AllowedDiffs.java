@@ -58,7 +58,7 @@ public final class AllowedDiffs {
      * @return список
      */
     public static AllowedDiffs parse(String json) {
-        throw new UnsupportedOperationException("S2: core-protocol-dump — AllowedDiffs.parse");
+        throw new UnsupportedOperationException("S2: core-protocol-dump - AllowedDiffs.parse");
     }
 
     /**
@@ -69,11 +69,11 @@ public final class AllowedDiffs {
      * @return недопустимые расхождения
      */
     public List<DumpDiff.Difference> filter(String client, List<DumpDiff.Difference> differences) {
-        throw new UnsupportedOperationException("S2: core-protocol-dump — AllowedDiffs.filter");
+        throw new UnsupportedOperationException("S2: core-protocol-dump - AllowedDiffs.filter");
     }
 
     /** @return записи, не сработавшие ни разу (ошибка сборки в конце прогона) */
     public List<Entry> unused() {
-        throw new UnsupportedOperationException("S2: core-protocol-dump — AllowedDiffs.unused");
+        throw new UnsupportedOperationException("S2: core-protocol-dump - AllowedDiffs.unused");
     }
 }

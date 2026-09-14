@@ -39,7 +39,7 @@ final class HelpActions extends ActionSupport {
             F1              О программе
             Shift+F10       Контекстное меню выбранной строки
 
-            В быстрой правке суммы (двойной щелчок по сумме): Enter — сохранить, Esc — закрыть.
+            В быстрой правке суммы (двойной щелчок по сумме): Enter - сохранить, Esc - закрыть.
             В веб-клиенте занятые браузером сочетания (Ctrl+N, Ctrl+T, Ctrl+W, Ctrl+O)
             заменены на Alt+Shift+буква.""";
 
@@ -57,7 +57,7 @@ final class HelpActions extends ActionSupport {
      */
     public void about() {
         // JavaFX: Alert(INFORMATION) → Swing: SwingAlert (JOptionPane.INFORMATION_MESSAGE) → Web: <dialog class="alert">
-        alerts().info("CashPrediction " + VERSION + " — прогноз бюджета",
+        alerts().info("CashPrediction " + VERSION + " - прогноз бюджета",
                 "Сколько денег будет через месяц, полгода, год при текущем плане доходов и расходов.\n\n"
                         + "Клиент: Swing, Java " + System.getProperty("java.version") + ".\n"
                         + "Все данные хранятся в папке CashMemory:\n" + context().layout().dir());
@@ -68,7 +68,7 @@ final class HelpActions extends ActionSupport {
      */
     public void hotkeys() {
         // JavaFX: Alert + expandableContent → Swing: SwingAlert + «Подробнее» (JTextArea) → Web: <dialog class="alert"> с <pre>
-        alerts().infoWithDetails("Горячие клавиши", "Горячие клавиши CashPrediction", "Полный список — ниже.", HOTKEYS);
+        alerts().infoWithDetails("Горячие клавиши", "Горячие клавиши CashPrediction", "Полный список - ниже.", HOTKEYS);
     }
 
     /**
@@ -77,8 +77,8 @@ final class HelpActions extends ActionSupport {
     public void formatHelp() {
         // JavaFX: Alert + expandableContent → Swing: SwingAlert + «Подробнее» (JTextArea) → Web: <dialog class="alert"> с <pre>
         alerts().infoWithDetails("Формат файла .md", "Формат файла плана CashPrediction",
-                "Файл плана — обычный текст Markdown: его можно править в Блокноте. Нераспознанные строки не теряются. "
-                        + "Руководство — ниже.", formatGuide());
+                "Файл плана - обычный текст Markdown: его можно править в Блокноте. Нераспознанные строки не теряются. "
+                        + "Руководство - ниже.", formatGuide());
     }
 
     /**

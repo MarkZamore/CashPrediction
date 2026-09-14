@@ -220,7 +220,7 @@ class UiTextCatalogTest {
         Set<String> used = usedKeys();
         List<String> unused = UiText.keys().stream().filter(key -> !used.contains(key)).toList();
         Assumptions.assumeTrue(Boolean.getBoolean(REQUIRE_ALL_USED),
-                () -> "S0–S1: неиспользуемые ключи только сообщаются (" + unused.size() + "): " + unused);
+                () -> "S0-S1: неиспользуемые ключи только сообщаются (" + unused.size() + "): " + unused);
         assertEquals(List.of(), unused, "ключи каталога, на которые нет ссылок");
     }
 

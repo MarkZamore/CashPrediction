@@ -46,21 +46,21 @@ public final class AdjustmentForm implements FormLogic {
 
     @Override
     public FormSpec spec(FormContext context) {
-        throw new UnsupportedOperationException("S1: core-forms-ops — AdjustmentForm.spec");
+        throw new UnsupportedOperationException("S1: core-forms-ops - AdjustmentForm.spec");
     }
 
     @Override
     public Map<String, String> defaults(FormContext context) {
-        throw new UnsupportedOperationException("S1: core-forms-ops — AdjustmentForm.defaults");
+        throw new UnsupportedOperationException("S1: core-forms-ops - AdjustmentForm.defaults");
     }
 
     @Override
     public FormView evaluate(FormState state, FormContext context) {
-        throw new UnsupportedOperationException("S1: core-forms-ops — AdjustmentForm.evaluate");
+        throw new UnsupportedOperationException("S1: core-forms-ops - AdjustmentForm.evaluate");
     }
 
     @Override
     public FormOutcome onButton(String buttonId, FormState state, FormContext context) {
-        throw new UnsupportedOperationException("S1: core-forms-ops — AdjustmentForm.onButton");
+        throw new UnsupportedOperationException("S1: core-forms-ops - AdjustmentForm.onButton");
     }
 }

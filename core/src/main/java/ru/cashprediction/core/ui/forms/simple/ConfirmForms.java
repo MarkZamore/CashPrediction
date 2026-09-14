@@ -48,7 +48,7 @@ public final class ConfirmForms {
      * @return подтверждение или пусто, если правила нет (контроллер показывает {@code err.notFound})
      */
     public static Optional<Confirmation> deleteRule(AppState state, String ruleId) {
-        throw new UnsupportedOperationException("S1: core-forms-framework — ConfirmForms.deleteRule");
+        throw new UnsupportedOperationException("S1: core-forms-framework - ConfirmForms.deleteRule");
     }
 
     /**
@@ -59,7 +59,7 @@ public final class ConfirmForms {
      * @return подтверждение или пусто, если операции нет
      */
     public static Optional<Confirmation> deleteOneTime(AppState state, String txId) {
-        throw new UnsupportedOperationException("S1: core-forms-framework — ConfirmForms.deleteOneTime");
+        throw new UnsupportedOperationException("S1: core-forms-framework - ConfirmForms.deleteOneTime");
     }
 
     /**
@@ -70,7 +70,7 @@ public final class ConfirmForms {
      * @return подтверждение или пусто
      */
     public static Optional<Confirmation> actualize(AppState state) {
-        throw new UnsupportedOperationException("S1: core-forms-framework — ConfirmForms.actualize");
+        throw new UnsupportedOperationException("S1: core-forms-framework - ConfirmForms.actualize");
     }
 
     /**
@@ -80,7 +80,7 @@ public final class ConfirmForms {
      * @return подтверждение или пусто
      */
     public static Optional<Confirmation> applyWhatIf(AppState state) {
-        throw new UnsupportedOperationException("S1: core-forms-framework — ConfirmForms.applyWhatIf");
+        throw new UnsupportedOperationException("S1: core-forms-framework - ConfirmForms.applyWhatIf");
     }
 
     /**
@@ -89,6 +89,6 @@ public final class ConfirmForms {
      * @return подтверждение
      */
     public static Confirmation clearSnapshots() {
-        throw new UnsupportedOperationException("S1: core-forms-framework — ConfirmForms.clearSnapshots");
+        throw new UnsupportedOperationException("S1: core-forms-framework - ConfirmForms.clearSnapshots");
     }
 }

@@ -1,6 +1,6 @@
 /**
- * @file Команды приложения — одно место, откуда меню, панель инструментов, горячие клавиши и контекстные меню
- * вызывают действия (реестр commands в store.js). Здесь же фабрики восстанавливаемых окон по WindowType —
+ * @file Команды приложения - одно место, откуда меню, панель инструментов, горячие клавиши и контекстные меню
+ * вызывают действия (реестр commands в store.js). Здесь же фабрики восстанавливаемых окон по WindowType -
  * web-аналог WindowFactory ядра: по состоянию окна с сервера открывается такой же диалог с теми же полями.
  *
  * Ошибки команд показываются диалогом 16 «Ошибка» (Alert ERROR со стеком сервера в подробностях).
@@ -42,7 +42,7 @@ export function run(fn) {
     try {
       return await fn(...args);
     } catch (e) {
-      // Сервер недоступен — экран «нет связи» уже показан обработчиком api.js.
+      // Сервер недоступен - экран «нет связи» уже показан обработчиком api.js.
       if (e instanceof ApiError && e.status === 0) return undefined;
       await errorAlert(e);
       return undefined;
@@ -97,7 +97,7 @@ export async function confirmDiscard(action = '') {
 }
 
 /**
- * Сохраняет план: в его файл или, для нового плана, в CashMemory под его именем. Конфликты — диалог 18.
+ * Сохраняет план: в его файл или, для нового плана, в CashMemory под его именем. Конфликты - диалог 18.
  * @param {boolean} [overwrite=false] пользователь уже согласился перезаписать
  * @returns {Promise<boolean>} сохранён ли план
  */
@@ -186,10 +186,10 @@ async function openPlanChoice(existing = null) {
     throw e;
   }
   const choices = list.plans.map((p) => ({
-    value: `name:${p.name}`, text: `${p.name} — изменён ${p.modifiedText}${p.current ? ' (открыт)' : ''}`,
+    value: `name:${p.name}`, text: `${p.name} - изменён ${p.modifiedText}${p.current ? ' (открыт)' : ''}`,
   }));
   for (const p of list.extraPlans || []) {
-    choices.push({ value: `path:${p.path}`, text: `${p.name} — папка ${list.extraFolder}` });
+    choices.push({ value: `path:${p.path}`, text: `${p.name} - папка ${list.extraFolder}` });
   }
   choices.push({ value: FROM_FILE, text: 'Из файла…' });
   let opened = null;
@@ -245,7 +245,7 @@ function renameDialog(existing = null) {
     value: store.state.plan.name,
     purpose: 'rename',
     existing,
-    // Те же правила, что PlanValidator.checkPlanName: имя плана — это имя файла в CashMemory.
+    // Те же правила, что PlanValidator.checkPlanName: имя плана - это имя файла в CashMemory.
     validate: (t) => planNameProblem(t) || null,
     onSubmit: async (value, d) => {
       const res = await api.post('/api/plans/rename', { name: value, windowId: await d.windowIdReady() });
@@ -266,7 +266,7 @@ function reconcileDialog(existing = null) {
   const s = store.state;
   return textInputDialog({
     title: 'Сверить баланс',
-    header: `Сколько денег у вас на самом деле сегодня, ${ruDate(s.today)}? По прогнозу — ${s.nowBalanceText || '?'} ${s.plan.currency}. `
+    header: `Сколько денег у вас на самом деле сегодня, ${ruDate(s.today)}? По прогнозу - ${s.nowBalanceText || '?'} ${s.plan.currency}. `
       + 'Разница будет учтена в плане.',
     label: 'Фактический баланс',
     value: s.nowBalance || '',
@@ -327,7 +327,7 @@ function customCurrencyDialog(existing = null) {
   const current = store.state.plan.currency;
   return textInputDialog({
     title: 'Другая валюта',
-    header: 'Обозначение валюты — до 10 символов, например ¥, CHF или «руб.»',
+    header: 'Обозначение валюты - до 10 символов, например ¥, CHF или «руб.»',
     label: 'Обозначение',
     value: CURRENCIES.includes(current) ? '' : current,
     purpose: 'customCurrency',
@@ -360,7 +360,7 @@ async function actualizeDialog(existing = null) {
   if (!preview.needed) {
     if (existing) await abandonWindow(existing);
     await alertDialog({
-      type: 'INFORMATION', title: 'Актуализация', header: 'План уже начинается сегодня', content: `Дата начала — ${preview.startDateText}.`,
+      type: 'INFORMATION', title: 'Актуализация', header: 'План уже начинается сегодня', content: `Дата начала - ${preview.startDateText}.`,
     });
     return;
   }
@@ -369,7 +369,7 @@ async function actualizeDialog(existing = null) {
     type: 'CONFIRMATION',
     title: 'Актуализировать на сегодня',
     header: `Перенести начало плана «${preview.plan}» с ${preview.startDateText} на ${preview.todayText}?`,
-    content: `Начальный баланс станет ${preview.balanceText} — столько должно быть на начало сегодняшнего дня по прогнозу `
+    content: `Начальный баланс станет ${preview.balanceText} - столько должно быть на начало сегодняшнего дня по прогнозу `
       + '(без «что-если»). Действие можно отменить (Ctrl+Z).',
     buttons: [ACTUALIZE, ButtonTypes.CANCEL],
     windowType: 'ALERT',
@@ -454,7 +454,7 @@ function openQuickEdit({ ruleId, originalDate, anchor = null, existing = null })
     amount: occurrenceAmount(ruleId, originalDate),
     anchor: cell,
     existing,
-    title: `«${rule.title}» ${ruDate(originalDate)} — новая сумма`,
+    title: `«${rule.title}» ${ruDate(originalDate)} - новая сумма`,
     onSubmit: async (amountText, windowId) => {
       const fields = { ruleId, originalDate, action: 'CHANGE_AMOUNT', amount: amountText, note: adjustment ? adjustment.note || '' : '' };
       if (adjustment && (adjustment.action === 'MOVE_DATE' || adjustment.action === 'REPLACE')) {
@@ -464,7 +464,7 @@ function openQuickEdit({ ruleId, originalDate, anchor = null, existing = null })
       }
       const res = await api.put('/api/adjustments', { fields, windowId });
       store.set(res);
-      toast('Сумма события изменена (Ctrl+Z — отменить)', 'success', 2500);
+      toast('Сумма события изменена (Ctrl+Z - отменить)', 'success', 2500);
     },
   });
   popup.open();
@@ -497,7 +497,7 @@ async function cashMemoryFolder() {
   ];
   if (list.extraFolder) {
     lines.push(h('p', {}, 'На этот сеанс также показываются планы из папки: ', h('code', { class: 'path', text: list.extraFolder })));
-    lines.push(h('ul', { class: 'plain-list' }, (list.extraPlans || []).map((p) => h('li', { text: `${p.name} — ${p.modifiedText}` }))));
+    lines.push(h('ul', { class: 'plain-list' }, (list.extraPlans || []).map((p) => h('li', { text: `${p.name} - ${p.modifiedText}` }))));
   }
   const buttons = list.extraFolder ? [CHOOSE, OPEN, RESET, ButtonTypes.CLOSE] : [CHOOSE, OPEN, ButtonTypes.CLOSE];
   const value = await alertDialog({
@@ -599,7 +599,7 @@ export function registerCommands() {
     openSample: run(async () => {
       if (!(await confirmDiscard('открытие примера'))) return;
       store.set(await api.post('/api/plans/sample'));
-      toast('Открыт пример плана. Он не сохранён: Ctrl+S — сохранить в CashMemory.', 'success', 4500);
+      toast('Открыт пример плана. Он не сохранён: Ctrl+S - сохранить в CashMemory.', 'success', 4500);
     }),
     openRecent: run(async (fileName) => {
       if (!(await confirmDiscard('открытие другого плана'))) return;
@@ -630,7 +630,7 @@ export function registerCommands() {
       if (chosen) await saveAsTo(chosen.name, chosen.folder, false);
     }),
     downloadPlan: run(() => {
-      // Скачивание текста плана — «Сохранить как» на компьютер пользователя через браузер.
+      // Скачивание текста плана - «Сохранить как» на компьютер пользователя через браузер.
       downloadUrl(apiUrl('/api/plans/download', { name: '' }));
     }),
     rename: run(() => renameDialog(null)),
@@ -642,7 +642,7 @@ export function registerCommands() {
     exportCsv: run(() => csvExportDialog()),
     saveChartSvg: run(() => {
       const markup = chartSvgMarkup(store.state, 1200, 560);
-      downloadText(markup, `${store.state.plan.name} — график.svg`, 'image/svg+xml;charset=utf-8');
+      downloadText(markup, `${store.state.plan.name} - график.svg`, 'image/svg+xml;charset=utf-8');
       toast('График передан браузеру для сохранения (SVG)', 'success', 3000);
     }),
     cashMemoryFolder: run(cashMemoryFolder),
@@ -658,7 +658,7 @@ export function registerCommands() {
       if (r.origin === 'RULE') return ruleEditor({ mode: 'edit', ruleId: r.ruleId });
       if (r.origin === 'ONE_TIME') return oneTimeEditor({ mode: 'edit', txId: r.txId });
       if (r.origin === 'START') return planSettingsDialog();
-      return toast('Строка «что-если» — часть сценария, а не операция плана', 'info');
+      return toast('Строка «что-если» - часть сценария, а не операция плана', 'info');
     }),
     deleteSelected: run((row) => {
       const r = rowOrSelected(row);
@@ -827,7 +827,7 @@ export function registerCommands() {
       showServerDown({
         title: 'Сервер остановлен аварийно',
         text: 'Так выглядит сбой: сервер завершился без сохранения. Запустите CashPrediction Web снова и откройте новый '
-          + 'адрес из его окна — появится баннер «Восстановить с сервера».',
+          + 'адрес из его окна - появится баннер «Восстановить с сервера».',
         retry: false,
       });
     }),
@@ -845,7 +845,7 @@ export function registerCommands() {
       await alertDialog({
         type: 'INFORMATION',
         title: 'О программе',
-        header: `CashPrediction ${about.version} — прогноз бюджета`,
+        header: `CashPrediction ${about.version} - прогноз бюджета`,
         content: 'Сколько денег будет через месяц, полгода, год при текущем плане доходов и расходов.\n\n'
           + `Клиент: браузер (тонкий клиент), сервер: Java ${about.java}, ${about.os}.\n`
           + `Все данные хранятся в папке CashMemory:\n${about.cashMemory}`,
@@ -856,7 +856,7 @@ export function registerCommands() {
       type: 'INFORMATION',
       title: 'Горячие клавиши',
       header: 'Горячие клавиши CashPrediction',
-      content: 'Сочетания, занятые браузером (Ctrl+N, Ctrl+T, Ctrl+W, Ctrl+O), заменены на Alt+Shift+буква. Полный список — ниже.',
+      content: 'Сочетания, занятые браузером (Ctrl+N, Ctrl+T, Ctrl+W, Ctrl+O), заменены на Alt+Shift+буква. Полный список - ниже.',
       details: HOTKEYS_TEXT,
       detailsLabel: 'Список сочетаний',
       width: 'min(680px, 96vw)',
@@ -867,7 +867,7 @@ export function registerCommands() {
         type: 'INFORMATION',
         title: 'Формат файла .md',
         header: 'Формат файла плана CashPrediction',
-        content: 'Файл плана — обычный текст Markdown: его можно править в Блокноте. Нераспознанные строки не теряются. Руководство — ниже.',
+        content: 'Файл плана - обычный текст Markdown: его можно править в Блокноте. Нераспознанные строки не теряются. Руководство - ниже.',
         details: res.text,
         detailsLabel: 'Руководство по формату',
         width: 'min(820px, 96vw)',

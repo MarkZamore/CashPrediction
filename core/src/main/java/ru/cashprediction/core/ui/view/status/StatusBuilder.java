@@ -39,6 +39,6 @@ public final class StatusBuilder {
      * @return модель строки состояния
      */
     public static StatusModel build(AppState state, Instant now) {
-        throw new UnsupportedOperationException("S1: core-menu — StatusBuilder.build");
+        throw new UnsupportedOperationException("S1: core-menu - StatusBuilder.build");
     }
 }

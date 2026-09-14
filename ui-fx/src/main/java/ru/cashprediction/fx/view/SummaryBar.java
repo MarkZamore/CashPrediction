@@ -112,8 +112,8 @@ public final class SummaryBar extends HBox {
                             DateFormats.ru(at) + " · " + wholeSigned(v.minus(now)), v.isNegative(), at, anchor, at, false,
                             "Баланс через " + RuText.count(months, "месяц", "месяца", "месяцев")
                                     + " и изменение относительно «сейчас» (" + v.minus(now).formatSigned() + ")"))
-                    // Короткое «—» вместо «за горизонтом»: длинное слово не помещалось в узкую карточку.
-                    .orElse(new Card(title, "—", "за горизонтом", "за горизонтом, план до " + DateFormats.ru(end), false,
+                    // Короткое «-» вместо «за горизонтом»: длинное слово не помещалось в узкую карточку.
+                    .orElse(new Card(title, "-", "за горизонтом", "за горизонтом, план до " + DateFormats.ru(end), false,
                             null, anchor, end, false, "Дата за пределами горизонта плана: увеличьте горизонт в меню «Вид»")));
         }
         cards.add(new Card("Минимум", whole(s.minBalance(), cur), s.minBalance().format(cur),
