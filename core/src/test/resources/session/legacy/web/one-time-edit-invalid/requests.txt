@@ -1,0 +1,6 @@
+# Запросы web API прежнего клиента (как их отправляет браузер): запись фикстуры one-time-edit-invalid
+POST /api/plans/sample {}
+POST /api/session/windows {"type":"ONE_TIME_EDITOR","modal":true,"ownerId":"main","context":{"mode":"edit","txId":"t1"},"fields":{"date":"2026-12-20","title":"Премия","kind":"INCOME","amount":"60000,00","category":"","note":""},"bounds":null}
+PUT /api/session/windows/{w1} {"fields":{"date":"20.13.2026","title":"","kind":"INCOME","amount":"60,00,0","category":"","note":""}}
+POST /api/session/snapshot {}
+POST /api/debug/crash {}

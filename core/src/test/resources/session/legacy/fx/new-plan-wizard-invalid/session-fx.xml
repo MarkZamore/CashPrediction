@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<session schema="1" client="fx" state="running" pid="30872" startedAt="2026-09-13T22:22:43.447025Z" savedAt="2026-09-13T22:22:48.814215900Z">
+  <main x="840" y="301" width="1200" height="800" maximized="false" view="TABLE" period="M12" filterText="">
+    <plan path="Семейный бюджет.md"/>
+    <filters><filter id="showIncome" value="true"/><filter id="showExpense" value="true"/><filter id="showOneTime" value="true"/><filter id="showSkipped" value="false"/><filter id="monthTotals" value="true"/><filter id="chartMarkers" value="true"/><filter id="chartBars" value="false"/><filter id="summaryPanel" value="true"/></filters>
+    <selection rowId=""/>
+  </main>
+  <unsavedPlan dirty="false"/>
+  <windows>
+    <window id="w1" type="NEW_PLAN_WIZARD" modal="true" owner="main" x="1147" y="471" width="586" height="562">
+      <context key="page" value="0"/>
+      <field id="name" value="План/2026"/>
+      <field id="currency" value=""/>
+      <field id="startDate" value="2026-02-28"/>
+      <field id="startBalance" value="12 3"/>
+      <field id="horizonKind" value="UNTIL"/>
+      <field id="horizonValue" value="abc"/>
+      <field id="horizonUntil" value="2025-01-01"/>
+      <field id="cushion" value="-500,00"/>
+      <field id="quickIncomeTitle" value=""/>
+      <field id="quickIncomeAmount" value="95 0"/>
+      <field id="quickIncomeDay" value="31"/>
+      <field id="quickExpenseTitle" value="Аренда"/>
+      <field id="quickExpenseAmount" value="abc"/>
+      <field id="quickExpenseDay" value="1"/>
+    </window>
+  </windows>
+</session>

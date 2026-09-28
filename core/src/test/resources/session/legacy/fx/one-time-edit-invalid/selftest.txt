@@ -1,0 +1,11 @@
+# Самотест прежнего клиента fx: запись фикстуры one-time-edit-invalid
+wait 1500
+sample
+wait 800
+open ONE_TIME_EDITOR mode=edit txId=t1
+wait 1000
+fill last date=20.13.2026 title= "amount=60 00,0"
+wait 800
+snapshot
+wait 2500
+crash

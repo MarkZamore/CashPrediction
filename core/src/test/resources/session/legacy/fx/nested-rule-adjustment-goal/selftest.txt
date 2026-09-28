@@ -1,0 +1,17 @@
+# Самотест прежнего клиента fx: запись фикстуры nested-rule-adjustment-goal
+wait 1500
+sample
+wait 800
+open RULE_EDITOR mode=edit ruleId=r1
+wait 1000
+fill last amount=85000,00 note=Повышение
+open ADJUSTMENT_EDITOR ruleId=r1 originalDate=2026-10-05 owner=last
+wait 1000
+fill last action=SKIP note=Отпуск
+open GOAL_CALCULATOR
+wait 1000
+fill last target=250000,00
+wait 800
+snapshot
+wait 2500
+crash

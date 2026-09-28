@@ -1,0 +1,5 @@
+# Запросы web API прежнего клиента (как их отправляет браузер): запись фикстуры alert-delete-one-time
+POST /api/plans/sample {}
+POST /api/session/windows {"type":"ALERT","modal":true,"ownerId":"main","context":{"purpose":"deleteOneTime","targetId":"t1"},"fields":{},"bounds":null}
+POST /api/session/snapshot {}
+POST /api/debug/crash {}

@@ -1,0 +1,9 @@
+# Самотест прежнего клиента fx: запись фикстуры new-plan-wizard
+wait 1500
+open NEW_PLAN_WIZARD
+wait 1000
+fill last "name=Семейный бюджет 2026" currency=€ startDate=2026-10-01 startBalance=120000,00 horizonKind=YEARS horizonValue=2 cushion=30000,00 quickIncomeTitle=Зарплата quickIncomeAmount=95000,00 quickIncomeDay=10 quickExpenseTitle=Аренда quickExpenseAmount=40000,00 quickExpenseDay=3
+wait 800
+snapshot
+wait 2500
+crash

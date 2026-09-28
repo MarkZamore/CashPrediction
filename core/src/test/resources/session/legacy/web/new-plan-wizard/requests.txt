@@ -1,0 +1,5 @@
+# Запросы web API прежнего клиента (как их отправляет браузер): запись фикстуры new-plan-wizard
+POST /api/session/windows {"type":"NEW_PLAN_WIZARD","modal":true,"ownerId":"main","context":{"page":"0"},"fields":{"name":"","currency":"₽","startDate":"2026-09-14","startBalance":"","horizonKind":"MONTHS","horizonValue":"12","horizonUntil":"","cushion":"","quickIncomeTitle":"Зарплата","quickIncomeAmount":"","quickIncomeDay":"5","quickExpenseTitle":"Аренда","quickExpenseAmount":"","quickExpenseDay":"1"},"bounds":null}
+PUT /api/session/windows/{w1} {"fields":{"name":"Семейный бюджет 2026","currency":"€","startDate":"2026-10-01","startBalance":"120000,00","horizonKind":"YEARS","horizonValue":"2","horizonUntil":"","cushion":"30000,00","quickIncomeTitle":"Зарплата","quickIncomeAmount":"95000,00","quickIncomeDay":"10","quickExpenseTitle":"Аренда","quickExpenseAmount":"40000,00","quickExpenseDay":"3"}}
+POST /api/session/snapshot {}
+POST /api/debug/crash {}

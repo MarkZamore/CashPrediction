@@ -1,0 +1,6 @@
+# Запросы web API прежнего клиента (как их отправляет браузер): запись фикстуры plan-settings-invalid
+POST /api/plans/sample {}
+POST /api/session/windows {"type":"PLAN_SETTINGS","modal":true,"ownerId":"main","context":{},"fields":{"name":"Пример","currency":"₽","startDate":"2026-09-01","startBalance":"150000,00","horizonKind":"MONTHS","horizonValue":"12","horizonUntil":"","cushion":"50000,00","goalTitle":"Отпуск","goalTarget":"300000,00","goalDate":"","note":""},"bounds":null}
+PUT /api/session/windows/{w1} {"fields":{"name":"Пример","currency":"руб|коп","startDate":"2026-09-01","startBalance":"1,234","horizonKind":"MONTHS","horizonValue":"0","horizonUntil":"","cushion":"50000,00","goalTitle":"Машина","goalTarget":"три","goalDate":"2027-13-01","note":""}}
+POST /api/session/snapshot {}
+POST /api/debug/crash {}

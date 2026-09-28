@@ -1,0 +1,9 @@
+# Самотест прежнего клиента fx: запись фикстуры choice-open-plan
+wait 1500
+open CHOICE purpose=openPlan
+wait 1000
+fill last "value=Семейный бюджет"
+wait 800
+snapshot
+wait 2500
+crash

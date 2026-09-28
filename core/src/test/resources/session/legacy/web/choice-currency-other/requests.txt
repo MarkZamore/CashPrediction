@@ -1,0 +1,6 @@
+# Запросы web API прежнего клиента (как их отправляет браузер): запись фикстуры choice-currency-other
+POST /api/plans/sample {}
+POST /api/session/windows {"type":"CHOICE","modal":true,"ownerId":"main","context":{"purpose":"currency"},"fields":{"value":"₽"},"bounds":null}
+PUT /api/session/windows/{w1} {"fields":{"value":"__other__"}}
+POST /api/session/snapshot {}
+POST /api/debug/crash {}

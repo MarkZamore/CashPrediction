@@ -1,0 +1,11 @@
+# Самотест прежнего клиента fx: запись фикстуры one-time-create
+wait 1500
+sample
+wait 800
+open ONE_TIME_EDITOR mode=create
+wait 1000
+fill last date=2026-11-20 title=Ноутбук kind=EXPENSE amount=85000,00 category=Техника "note=В рассрочку"
+wait 800
+snapshot
+wait 2500
+crash

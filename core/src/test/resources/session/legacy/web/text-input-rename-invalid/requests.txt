@@ -1,0 +1,6 @@
+# Запросы web API прежнего клиента (как их отправляет браузер): запись фикстуры text-input-rename-invalid
+POST /api/plans/sample {}
+POST /api/session/windows {"type":"TEXT_INPUT","modal":true,"ownerId":"main","context":{"purpose":"rename"},"fields":{"value":"Пример"},"bounds":null}
+PUT /api/session/windows/{w1} {"fields":{"value":"План/2026"}}
+POST /api/session/snapshot {}
+POST /api/debug/crash {}

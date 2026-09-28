@@ -1,0 +1,11 @@
+# Самотест прежнего клиента swing: запись фикстуры csv-export
+wait 1500
+sample
+wait 800
+open CSV_EXPORT
+wait 1000
+fill last separator=TAB bom=false range=ALL
+wait 800
+snapshot
+wait 2500
+crash

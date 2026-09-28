@@ -1,0 +1,11 @@
+# Самотест прежнего клиента swing: запись фикстуры text-input-custom-currency
+wait 1500
+sample
+wait 800
+open TEXT_INPUT purpose=customCurrency
+wait 1000
+fill last value=CNY
+wait 800
+snapshot
+wait 2500
+crash

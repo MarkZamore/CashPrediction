@@ -1,0 +1,10 @@
+# Самотест прежнего клиента fx: запись фикстуры alert-delete-one-time
+wait 1500
+sample
+wait 800
+open ALERT purpose=deleteOneTime targetId=t1
+wait 1000
+wait 800
+snapshot
+wait 2500
+crash

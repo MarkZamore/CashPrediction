@@ -1,0 +1,5 @@
+# Запросы web API прежнего клиента (как их отправляет браузер): запись фикстуры choice-open-plan-from-file
+POST /api/session/windows {"type":"CHOICE","modal":true,"ownerId":"main","context":{"purpose":"openPlan"},"fields":{"value":"name:Семейный бюджет"},"bounds":null}
+PUT /api/session/windows/{w1} {"fields":{"value":"__file__"}}
+POST /api/session/snapshot {}
+POST /api/debug/crash {}

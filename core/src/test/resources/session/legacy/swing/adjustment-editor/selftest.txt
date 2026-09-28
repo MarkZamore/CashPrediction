@@ -1,0 +1,11 @@
+# Самотест прежнего клиента swing: запись фикстуры adjustment-editor
+wait 1500
+sample
+wait 800
+open ADJUSTMENT_EDITOR ruleId=r1 originalDate=2026-10-05
+wait 1000
+fill last action=REPLACE amount=95000,00 date=2026-10-07 note=Премия
+wait 800
+snapshot
+wait 2500
+crash

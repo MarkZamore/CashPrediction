@@ -1,0 +1,6 @@
+# Запросы web API прежнего клиента (как их отправляет браузер): запись фикстуры one-time-create
+POST /api/plans/sample {}
+POST /api/session/windows {"type":"ONE_TIME_EDITOR","modal":true,"ownerId":"main","context":{"mode":"create","txId":""},"fields":{"date":"2026-09-14","title":"","kind":"EXPENSE","amount":"","category":"","note":""},"bounds":null}
+PUT /api/session/windows/{w1} {"fields":{"date":"2026-11-20","title":"Ноутбук","kind":"EXPENSE","amount":"85000,00","category":"Техника","note":"В рассрочку"}}
+POST /api/session/snapshot {}
+POST /api/debug/crash {}

@@ -1,0 +1,11 @@
+# Самотест прежнего клиента fx: запись фикстуры goal-calculator-invalid
+wait 1500
+sample
+wait 800
+open GOAL_CALCULATOR
+wait 1000
+fill last target=пятьсот byDateEnabled=true byDate=2027-02-29 "extraSaving=1 2 3"
+wait 800
+snapshot
+wait 2500
+crash

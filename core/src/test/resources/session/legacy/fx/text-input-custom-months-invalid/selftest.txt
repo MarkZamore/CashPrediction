@@ -1,0 +1,11 @@
+# Самотест прежнего клиента fx: запись фикстуры text-input-custom-months-invalid
+wait 1500
+sample
+wait 800
+open TEXT_INPUT purpose=customMonths
+wait 1000
+fill last value=abc
+wait 800
+snapshot
+wait 2500
+crash

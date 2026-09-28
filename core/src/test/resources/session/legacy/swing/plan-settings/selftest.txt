@@ -1,0 +1,11 @@
+# Самотест прежнего клиента swing: запись фикстуры plan-settings
+wait 1500
+sample
+wait 800
+open PLAN_SETTINGS
+wait 1000
+fill last name=Пример currency=$ startDate=2026-09-01 startBalance=150000,00 horizonKind=UNTIL horizonUntil=2027-12-31 cushion=50000,00 "note=Семейный план" goalTitle=Отпуск goalTarget=300000,00 goalDate=2027-06-01
+wait 800
+snapshot
+wait 2500
+crash

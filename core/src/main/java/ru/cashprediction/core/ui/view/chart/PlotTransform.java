@@ -1,6 +1,7 @@
 package ru.cashprediction.core.ui.view.chart;
 
 import java.time.LocalDate;
+import java.time.temporal.ChronoUnit;
 import java.util.Objects;
 
 /**
@@ -10,6 +11,10 @@ import java.util.Objects;
  * результат ограничен диапазоном {@code [from, from + dayCount - 1]}. <b>дата → x</b>: левый край дня
  * {@code plotX + dayIndex * plotWidth / dayCount}. <b>сумма → y</b>: {@code plotY + plotHeight * (maxMinor - minor) /
  * (maxMinor - minMinor)} (y растёт вниз).</p>
+ *
+ * <p>Вырожденные значения не бросают исключений: {@code dayCount < 1} считается равным 1; при неположительной ширине
+ * {@link #dateAt(double)} даёт {@code from}; при {@code maxMinor == minMinor} любая сумма - середина по высоте;
+ * {@code x = NaN} даёт {@code from}, а {@link #contains(double, double)} для NaN - {@code false}.</p>
  *
  * @param plotX      левый край области построения
  * @param plotY      верхний край области построения
@@ -35,7 +40,19 @@ public record PlotTransform(double plotX, double plotY, double plotWidth, double
      * @return дата, ограниченная диапазоном
      */
     public LocalDate dateAt(double x) {
-        throw new UnsupportedOperationException("S1: core-chart - PlotTransform.dateAt");
+        int days = Math.max(1, dayCount);
+        if (!(plotWidth > 0)) {
+            return from;
+        }
+        double index = Math.floor((x - plotX) * days / plotWidth);
+        // Сравнение с NaN ложно, поэтому x = NaN и всё левее области дают первый день.
+        if (!(index > 0)) {
+            return from;
+        }
+        if (index >= days - 1) {
+            return from.plusDays(days - 1L);
+        }
+        return from.plusDays((long) index);
     }
 
     /**
@@ -45,7 +62,8 @@ public record PlotTransform(double plotX, double plotY, double plotWidth, double
      * @return координата
      */
     public double xOf(LocalDate date) {
-        throw new UnsupportedOperationException("S1: core-chart - PlotTransform.xOf");
+        Objects.requireNonNull(date, "date");
+        return plotX + ChronoUnit.DAYS.between(from, date) * plotWidth / Math.max(1, dayCount);
     }
 
     /**
@@ -55,7 +73,10 @@ public record PlotTransform(double plotX, double plotY, double plotWidth, double
      * @return координата
      */
     public double yOf(long minor) {
-        throw new UnsupportedOperationException("S1: core-chart - PlotTransform.yOf");
+        if (maxMinor == minMinor) {
+            return plotY + plotHeight / 2;
+        }
+        return plotY + plotHeight * ((double) (maxMinor - minor) / (double) (maxMinor - minMinor));
     }
 
     /**
@@ -66,6 +87,6 @@ public record PlotTransform(double plotX, double plotY, double plotWidth, double
      * @return {@code true}, если внутри или на границе
      */
     public boolean contains(double x, double y) {
-        throw new UnsupportedOperationException("S1: core-chart - PlotTransform.contains");
+        return x >= plotX && x <= plotX + plotWidth && y >= plotY && y <= plotY + plotHeight;
     }
 }

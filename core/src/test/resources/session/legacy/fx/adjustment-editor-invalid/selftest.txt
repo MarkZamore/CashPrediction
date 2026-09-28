@@ -1,0 +1,11 @@
+# Самотест прежнего клиента fx: запись фикстуры adjustment-editor-invalid
+wait 1500
+sample
+wait 800
+open ADJUSTMENT_EDITOR ruleId=r1 originalDate=2026-10-05
+wait 1000
+fill last action=MOVE_DATE "amount=-1 0" date=32.10.2026 note=
+wait 800
+snapshot
+wait 2500
+crash

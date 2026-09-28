@@ -1,0 +1,12 @@
+# Самотест прежнего клиента fx: запись фикстуры alert-apply-what-if
+wait 1500
+sample
+wait 800
+menu "Инструменты/Что-если/Доходы −10 %"
+wait 500
+open ALERT purpose=applyWhatIf
+wait 1000
+wait 800
+snapshot
+wait 2500
+crash

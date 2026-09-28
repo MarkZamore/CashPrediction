@@ -1,0 +1,5 @@
+# Запросы web API прежнего клиента (как их отправляет браузер): запись фикстуры new-plan-wizard-invalid
+POST /api/session/windows {"type":"NEW_PLAN_WIZARD","modal":true,"ownerId":"main","context":{"page":"0"},"fields":{"name":"","currency":"₽","startDate":"2026-09-14","startBalance":"","horizonKind":"MONTHS","horizonValue":"12","horizonUntil":"","cushion":"","quickIncomeTitle":"Зарплата","quickIncomeAmount":"","quickIncomeDay":"5","quickExpenseTitle":"Аренда","quickExpenseAmount":"","quickExpenseDay":"1"},"bounds":null}
+PUT /api/session/windows/{w1} {"fields":{"name":"План/2026","currency":"","startDate":"31.02.2026","startBalance":"12,3,4","horizonKind":"UNTIL","horizonValue":"","horizonUntil":"2025-01-01","cushion":"-500,00","quickIncomeTitle":"","quickIncomeAmount":"95 0,00,1","quickIncomeDay":"45","quickExpenseTitle":"Аренда","quickExpenseAmount":"abc","quickExpenseDay":"1"},"context":{"page":"1"}}
+POST /api/session/snapshot {}
+POST /api/debug/crash {}

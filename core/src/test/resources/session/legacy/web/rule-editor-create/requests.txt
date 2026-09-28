@@ -1,0 +1,6 @@
+# Запросы web API прежнего клиента (как их отправляет браузер): запись фикстуры rule-editor-create
+POST /api/plans/sample {}
+POST /api/session/windows {"type":"RULE_EDITOR","modal":true,"ownerId":"main","context":{"mode":"create","ruleId":""},"fields":{"title":"","kind":"EXPENSE","amount":"","category":"","recurrenceKind":"MONTHLY","dayOfMonth":"14","weekday":"MONDAY","monthDay":"09-14","everyN":"1","fromEnabled":"false","from":"","untilEnabled":"false","until":"","weekendPolicy":"NONE","enabled":"true","note":""},"bounds":null}
+PUT /api/session/windows/{w1} {"fields":{"title":"Спортзал","kind":"EXPENSE","amount":"3500,00","category":"Здоровье","recurrenceKind":"WEEKLY","dayOfMonth":"15","weekday":"TUESDAY","monthDay":"03-15","everyN":"2","fromEnabled":"true","from":"2026-09-15","untilEnabled":"true","until":"2027-09-14","weekendPolicy":"NEXT_BUSINESS_DAY","enabled":"true","note":"Абонемент"}}
+POST /api/session/snapshot {}
+POST /api/debug/crash {}

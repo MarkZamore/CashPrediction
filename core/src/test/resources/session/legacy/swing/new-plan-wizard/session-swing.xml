@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<session schema="1" client="swing" state="running" pid="33076" startedAt="2026-09-13T22:24:51.333129700Z" savedAt="2026-09-13T22:24:56.620512200Z">
+  <main x="820" y="452" width="1240" height="800" maximized="false" view="TABLE" period="M12" filterText="">
+    <plan path="Семейный бюджет.md"/>
+    <filters><filter id="showIncome" value="true"/><filter id="showExpense" value="true"/><filter id="showOneTime" value="true"/><filter id="showSkipped" value="false"/><filter id="monthTotals" value="true"/><filter id="chartMarkers" value="true"/><filter id="chartBars" value="false"/><filter id="summaryPanel" value="true"/></filters>
+    <selection rowId=""/>
+  </main>
+  <unsavedPlan dirty="false"/>
+  <windows>
+    <window id="w1" type="NEW_PLAN_WIZARD" modal="true" owner="main" x="1142" y="658" width="596" height="388">
+      <context key="page" value="0"/>
+      <field id="name" value="Семейный бюджет 2026"/>
+      <field id="currency" value="€"/>
+      <field id="startDate" value="2026-10-01"/>
+      <field id="startBalance" value="120000,00"/>
+      <field id="horizonKind" value="YEARS"/>
+      <field id="horizonValue" value="2"/>
+      <field id="horizonUntil" value=""/>
+      <field id="cushion" value="30000,00"/>
+      <field id="quickIncomeTitle" value="Зарплата"/>
+      <field id="quickIncomeAmount" value="95000,00"/>
+      <field id="quickIncomeDay" value="10"/>
+      <field id="quickExpenseTitle" value="Аренда"/>
+      <field id="quickExpenseAmount" value="40000,00"/>
+      <field id="quickExpenseDay" value="3"/>
+    </window>
+  </windows>
+</session>

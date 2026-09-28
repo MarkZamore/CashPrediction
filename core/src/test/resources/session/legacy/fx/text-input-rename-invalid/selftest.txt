@@ -1,0 +1,11 @@
+# Самотест прежнего клиента fx: запись фикстуры text-input-rename-invalid
+wait 1500
+sample
+wait 800
+open TEXT_INPUT purpose=rename
+wait 1000
+fill last value=План/2026
+wait 800
+snapshot
+wait 2500
+crash

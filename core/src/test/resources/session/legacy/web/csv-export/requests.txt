@@ -1,0 +1,6 @@
+# Запросы web API прежнего клиента (как их отправляет браузер): запись фикстуры csv-export
+POST /api/plans/sample {}
+POST /api/session/windows {"type":"CSV_EXPORT","modal":true,"ownerId":"main","context":{},"fields":{"separator":";","bom":"true","range":"PERIOD"},"bounds":null}
+PUT /api/session/windows/{w1} {"fields":{"separator":"TAB","bom":"false","range":"ALL"}}
+POST /api/session/snapshot {}
+POST /api/debug/crash {}

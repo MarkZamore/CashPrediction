@@ -1,0 +1,6 @@
+# Запросы web API прежнего клиента (как их отправляет браузер): запись фикстуры adjustment-editor
+POST /api/plans/sample {}
+POST /api/session/windows {"type":"ADJUSTMENT_EDITOR","modal":true,"ownerId":"main","context":{"ruleId":"r1","originalDate":"2026-10-05"},"fields":{"action":"CHANGE_AMOUNT","amount":"80000,00","date":"2026-10-05","note":""},"bounds":null}
+PUT /api/session/windows/{w1} {"fields":{"action":"REPLACE","amount":"95000,00","date":"2026-10-07","note":"Премия"}}
+POST /api/session/snapshot {}
+POST /api/debug/crash {}

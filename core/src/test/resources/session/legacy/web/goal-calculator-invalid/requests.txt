@@ -1,0 +1,6 @@
+# Запросы web API прежнего клиента (как их отправляет браузер): запись фикстуры goal-calculator-invalid
+POST /api/plans/sample {}
+POST /api/session/windows {"type":"GOAL_CALCULATOR","modal":false,"ownerId":"main","context":{},"fields":{"target":"300000,00","byDateEnabled":"false","byDate":"","extraSaving":""},"bounds":null}
+PUT /api/session/windows/{w1} {"fields":{"target":"пятьсот","byDateEnabled":"true","byDate":"2027-02-29","extraSaving":"1,2,3"}}
+POST /api/session/snapshot {}
+POST /api/debug/crash {}

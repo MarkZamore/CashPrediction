@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<session schema="1" client="fx" state="running" pid="7792" startedAt="2026-09-13T22:23:08.030788600Z" savedAt="2026-09-13T22:23:14.755181100Z">
+  <main x="840" y="301" width="1200" height="800" maximized="false" view="TABLE" period="M12" filterText="">
+    <plan path=""/>
+    <filters><filter id="showIncome" value="true"/><filter id="showExpense" value="true"/><filter id="showOneTime" value="true"/><filter id="showSkipped" value="false"/><filter id="monthTotals" value="true"/><filter id="chartMarkers" value="true"/><filter id="chartBars" value="false"/><filter id="summaryPanel" value="true"/></filters>
+    <selection rowId=""/>
+  </main>
+  <unsavedPlan dirty="true"><![CDATA[# План: Пример
+
+## Параметры
+
+- Формат: CashPrediction 1
+- Валюта: ₽
+- Начало: 2026-09-01
+- Горизонт: 12 месяцев
+- Начальный баланс: 150 000,00
+- Подушка безопасности: 50 000,00
+- Цель: 300 000,00
+- Название цели: Отпуск
+
+## Регулярные операции
+
+| ID | Название | Тип    | Сумма     | Категория | Повтор         | С | По | Выходные | Активна | Заметка |
+|----|----------|--------|-----------|-----------|----------------|---|----|----------|---------|---------|
+| r1 | Зарплата | доход  | 80 000,00 |           | ежемесячно 5   |   |    | раньше   | да      |         |
+| r2 | Аванс    | доход  | 40 000,00 |           | ежемесячно 20  |   |    | раньше   | да      |         |
+| r3 | Аренда   | расход | 45 000,00 |           | ежемесячно 1   |   |    | нет      | да      |         |
+| r4 | Продукты | расход | 4 000,00  |           | еженедельно сб |   |    | нет      | да      |         |
+| r5 | Кредит   | расход | 12 345,67 |           | ежемесячно 31  |   |    | нет      | да      |         |
+
+## Разовые операции
+
+| ID | Дата       | Название | Тип   | Сумма     | Категория | Заметка |
+|----|------------|----------|-------|-----------|-----------|---------|
+| t1 | 2026-12-20 | Премия   | доход | 60 000,00 |           |         |
+]]></unsavedPlan>
+  <windows>
+    <window id="w1" type="ADJUSTMENT_EDITOR" modal="true" owner="main" x="1147" y="510" width="586" height="448">
+      <context key="ruleId" value="r1"/><context key="originalDate" value="2026-10-05"/>
+      <field id="action" value="REPLACE"/>
+      <field id="amount" value="95000,00"/>
+      <field id="date" value="2026-10-07"/>
+      <field id="note" value="Премия"/>
+    </window>
+  </windows>
+</session>

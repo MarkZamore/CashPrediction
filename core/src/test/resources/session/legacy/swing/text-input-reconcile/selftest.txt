@@ -1,0 +1,11 @@
+# Самотест прежнего клиента swing: запись фикстуры text-input-reconcile
+wait 1500
+sample
+wait 800
+open TEXT_INPUT purpose=reconcile
+wait 1000
+fill last value=171234,56
+wait 800
+snapshot
+wait 2500
+crash

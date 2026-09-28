@@ -7,7 +7,26 @@ import ru.cashprediction.core.session.WindowState;
  * Результат нажатия кнопки или выбора в предпросмотре (архитектура §3.5).
  */
 public sealed interface FormOutcome
-        permits FormOutcome.Stay, FormOutcome.Page, FormOutcome.Close, FormOutcome.OpenChild, FormOutcome.Apply {
+        permits FormOutcome.Stay, FormOutcome.Page, FormOutcome.Close, FormOutcome.OpenChild, FormOutcome.Apply,
+        FormOutcome.SetFields {
+
+    /**
+     * Заменить значения полей и пересчитать форму, не закрывая её и ничего не сообщая контроллеру. Пример: «Выбор
+     * файла» (§6.21) - двойной щелчок по папке, кнопки «↑» и «CashMemory» переходят в другую папку. Дополнение этапа S1
+     * к архитектуре §3.5: на этот вариант уже ссылались описания {@code FormLogic.onFieldActivated} и
+     * {@code FormSession}, но в списке вариантов его не было.
+     *
+     * <p>Значения - канонические формы {@code FieldCodec}; поля, которых нет в карте, не меняются. Строка проблем
+     * от прежнего {@link Stay} сбрасывается, у изменённых полей клиент получает новый текст ({@code FieldView.value}).</p>
+     *
+     * @param values новые значения по id поля
+     */
+    record SetFields(java.util.Map<String, String> values) implements FormOutcome {
+        /** Копирует карту. */
+        public SetFields {
+            values = values == null ? java.util.Map.of() : java.util.Map.copyOf(values);
+        }
+    }
 
     /**
      * Выполнить действие, не закрывая форму (калькулятор цели, §6.6: «Записать цель в план», «Показать с доп.
@@ -48,21 +67,21 @@ public sealed interface FormOutcome
     /**
      * Закрыть форму.
      *
-     * @param result результат для контроллера: {@code null} — отмена; иначе объект, описанный у каждой формы
+     * @param result результат для контроллера: {@code null} - отмена; иначе объект, описанный у каждой формы
      *               (например, {@code Plan} мастера или {@code UnaryOperator<Plan>} правки)
      */
     record Close(Object result) implements FormOutcome {
     }
 
     /**
-     * Открыть дочернее окно, владелец — эта форма (например, корректировка из предпросмотра редактора правила).
+     * Открыть дочернее окно, владелец - эта форма (например, корректировка из предпросмотра редактора правила).
      *
      * <p>Форма ещё не знает id нового окна, а {@code WindowState} не принимает пустой id, поэтому форма пишет в
      * {@code child} id {@link #PENDING_ID} и любого владельца; контроллер заменяет оба
      * ({@code child.withIds(recorder.nextWindowId(), parent.windowId())}) и открывает окно через
      * {@code FlowContext.openForm}.</p>
      *
-     * @param child состояние дочернего окна (тип, контекст, начальные поля; id — {@link #PENDING_ID})
+     * @param child состояние дочернего окна (тип, контекст, начальные поля; id - {@link #PENDING_ID})
      */
     record OpenChild(WindowState child) implements FormOutcome {
 

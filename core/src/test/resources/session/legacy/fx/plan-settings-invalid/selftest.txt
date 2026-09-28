@@ -1,0 +1,11 @@
+# Самотест прежнего клиента fx: запись фикстуры plan-settings-invalid
+wait 1500
+sample
+wait 800
+open PLAN_SETTINGS
+wait 1000
+fill last "startBalance=1 23" horizonKind=MONTHS horizonValue=0 goalTitle=Машина goalTarget=три goalDate=2027-13-01 currency=руб|коп
+wait 800
+snapshot
+wait 2500
+crash

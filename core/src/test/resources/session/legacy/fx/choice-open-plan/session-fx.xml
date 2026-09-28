@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<session schema="1" client="fx" state="running" pid="22088" startedAt="2026-09-13T22:24:04.596869500Z" savedAt="2026-09-13T22:24:10.017350800Z">
+  <main x="840" y="301" width="1200" height="800" maximized="false" view="TABLE" period="M12" filterText="">
+    <plan path="Семейный бюджет.md"/>
+    <filters><filter id="showIncome" value="true"/><filter id="showExpense" value="true"/><filter id="showOneTime" value="true"/><filter id="showSkipped" value="false"/><filter id="monthTotals" value="true"/><filter id="chartMarkers" value="true"/><filter id="chartBars" value="false"/><filter id="summaryPanel" value="true"/></filters>
+    <selection rowId=""/>
+  </main>
+  <unsavedPlan dirty="false"/>
+  <windows>
+    <window id="w1" type="CHOICE" modal="true" owner="main" x="1197" y="613" width="486" height="235">
+      <context key="purpose" value="openPlan"/>
+      <field id="value" value="Семейный бюджет"/>
+    </window>
+  </windows>
+</session>

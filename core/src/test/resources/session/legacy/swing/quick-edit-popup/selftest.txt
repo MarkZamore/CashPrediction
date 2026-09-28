@@ -1,0 +1,10 @@
+# Самотест прежнего клиента swing: запись фикстуры quick-edit-popup
+wait 1500
+sample
+wait 800
+quickedit r1@2026-10-05 95000
+wait 1000
+wait 800
+snapshot
+wait 2500
+crash

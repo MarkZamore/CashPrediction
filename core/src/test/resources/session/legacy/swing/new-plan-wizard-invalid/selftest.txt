@@ -1,0 +1,9 @@
+# Самотест прежнего клиента swing: запись фикстуры new-plan-wizard-invalid
+wait 1500
+open NEW_PLAN_WIZARD
+wait 1000
+fill last name=План/2026 currency= startDate=31.02.2026 "startBalance=12 3" horizonKind=UNTIL horizonValue=abc horizonUntil=2025-01-01 cushion=-500 quickIncomeTitle= "quickIncomeAmount=95 0" quickIncomeDay=45 quickExpenseAmount=abc
+wait 800
+snapshot
+wait 2500
+crash

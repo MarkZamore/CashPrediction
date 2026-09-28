@@ -1,0 +1,11 @@
+# Самотест прежнего клиента fx: запись фикстуры rule-editor-edit-invalid
+wait 1500
+sample
+wait 800
+open RULE_EDITOR mode=edit ruleId=r3
+wait 1000
+fill last title= "amount=45 00" recurrenceKind=YEARLY monthDay=31.02 everyN=0 fromEnabled=true from=2026-02-30 untilEnabled=true until=abc
+wait 800
+snapshot
+wait 2500
+crash

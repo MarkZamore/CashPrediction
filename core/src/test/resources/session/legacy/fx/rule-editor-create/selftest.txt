@@ -1,0 +1,11 @@
+# Самотест прежнего клиента fx: запись фикстуры rule-editor-create
+wait 1500
+sample
+wait 800
+open RULE_EDITOR mode=create kind=EXPENSE
+wait 1000
+fill last title=Спортзал kind=EXPENSE amount=3500,00 category=Здоровье recurrenceKind=WEEKLY dayOfMonth=15 everyN=2 weekday=TUESDAY monthDay=15.03 fromEnabled=true from=2026-09-15 untilEnabled=true until=2027-09-14 weekendPolicy=NEXT_BUSINESS_DAY enabled=true note=Абонемент
+wait 800
+snapshot
+wait 2500
+crash

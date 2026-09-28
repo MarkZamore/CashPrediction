@@ -1,0 +1,11 @@
+# Самотест прежнего клиента swing: запись фикстуры goal-calculator
+wait 1500
+sample
+wait 800
+open GOAL_CALCULATOR
+wait 1000
+fill last target=500000,00 byDateEnabled=true byDate=2027-08-31 extraSaving=5000,00
+wait 800
+snapshot
+wait 2500
+crash

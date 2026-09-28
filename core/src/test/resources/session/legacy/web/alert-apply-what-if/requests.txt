@@ -1,0 +1,6 @@
+# Запросы web API прежнего клиента (как их отправляет браузер): запись фикстуры alert-apply-what-if
+POST /api/plans/sample {}
+PUT /api/what-if {"incomeFactor":"0.9"}
+POST /api/session/windows {"type":"ALERT","modal":true,"ownerId":"main","context":{"purpose":"applyWhatIf"},"fields":{},"bounds":null}
+POST /api/session/snapshot {}
+POST /api/debug/crash {}

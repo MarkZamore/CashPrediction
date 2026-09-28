@@ -1,0 +1,10 @@
+# Запросы web API прежнего клиента (как их отправляет браузер): запись фикстуры nested-rule-adjustment-goal
+POST /api/plans/sample {}
+POST /api/session/windows {"type":"RULE_EDITOR","modal":true,"ownerId":"main","context":{"mode":"edit","ruleId":"r1"},"fields":{"title":"Зарплата","kind":"INCOME","amount":"80000,00","category":"","recurrenceKind":"MONTHLY","dayOfMonth":"5","weekday":"MONDAY","monthDay":"01-05","everyN":"1","fromEnabled":"false","from":"","untilEnabled":"false","until":"","weekendPolicy":"PREVIOUS_BUSINESS_DAY","enabled":"true","note":""},"bounds":null}
+PUT /api/session/windows/{w1} {"fields":{"title":"Зарплата","kind":"INCOME","amount":"85000,00","category":"","recurrenceKind":"MONTHLY","dayOfMonth":"5","weekday":"MONDAY","monthDay":"01-05","everyN":"1","fromEnabled":"false","from":"","untilEnabled":"false","until":"","weekendPolicy":"PREVIOUS_BUSINESS_DAY","enabled":"true","note":"Повышение"}}
+POST /api/session/windows {"type":"ADJUSTMENT_EDITOR","modal":true,"ownerId":"{w1}","context":{"ruleId":"r1","originalDate":"2026-10-05"},"fields":{"action":"CHANGE_AMOUNT","amount":"80000,00","date":"2026-10-05","note":""},"bounds":null}
+PUT /api/session/windows/{w2} {"fields":{"action":"SKIP","amount":"80000,00","date":"2026-10-05","note":"Отпуск"}}
+POST /api/session/windows {"type":"GOAL_CALCULATOR","modal":false,"ownerId":"main","context":{},"fields":{"target":"300000,00","byDateEnabled":"false","byDate":"","extraSaving":""},"bounds":null}
+PUT /api/session/windows/{w3} {"fields":{"target":"250000,00","byDateEnabled":"false","byDate":"","extraSaving":""}}
+POST /api/session/snapshot {}
+POST /api/debug/crash {}

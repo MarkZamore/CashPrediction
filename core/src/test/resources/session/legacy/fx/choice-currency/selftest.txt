@@ -1,0 +1,11 @@
+# Самотест прежнего клиента fx: запись фикстуры choice-currency
+wait 1500
+sample
+wait 800
+open CHOICE purpose=currency
+wait 1000
+fill last value=$
+wait 800
+snapshot
+wait 2500
+crash
