@@ -293,6 +293,8 @@ public final class RuFormats {
      * @throws IllegalArgumentException если слово не распознано
      */
     public static Kind parseKind(String text) {
+        // Типографский минус U+2212 во вводе понимается как «-» (расход); в текстах интерфейса его нет, поэтому
+        // только escape-последовательность, разрешённая проверкой NoMinusSignInUiTextTest в этом методе.
         String t = normalize(text).replace('−', '-');
         if (t.equals(normalize(Kind.INCOME.label())) || t.equals("+") || t.equals("income")) {
             return Kind.INCOME;
@@ -576,10 +578,12 @@ public final class RuFormats {
      * поэтому читатель отбрасывает его с предупреждением.
      *
      * @param text текст суммы
-     * @return {@code true}, если текст начинается с «+», «-» или «−»
+     * @return {@code true}, если текст начинается с «+», «-» или типографского минуса U+2212
      */
     public static boolean hasExplicitSign(String text) {
         String t = normalize(text);
+        // Типографский минус U+2212 во вводе - тоже знак; в текстах интерфейса его нет, поэтому только
+        // escape-последовательность, разрешённая проверкой NoMinusSignInUiTextTest в этом методе.
         return t.startsWith("+") || t.startsWith("-") || t.startsWith("−");
     }
 

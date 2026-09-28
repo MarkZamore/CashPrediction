@@ -201,7 +201,7 @@ export function whatIfItems() {
    */
   const factorOn = (f) => Number(String(f ?? '1').replace(',', '.')) !== 1;
   return [
-    check('Доходы −10 %', factorOn(w.incomeFactor), () => cmd('whatIfIncome'), { title: 'Все доходы на 10 % меньше' }),
+    check('Доходы -10 %', factorOn(w.incomeFactor), () => cmd('whatIfIncome'), { title: 'Все доходы на 10 % меньше' }),
     check('Расходы +10 %', factorOn(w.expenseFactor), () => cmd('whatIfExpense'), { title: 'Все расходы на 10 % больше' }),
     extraSavingItem(),
     SEPARATOR,
@@ -363,7 +363,8 @@ export function buildToolbar(container) {
   // JavaFX: MenuButton → Swing: SwingMenuButton → Web: <button> + <ul role="menu">
   const period = menuButton(() => {
     const found = PERIODS.find(([value]) => value === vs().period);
-    return `Период: ${found ? found[1] : '-'}`;
+    // Период вне известного списка словами, а не одиноким дефисом (решение пользователя от 2026-09-14).
+    return `Период: ${found ? found[1] : 'не задан'}`;
   }, () => [...periodItems(), SEPARATOR, horizonItem()], 'Сколько месяцев показывать в таблице и на графике');
 
   // JavaFX: MenuButton → Swing: SwingMenuButton → Web: <button> + <ul role="menu">

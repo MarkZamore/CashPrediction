@@ -104,7 +104,7 @@ public final class StatusBar extends HBox {
                 default -> status.storeId();
             };
             parts.add(title + (status.ok() ? " ✓ " + time(status.savedAt()) : " ✗"));
-            details.add(title + ": " + (status.ok() ? "записано " + time(status.savedAt()) : "ошибка")
+            details.add(title + ": " + (status.ok() ? written(status.savedAt()) : "ошибка")
                     + (status.message().isBlank() ? "" : " - " + status.message()));
         }
         stores.setText(String.join(" | ", parts));
@@ -130,7 +130,23 @@ public final class StatusBar extends HBox {
         return stores.getText();
     }
 
+    /**
+     * Время записи снимка для сегмента строки состояния («Реестр ✓ 10:15:30»).
+     *
+     * @param instant время записи; {@code null}, если хранилище в этом сеансе ещё ничего не записало
+     * @return время {@code ЧЧ:мм:сс} или слова «ещё не записан» (о снимке)
+     */
     private static String time(Instant instant) {
-        return instant == null ? "-" : TIME.format(instant.atZone(ZoneId.systemDefault()));
+        return instant == null ? "ещё не записан" : TIME.format(instant.atZone(ZoneId.systemDefault()));
+    }
+
+    /**
+     * Строка подсказки о записи снимка («Реестр: записано 10:15:30»).
+     *
+     * @param instant время записи; {@code null}, если хранилище в этом сеансе ещё ничего не записало
+     * @return «записано {время}» или безличное «ещё не записано»
+     */
+    private static String written(Instant instant) {
+        return instant == null ? "ещё не записано" : "записано " + time(instant);
     }
 }

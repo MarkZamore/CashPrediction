@@ -259,7 +259,7 @@ public final class AppMenuBar {
      */
     static void fillWhatIf(javax.swing.JPopupMenu popup, SwingActions actions, ViewModels models) {
         // JavaFX: CheckMenuItem → Swing: JCheckBoxMenuItem (общий ButtonModel) → Web: role="menuitemcheckbox"
-        JCheckBoxMenuItem income = new JCheckBoxMenuItem("Доходы −10 %");
+        JCheckBoxMenuItem income = new JCheckBoxMenuItem("Доходы -10 %");
         income.setModel(models.incomeWhatIf());
         income.setToolTipText("Что будет, если все доходы уменьшатся на 10 %");
         JCheckBoxMenuItem expense = new JCheckBoxMenuItem("Расходы +10 %");

@@ -386,7 +386,7 @@ public final class ForecastTableView extends TableView<TableEntry> {
         if (row.origin() == Origin.START || !row.isIncome()) {
             return "";
         }
-        return row.flags().skipped() ? "-" : row.amount().abs().format();
+        return row.flags().skipped() ? "пропущено" : row.amount().abs().format();
     }
 
     private String expenseText(TableEntry e) {
@@ -397,7 +397,7 @@ public final class ForecastTableView extends TableView<TableEntry> {
         if (row.origin() == Origin.START || !row.isExpense()) {
             return "";
         }
-        return row.flags().skipped() ? "-" : row.amount().abs().format();
+        return row.flags().skipped() ? "пропущено" : row.amount().abs().format();
     }
 
     private String balanceText(TableEntry e) {

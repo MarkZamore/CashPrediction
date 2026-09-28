@@ -106,7 +106,8 @@ function renderStatus(state, session) {
   bar.replaceChildren(...[
     h('span', { class: 'status-seg status-file', title: state.file || 'План ещё не сохранён в файл' },
       `${doc.fileName || 'не сохранён'}${state.dirty ? ' *' : ''}`),
-    h('span', { class: 'status-seg', text: `Период: до ${state.periodEndText || '-'}` }),
+    // Даты конца периода нет только тогда, когда сервер не смог рассчитать прогноз: это пишется словами.
+    h('span', { class: 'status-seg', text: state.periodEndText ? `Период: до ${state.periodEndText}` : 'Период: прогноз не рассчитан' }),
     h('span', { class: 'status-seg', text: `Событий: ${state.rowsTotal ?? 0}` }),
     state.settings && state.settings.autosave
       ? h('span', { class: `status-seg${state.autosaveProblem ? ' warn' : ''}`, title: state.autosaveProblem || 'Автосохранение включено', text: 'Автосохранение' })

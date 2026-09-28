@@ -81,7 +81,7 @@ public final class ViewModels {
      * @param onMode          выбран вид
      * @param onPeriod        выбран период
      * @param onFilter        переключён флажок вида (ключ, новое значение)
-     * @param onIncomeWhatIf  «Доходы −10 %»
+     * @param onIncomeWhatIf  «Доходы -10 %»
      * @param onExpenseWhatIf «Расходы +10 %»
      * @param onExtraSaving   «Откладывать доп.» (сумма в месяц)
      * @param onAutosave      «Автосохранение»
@@ -194,7 +194,7 @@ public final class ViewModels {
         return storeModels.get(Objects.requireNonNull(kind, "kind"));
     }
 
-    /** @return модель «Доходы −10 %» */
+    /** @return модель «Доходы -10 %» */
     public ButtonModel incomeWhatIf() {
         return incomeWhatIf;
     }

@@ -52,7 +52,7 @@ import java.util.Objects;
  */
 public final class ViewControls {
 
-    /** Коэффициент пункта «Доходы −10 %». */
+    /** Коэффициент пункта «Доходы -10 %». */
     static final BigDecimal INCOME_DOWN = new BigDecimal("0.90");
     /** Коэффициент пункта «Расходы +10 %». */
     static final BigDecimal EXPENSE_UP = new BigDecimal("1.10");
@@ -74,7 +74,7 @@ public final class ViewControls {
     private final Map<PeriodChoice, RadioMenuItem> periodItems = new EnumMap<>(PeriodChoice.class);
     private final Map<String, CheckMenuItem> flagItems = new LinkedHashMap<>();
     // JavaFX: CheckMenuItem → Swing: JCheckBoxMenuItem → Web: role="menuitemcheckbox"
-    private final CheckMenuItem incomeDown = new CheckMenuItem("Доходы −10 %");
+    private final CheckMenuItem incomeDown = new CheckMenuItem("Доходы -10 %");
     // JavaFX: CheckMenuItem → Swing: JCheckBoxMenuItem → Web: role="menuitemcheckbox"
     private final CheckMenuItem expenseUp = new CheckMenuItem("Расходы +10 %");
     private final Spinner<Integer> savingSpinner = new Spinner<>(0, 10_000_000, 0, 1000);
@@ -350,7 +350,7 @@ public final class ViewControls {
         return filterField;
     }
 
-    /** @return флажок «Доходы −10 %» */
+    /** @return флажок «Доходы -10 %» */
     public CheckMenuItem incomeDownItem() {
         return incomeDown;
     }

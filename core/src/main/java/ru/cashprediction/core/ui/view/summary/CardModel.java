@@ -14,7 +14,7 @@ import ru.cashprediction.core.ui.token.ColorToken;
  * @param id           идентификатор: {@code now}, {@code m1}, {@code m3}, {@code m6}, {@code m12}, {@code min},
  *                     {@code firstNegative}, {@code avg}, {@code goal}
  * @param title        заголовок («Сейчас», «Через 3 месяца», …)
- * @param value        значение («177 000 ₽», «—», «не задана»)
+ * @param value        значение («177 000 ₽», «за горизонтом», «не задана»)
  * @param valueColor   цвет значения
  * @param caption      подпись («на 13.09.2026», «dd.MM.yyyy · +46 654»)
  * @param captionColor цвет подписи

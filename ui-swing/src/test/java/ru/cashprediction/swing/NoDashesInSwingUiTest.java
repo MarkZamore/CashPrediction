@@ -27,6 +27,14 @@ import org.junit.jupiter.api.Test;
  * escape-последовательность {@code \}{@code u2014} и HTML-сущность ({@code &mdash;}, {@code &#8212;},
  * {@code &#x2014;} и то же для среднего тире). Исключений нет.</p>
  *
+ * <p><b>Минус и прочерк.</b> Решение пользователя от того же дня: типографского знака минуса (U+2212) в текстах
+ * клиента тоже нет (он ищется в тех же литералах и ресурсах: символ, escape-последовательность и сущность
+ * {@code &minus;}), а отсутствующее значение пишется словами («за горизонтом», «пропущено», «нет данных»,
+ * «ещё не записан»), поэтому литерал, состоящий из одного дефиса ({@code "-"} или {@code '-'}), запрещён. Дефис
+ * внутри настоящего значения (отрицательная сумма, диапазон дат «01.09.2026 - 31.10.2026», разделитель
+ * {@code " - "}) не проверяется. Разбор введённой суммы с U+2212 живёт в ядре ({@code Money.parse}), в Swing-клиенте
+ * исключений нет.</p>
+ *
  * <p>Сообщение теста перечисляет {@code файл:строка: текст}. Папка модуля берётся из рабочей папки: сама папка
  * {@code ui-swing} (Maven) или её подпапка в корне репозитория (IDE); если она не найдена, тест падает, а не проходит
  * молча.</p>
@@ -42,6 +50,13 @@ class NoDashesInSwingUiTest {
     private static final Pattern ESCAPED = Pattern.compile("\\\\u+201[34]", Pattern.CASE_INSENSITIVE);
     /** Тире в виде HTML-сущности. */
     private static final Pattern ENTITY = Pattern.compile("&(mdash|ndash|#821[12]|#x201[34]);", Pattern.CASE_INSENSITIVE);
+
+    /** Типографский знак минуса. */
+    private static final char MINUS = (char) 0x2212;
+    /** Знак минуса в виде escape-последовательности Java или JS. */
+    private static final Pattern ESCAPED_MINUS = Pattern.compile("\\\\u+2212", Pattern.CASE_INSENSITIVE);
+    /** Знак минуса в виде HTML-сущности. */
+    private static final Pattern ENTITY_MINUS = Pattern.compile("&(minus|#8722|#x2212);", Pattern.CASE_INSENSITIVE);
 
     /** Двоичные ресурсы: в них случайные байты могут совпасть с кодом тире в UTF-8. */
     private static final Set<String> BINARY = Set.of("png", "jpg", "jpeg", "gif", "ico", "bmp", "class", "jar", "zip");
@@ -82,6 +97,82 @@ class NoDashesInSwingUiTest {
             }
         }
         assertEquals(List.of(), found, "в ресурсах Swing-клиента вместо тире пишется дефис-минус \"-\"");
+    }
+
+    @Test
+    void mainCodeLiteralsHaveNoTypographicMinus() {
+        List<String> found = new ArrayList<>();
+        for (Path file : files(moduleDir().resolve("src/main/java"))) {
+            if (!file.toString().endsWith(".java")) {
+                continue;
+            }
+            for (Literal literal : literals(file, read(file))) {
+                if (hasMinus(literal.text())) {
+                    found.add(literal.toString());
+                }
+            }
+        }
+        assertEquals(List.of(), found, "в текстах Swing-клиента вместо знака минуса U+2212 пишется дефис-минус \"-\"");
+    }
+
+    @Test
+    void resourcesHaveNoTypographicMinus() {
+        List<String> found = new ArrayList<>();
+        for (String folder : List.of("src/main/resources", "src/test/resources")) {
+            for (Path file : files(moduleDir().resolve(folder))) {
+                if (BINARY.contains(extension(file))) {
+                    continue;
+                }
+                String[] lines = read(file).split("\n", -1);
+                for (int i = 0; i < lines.length; i++) {
+                    if (hasMinus(lines[i])) {
+                        found.add(moduleDir().relativize(file) + ":" + (i + 1) + ": " + lines[i].strip());
+                    }
+                }
+            }
+        }
+        assertEquals(List.of(), found, "в ресурсах Swing-клиента вместо знака минуса U+2212 пишется дефис-минус \"-\"");
+    }
+
+    @Test
+    void mainCodeHasNoLoneHyphenPlaceholders() {
+        List<String> found = new ArrayList<>();
+        for (Path file : files(moduleDir().resolve("src/main/java"))) {
+            if (!file.toString().endsWith(".java")) {
+                continue;
+            }
+            for (Literal literal : literals(file, read(file))) {
+                if (isLoneHyphen(literal.text())) {
+                    found.add(literal.toString());
+                }
+            }
+        }
+        assertEquals(List.of(), found,
+                "отсутствующее значение в Swing-клиенте пишется словами («за горизонтом», «пропущено», «нет данных»), а не прочерком \"-\"");
+    }
+
+    @Test
+    void minusAndLoneHyphenChecksFindEveryForm() {
+        String minus = String.valueOf(MINUS);
+        String source = "// \"Доходы " + minus + "10 %\" в комментарии не литерал\n"
+                + "class B {\n"
+                + "    String a = \"Доходы " + minus + "10 %\";\n"
+                + "    String e = \"\\u2212\";\n"
+                + "    String h = \"<html>&minus;10 %</html>\";\n"
+                + "    String dash = \"-\";\n"
+                + "    char sign = '-';\n"
+                + "    String amount = \"-45 000,00\";\n"
+                + "    String range = \" - \";\n"
+                + "    String words = \"за горизонтом\";\n"
+                + "}\n";
+        List<Literal> literals = literals(Path.of("B.java"), source);
+        assertEquals(8, literals.size(), literals.toString());
+        assertEquals(List.of(3, 4, 5), literals.stream().filter(l -> hasMinus(l.text())).map(Literal::line).toList(),
+                literals.toString());
+        assertEquals(List.of(6, 7), literals.stream().filter(l -> isLoneHyphen(l.text())).map(Literal::line).toList(),
+                literals.toString());
+        assertTrue(hasMinus("&#8722;") && hasMinus("&#X2212;") && hasMinus("\\uu2212") && !hasMinus("-10 %"));
+        assertTrue(!isLoneHyphen("- ") && !isLoneHyphen("--") && !isLoneHyphen(""), "только дефис целиком");
     }
 
     @Test
@@ -133,6 +224,26 @@ class NoDashesInSwingUiTest {
     private static boolean hasDash(String text) {
         return text.indexOf(EM_DASH) >= 0 || text.indexOf(EN_DASH) >= 0
                 || ESCAPED.matcher(text).find() || ENTITY.matcher(text).find();
+    }
+
+    /**
+     * Есть ли в тексте типографский знак минуса в любом виде.
+     *
+     * @param text текст литерала или строки ресурса
+     * @return {@code true}, если есть символ U+2212, его escape-последовательность или HTML-сущность
+     */
+    private static boolean hasMinus(String text) {
+        return text.indexOf(MINUS) >= 0 || ESCAPED_MINUS.matcher(text).find() || ENTITY_MINUS.matcher(text).find();
+    }
+
+    /**
+     * Состоит ли литерал из одного дефиса: так раньше показывалось отсутствующее значение (прочерк).
+     *
+     * @param text текст строкового или символьного литерала
+     * @return {@code true} для {@code "-"} и {@code '-'}; дефис внутри значения или разделитель {@code " - "} не в счёт
+     */
+    private static boolean isLoneHyphen(String text) {
+        return text.equals("-");
     }
 
     /**

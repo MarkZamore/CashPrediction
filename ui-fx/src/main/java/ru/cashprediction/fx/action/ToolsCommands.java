@@ -85,7 +85,7 @@ final class ToolsCommands {
         WhatIf whatIf = support.document().viewState().whatIf();
         if (whatIf.isNone()) {
             support.cannotOpen(request, "Режим «что-если» выключен",
-                    "Включите «Доходы −10 %», «Расходы +10 %» или доп. экономию в меню Инструменты → Что-если.");
+                    "Включите «Доходы -10 %», «Расходы +10 %» или доп. экономию в меню Инструменты → Что-если.");
             return;
         }
         // JavaFX: Alert → Swing: JOptionPane.showConfirmDialog → Web: <dialog class="alert">

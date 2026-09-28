@@ -691,7 +691,7 @@ public final class SwingActions {
     }
 
     /**
-     * Включено ли «Доходы −10 %».
+     * Включено ли «Доходы -10 %».
      *
      * @return {@code true}, если включено
      */
@@ -709,7 +709,7 @@ public final class SwingActions {
     }
 
     /**
-     * «Что-если → Доходы −10 %».
+     * «Что-если → Доходы -10 %».
      *
      * @param on включить
      */

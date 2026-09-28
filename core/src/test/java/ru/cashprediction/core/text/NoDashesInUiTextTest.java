@@ -50,6 +50,9 @@ class NoDashesInUiTextTest {
     /** Среднее тире U+2013. */
     private static final char EN_DASH = (char) 0x2013;
 
+    /** Типографский знак минуса U+2212, который не является текстом интерфейса. */
+    private static final char MINUS_SIGN = (char) 0x2212;
+
     /** Любая форма длинного или среднего тире: символ, escape-последовательность или HTML-сущность. */
     private static final Pattern DASH = Pattern.compile(
             "[" + EN_DASH + EM_DASH + "]"
@@ -167,6 +170,22 @@ class NoDashesInUiTextTest {
         assertEquals(List.of(), found, RULE);
     }
 
+    /** В спецификации и общих текстовых ресурсах знак U+2212 не маскирует обычный дефис-минус. */
+    @Test
+    void sharedUiTextsAndSpecificationHaveNoTypographicMinus() {
+        List<String> found = new ArrayList<>();
+        for (Path root : List.of(MAIN_RESOURCES, MAIN_RESOURCES_FILTERED)) {
+            for (Path file : files(root)) {
+                inSign(file, read(file), MINUS_SIGN).forEach(finding -> found.add(finding.toString()));
+            }
+        }
+        for (Path file : List.of(CoreModuleDir.resolve("../docs/ui-spec.md"),
+                CoreModuleDir.resolve("../docs/design/ui-spec-v2.md"))) {
+            inSign(file, read(file), MINUS_SIGN).forEach(finding -> found.add(finding.toString()));
+        }
+        assertEquals(List.of(), found, "в общих текстах и спецификации знак U+2212 заменяется дефисом-минусом");
+    }
+
     /** Исключение для проверок тире узкое: только файлы {@code NoDashesIn*Test.java}. */
     @Test
     void onlyDashGuardFilesAreExempt() {
@@ -236,6 +255,18 @@ class NoDashesInUiTextTest {
         String[] lines = text.split("\n", -1);
         for (int i = 0; i < lines.length; i++) {
             if (DASH.matcher(lines[i]).find()) {
+                found.add(new Finding(file, i + 1, lines[i].strip()));
+            }
+        }
+        return found;
+    }
+
+    /** Строки текста с конкретным символом. */
+    private static List<Finding> inSign(Path file, String text, char sign) {
+        List<Finding> found = new ArrayList<>();
+        String[] lines = text.split("\\n", -1);
+        for (int i = 0; i < lines.length; i++) {
+            if (lines[i].indexOf(sign) >= 0) {
                 found.add(new Finding(file, i + 1, lines[i].strip()));
             }
         }

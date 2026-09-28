@@ -56,6 +56,15 @@ class NoDashesInWebUiTest {
     private static final Pattern DASH_IN_LITERAL = Pattern.compile(
             "[\u2013\u2014]|(?<!\\\\)(?:\\\\\\\\)*\\\\u+201[34]", Pattern.CASE_INSENSITIVE);
 
+    /** Знак U+2212 в UTF-8, unicode-escape, CSS-escape или HTML-сущности. */
+    private static final Pattern MINUS_BYTES = Pattern.compile(
+            "\u00E2\u0088\u0092|\\\\u\\{?0*2212\\}?|\\\\0{0,2}2212(?![0-9a-f])|&minus;|&#0*8722;|&#x0*2212;",
+            Pattern.CASE_INSENSITIVE);
+
+    /** Типографский минус в Java-литерале или unicode-escape. */
+    private static final Pattern MINUS_IN_LITERAL = Pattern.compile(
+            "\u2212|(?<!\\\\)(?:\\\\\\\\)*\\\\u+2212", Pattern.CASE_INSENSITIVE);
+
     @Test
     void webResourcesAndTestResourcesContainNoDashBytes() {
         List<String> found = new ArrayList<>(dashBytes(moduleDir().resolve(MARKER)));
@@ -74,6 +83,20 @@ class NoDashesInWebUiTest {
                 .toList();
         assertEquals(List.of(), found,
                 "строки web-сервера, которые видит пользователь, пишутся с дефисом-минусом, а не с тире");
+    }
+
+    /** В web-клиенте знак U+2212 не попадает ни в страницу, ни в ответы сервера. */
+    @Test
+    void webResourcesAndMainJavaLiteralsContainNoTypographicMinus() {
+        List<String> found = new ArrayList<>(signByteLines(moduleDir().resolve(MARKER), MINUS_BYTES));
+        Path testResources = moduleDir().resolve("src/test/resources");
+        if (Files.isDirectory(testResources)) {
+            found.addAll(signByteLines(testResources, MINUS_BYTES));
+        }
+        for (Path file : javaFiles(moduleDir().resolve("src/main/java"))) {
+            found.addAll(signsInLiterals(file, read(file), MINUS_IN_LITERAL));
+        }
+        assertEquals(List.of(), found, "в интерфейсе web-клиента U+2212 заменяется дефисом-минусом");
     }
 
     @Test
@@ -155,6 +178,11 @@ class NoDashesInWebUiTest {
      * @return найденные строки {@code файл:строка: текст}
      */
     private static List<String> dashBytes(Path dir) {
+        return signByteLines(dir, DASH_BYTES);
+    }
+
+    /** Строки файлов с одним из запрещённых знаков, заданных байтовым шаблоном. */
+    private static List<String> signByteLines(Path dir, Pattern pattern) {
         List<String> found = new ArrayList<>();
         for (Path file : files(dir)) {
             byte[] bytes;
@@ -164,7 +192,7 @@ class NoDashesInWebUiTest {
                 throw new UncheckedIOException(e);
             }
             List<String> lines = List.of(new String(bytes, StandardCharsets.UTF_8).split("\n", -1));
-            for (int line : dashByteLines(bytes)) {
+            for (int line : signByteLines(bytes, pattern)) {
                 found.add(file + ":" + line + ": " + lines.get(line - 1).strip());
             }
         }
@@ -178,11 +206,16 @@ class NoDashesInWebUiTest {
      * @return номера строк по возрастанию
      */
     private static List<Integer> dashByteLines(byte[] bytes) {
+        return signByteLines(bytes, DASH_BYTES);
+    }
+
+    /** Номера строк, которые совпали с байтовым шаблоном запрещённого знака. */
+    private static List<Integer> signByteLines(byte[] bytes, Pattern pattern) {
         String latin = new String(bytes, StandardCharsets.ISO_8859_1);
         List<Integer> lines = new ArrayList<>();
         String[] split = latin.split("\n", -1);
         for (int i = 0; i < split.length; i++) {
-            if (DASH_BYTES.matcher(split[i]).find()) {
+            if (pattern.matcher(split[i]).find()) {
                 lines.add(i + 1);
             }
         }
@@ -197,11 +230,16 @@ class NoDashesInWebUiTest {
      * @return найденные строки {@code файл:строка: текст}
      */
     private static List<String> dashesInLiterals(Path file, String source) {
+        return signsInLiterals(file, source, DASH_IN_LITERAL);
+    }
+
+    /** Строки Java-литералов с запрещённым знаком. */
+    private static List<String> signsInLiterals(Path file, String source, Pattern pattern) {
         String[] lines = source.split("\n", -1);
         List<String> found = new ArrayList<>();
         int lastLine = 0;
         for (Literal literal : literals(source)) {
-            Matcher m = DASH_IN_LITERAL.matcher(literal.text());
+            Matcher m = pattern.matcher(literal.text());
             while (m.find()) {
                 int line = lineOf(source, literal.start() + m.start());
                 if (line != lastLine) {

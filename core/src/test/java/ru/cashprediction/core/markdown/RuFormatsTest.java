@@ -121,6 +121,7 @@ class RuFormatsTest {
 
     @ParameterizedTest(name = "«{0}» = {1}")
     @CsvSource({"доход, INCOME", "ДОХОД, INCOME", "+, INCOME", "income, INCOME", "расход, EXPENSE", "-, EXPENSE",
+        // Типографский минус U+2212 во вводе записан escape-последовательностью.
         "−, EXPENSE", "Expense, EXPENSE", "' Расход ', EXPENSE"})
     void parsesKind(String text, Kind expected) {
         assertEquals(expected, RuFormats.parseKind(text));
@@ -272,7 +273,7 @@ class RuFormatsTest {
         assertThrows(IllegalArgumentException.class, () -> RuFormats.parseMoney("8о 000"));
         assertTrue(RuFormats.hasExplicitSign(" -5"));
         assertTrue(RuFormats.hasExplicitSign("+5"));
-        assertTrue(RuFormats.hasExplicitSign("−5"));
+        assertTrue(RuFormats.hasExplicitSign("−5"), "типографский минус U+2212 - тоже знак");
         assertFalse(RuFormats.hasExplicitSign("5"));
         assertEquals("12 345,67", RuFormats.formatMoney(Money.ofMinor(1_234_567)));
     }

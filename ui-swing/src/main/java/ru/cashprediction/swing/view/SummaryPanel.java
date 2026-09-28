@@ -58,7 +58,8 @@ public final class SummaryPanel extends JPanel {
     /** Одна карточка: подписи и то, что показать во всплывающей карточке. */
     private final class Card extends JPanel {
         private final JLabel title = new JLabel();
-        private final JLabel value = new JLabel("-");
+        /** Значение карточки; до первого прогноза - словами «нет данных», а не прочерком. */
+        private final JLabel value = new JLabel("нет данных");
         private final JLabel note = new JLabel(" ");
         private LocalDate date;
         private LocalDate sparkFrom;
@@ -238,7 +239,7 @@ public final class SummaryPanel extends JPanel {
             card.set(balance.get().format(currency), colorOf(balance.get(), plan.cushion()), "на " + DateFormats.ru(date), date,
                     anchor, date, Money.ZERO, "Баланс через " + months + " мес. от сегодняшнего дня");
         } else {
-            card.set("-", Palette.PAST, "за горизонтом", null, anchor, forecast.endDate(), null,
+            card.set("за горизонтом", Palette.PAST, "за горизонтом", null, anchor, forecast.endDate(), null,
                     "Дата " + DateFormats.ru(date) + " за пределами горизонта плана");
         }
     }
@@ -258,7 +259,7 @@ public final class SummaryPanel extends JPanel {
     public void showUnavailable(String message) {
         forecast = null;
         for (Card card : cards) {
-            card.set("-", Palette.PAST, " ", null, null, null, null, message);
+            card.set("нет данных", Palette.PAST, " ", null, null, null, null, message);
         }
     }
 

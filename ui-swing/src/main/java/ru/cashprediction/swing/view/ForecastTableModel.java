@@ -192,10 +192,10 @@ public final class ForecastTableModel extends AbstractTableModel {
         };
     }
 
-    /** У пропущенного события сумма нулевая: показываем прочерк в колонке его типа. */
+    /** У пропущенного события сумма нулевая: показываем «пропущено» в колонке его типа. */
     private static String skippedAmount(ForecastRow row, boolean incomeColumn) {
         if (row.flags().skipped() && row.origin() != Origin.START && row.isIncome() == incomeColumn) {
-            return "-";
+            return "пропущено";
         }
         return "";
     }

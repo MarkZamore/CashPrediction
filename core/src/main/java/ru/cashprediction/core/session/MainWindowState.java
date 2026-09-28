@@ -15,7 +15,7 @@ import java.util.Objects;
  *
  * <p><b>Дополнительные ключи карты фильтров</b> (спецификация интерфейса v2, изменение 6): кроме флажков меню
  * «Вид» карта хранит {@link #FILTER_PAST_EXPANDED} (раскрыта ли группа «Прошедшие события»),
- * {@link #FILTER_WHAT_IF_INCOME} («Доходы −10 %») и {@link #FILTER_WHAT_IF_EXPENSE} («Расходы +10 %»).
+ * {@link #FILTER_WHAT_IF_INCOME} («Доходы -10 %») и {@link #FILTER_WHAT_IF_EXPENSE} («Расходы +10 %»).
  * Старые снимки без этих ключей читаются как «ключ не задан» — значение по умолчанию.</p>
  *
  * <p><b>Поле {@link #whatIfExtra()}</b> добавлено к схеме 1 необязательно: снимки, записанные до его появления,
@@ -42,7 +42,7 @@ public record MainWindowState(WindowBounds bounds, boolean maximized, String vie
 
     /** Ключ карты фильтров: раскрыта ли группа «Прошедшие события» таблицы (спецификация §5.2). */
     public static final String FILTER_PAST_EXPANDED = "pastExpanded";
-    /** Ключ карты фильтров: включён ли флажок «что-если» «Доходы −10 %» (спецификация §3.4). */
+    /** Ключ карты фильтров: включён ли флажок «что-если» «Доходы -10 %» (спецификация §3.4). */
     public static final String FILTER_WHAT_IF_INCOME = "whatIfIncome";
     /** Ключ карты фильтров: включён ли флажок «что-если» «Расходы +10 %» (спецификация §3.4). */
     public static final String FILTER_WHAT_IF_EXPENSE = "whatIfExpense";

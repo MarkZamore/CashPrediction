@@ -217,7 +217,8 @@ export function showRecoveryBanner(session) {
     h('div', { class: 'banner-text' },
       h('strong', { text: 'Предыдущий сеанс CashPrediction завершился аварийно.' }),
       h('div', {
-        text: `Начат: ${session.pendingStartedAtText || '-'}; снимок сохранён: ${session.pendingSavedAtText || '-'}. `
+        // Неизвестное время начала и отсутствующий снимок пишутся словами, а не одиноким дефисом.
+        text: `Начат: ${session.pendingStartedAtText || 'неизвестно'}; снимок сохранён: ${session.pendingSavedAtText || 'нет'}. `
           + 'Восстановить открытые окна и введённые данные?',
       }),
       h('div', {

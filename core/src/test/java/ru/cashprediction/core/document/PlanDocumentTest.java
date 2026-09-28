@@ -560,7 +560,7 @@ class PlanDocumentTest {
         Adjustment bonus = adjust("r1", "2026-12-05", new Adjustment.ChangeAmount(Money.ofMajor(95_000)));
         Adjustment rent = adjust("r2", "2027-01-01", new Adjustment.Replace(Money.ofMajor(1), LocalDate.of(2027, 1, 9)));
         doc.replace(basePlan().withAdjustments(List.of(bonus, rent)), null, false, List.of());
-        // Доходы −100 %, расходы −99,9 % через коэффициент: 1,00 ₽ × 0,001 округляется до нуля.
+        // Доходы -100 %, расходы -99,9 % через коэффициент: 1,00 ₽ × 0,001 округляется до нуля.
         doc.setViewState(doc.viewState().withWhatIf(new WhatIf(java.math.BigDecimal.ZERO, new java.math.BigDecimal("0.001"), Money.ZERO)));
         long[] expected = doc.forecast().dailyBalance();
 

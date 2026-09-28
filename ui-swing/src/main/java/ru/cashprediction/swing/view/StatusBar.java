@@ -139,9 +139,11 @@ public final class StatusBar extends JPanel {
                 case "xml" -> "XML";
                 default -> s.storeId();
             };
-            String time = s.savedAt() == null ? "-" : TIME.format(s.savedAt());
+            // Хранилище, которое в этом сеансе ещё ничего не записало, показывается словами, а не прочерком.
+            String time = s.savedAt() == null ? "ещё не записан" : TIME.format(s.savedAt());
             parts.add(title + (s.ok() ? " ✓ " + time : " ✗ " + time));
-            details.add(title + ": " + (s.ok() ? "записано " + time : "ошибка - " + s.message()));
+            String written = s.savedAt() == null ? "ещё не записано" : "записано " + time;
+            details.add(title + ": " + (s.ok() ? written : "ошибка - " + s.message()));
         }
         storesLabel.setText(String.join(" | ", parts));
         storesLabel.setForeground(statuses.values().stream().allMatch(StoreStatus::ok) ? getForeground() : Palette.EXPENSE);

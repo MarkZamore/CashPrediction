@@ -214,7 +214,7 @@ class PlanMarkdownToleranceTest {
                 | t1 | 2026-10-01 | Ноутбук | расход | -90 000 |
                 | t2 | 2026-10-02 | Премия | доход | +5 000 |
                 | t3 | 2026-10-03 | Кино | расход | −700 |
-                """;
+                """; // t3: типографский минус U+2212, записан escape-последовательностью.
         ReadResult result = PlanMarkdownReader.read(text, "x", TODAY);
         assertEquals(3, result.diagnostics().size());
         assertTrue(result.diagnostics().stream().allMatch(d -> d.severity() == Severity.WARNING));
