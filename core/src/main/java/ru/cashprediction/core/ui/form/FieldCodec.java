@@ -17,6 +17,7 @@ import ru.cashprediction.core.model.Money;
 import ru.cashprediction.core.model.RecurrenceKind;
 import ru.cashprediction.core.model.WeekendPolicy;
 import ru.cashprediction.core.session.WindowType;
+import ru.cashprediction.core.ui.text.UiText;
 import ru.cashprediction.core.util.RuText;
 
 /**
@@ -149,6 +150,17 @@ public final class FieldCodec {
             return value;
         }
         String code = value.strip();
+        if (type == WindowType.CHOICE && "value".equals(fieldId)) {
+            if (code.equals("__other__") || code.equalsIgnoreCase(UiText.get("legacy.choice.currencyCustom"))) {
+                return "custom";
+            }
+            if (code.equals("__file__") || code.equalsIgnoreCase(UiText.get("legacy.choice.fromFile"))) {
+                return "fromFile";
+            }
+            if (code.startsWith("name:")) {
+                return code.substring("name:".length());
+            }
+        }
         switch (fieldId) {
             case "kind" -> {
                 if (type == WindowType.RULE_EDITOR || type == WindowType.ONE_TIME_EDITOR) {

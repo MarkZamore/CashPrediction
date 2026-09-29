@@ -1,6 +1,7 @@
 package ru.cashprediction.core.ui.alert;
 
 import java.util.Objects;
+import java.util.Map;
 import ru.cashprediction.core.session.StatefulWindow;
 import ru.cashprediction.core.session.WindowState;
 import ru.cashprediction.core.session.WindowType;
@@ -42,6 +43,8 @@ public final class AlertSession implements StatefulWindow {
     private final String ownerId;
     private final AlertSpec spec;
     private final Host host;
+    private boolean registered;
+    private boolean unregistered;
 
     /**
      * Создаёт сеанс.
@@ -90,21 +93,31 @@ public final class AlertSession implements StatefulWindow {
 
     /** Клиент показал сообщение. */
     public void shown() {
-        throw new UnsupportedOperationException("S1: core-forms-framework - AlertSession.shown");
+        if (!registered && spec.restorable()) {
+            registered = true;
+            host.registered(this);
+        }
     }
 
     /** Сообщение закрыто (любой кнопкой или крестиком). */
     public void closed() {
-        throw new UnsupportedOperationException("S1: core-forms-framework - AlertSession.closed");
+        if (registered && !unregistered) {
+            unregistered = true;
+            host.unregistered(this);
+        }
     }
 
     @Override
     public WindowState captureState() {
-        throw new UnsupportedOperationException("S1: core-forms-framework - AlertSession.captureState");
+        return new WindowState(windowId, WindowType.ALERT, true, ownerId, null,
+                Map.of(WindowType.CONTEXT_PURPOSE, spec.purpose(), WindowType.CONTEXT_TARGET_ID, spec.targetId()), Map.of());
     }
 
     @Override
     public void applyState(WindowState state) {
-        throw new UnsupportedOperationException("S1: core-forms-framework - AlertSession.applyState");
+        Objects.requireNonNull(state, "state");
+        if (state.type() != null && state.type() != WindowType.ALERT) {
+            throw new IllegalArgumentException("state.type");
+        }
     }
 }

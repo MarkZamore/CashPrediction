@@ -524,6 +524,10 @@ public final class FormSession implements StatefulWindow {
         Map<String, String> values = new LinkedHashMap<>(state.values());
         // Дословно: канонические значения и некорректный текст из снимка не переводятся повторно.
         values.putAll(restored.fields());
+        Map<String, String> normalized = logic.normalizeRestoredValues(Map.copyOf(values), context);
+        if (normalized != null) {
+            normalized.forEach((id, value) -> values.put(id, Objects.requireNonNullElse(value, "")));
+        }
         int page = 0;
         String pageText = restored.contextValue(WindowType.CONTEXT_PAGE);
         if (FieldCodec.parseLong(pageText).isPresent()) {
@@ -634,7 +638,9 @@ public final class FormSession implements StatefulWindow {
             if (id.equals(typingField)) {
                 value = null;
             } else if (given != null && given.value() != null) {
-                value = given.value();
+                // Логика возвращает канонические значения состояния; перед отдачей клиенту превращаем суммы и даты
+                // в человекочитаемый вид. Некорректный текст FieldCodec оставляет дословно.
+                value = FieldCodec.display(kind, given.value());
             } else {
                 value = FieldCodec.display(kind, state.value(id));
             }

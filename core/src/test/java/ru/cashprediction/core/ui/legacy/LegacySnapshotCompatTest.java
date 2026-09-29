@@ -24,7 +24,6 @@ import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -247,7 +246,6 @@ class LegacySnapshotCompatTest {
      * форм ({@code MOVE_DATE} → {@code MOVE}, табуляция → {@code TAB}, «другая…» / {@code __other__} → «своя валюта»,
      * «Из файла…» / {@code __file__} → «из файла»).
      */
-    @Disabled("S1 core-forms-framework: FieldCodec.acceptLegacy (enable after the S1 form tasks merge)")
     @Test
     void acceptLegacyYieldsCanonicalValues() throws Exception {
         List<String> mismatches = new ArrayList<>();
@@ -266,7 +264,6 @@ class LegacySnapshotCompatTest {
      * Приведение идемпотентно для всех полей всех фикстур: каноническое значение, пропущенное через
      * {@link FieldCodec#acceptLegacy} ещё раз, не меняется (так восстановление после восстановления не портит ввод).
      */
-    @Disabled("S1 core-forms-framework: FieldCodec.acceptLegacy (enable after the S1 form tasks merge)")
     @ParameterizedTest(name = "{0}")
     @MethodSource("fixtures")
     void acceptLegacyIsIdempotent(Fixture fixture) throws Exception {
@@ -285,8 +282,6 @@ class LegacySnapshotCompatTest {
      * в {@code FormState} и в {@code captureState}, ту же страницу мастера и те же контекст и границы; сеанс не бросает
      * исключений ни на корректном, ни на некорректном вводе.
      */
-    @Disabled("S1 core-forms-framework + core-forms-plan + core-forms-ops: FormSession.applyState and the form logics"
-            + " (enable after the S1 form tasks merge)")
     @ParameterizedTest(name = "{0}")
     @MethodSource("formFixtures")
     void applyStateRestoresLegacyWindowsInTheNewForms(Fixture fixture, @TempDir Path dir) throws Exception {
@@ -295,10 +290,11 @@ class LegacySnapshotCompatTest {
         for (WindowState legacy : snapshot.windows()) {
             WindowState canonical = canonicalWindow(legacy);
             Restored restored = restore(fixture, canonical, app);
-            assertEquals(canonical.fields(), pick(restored.session().state().values(), canonical.fields().keySet()),
+            Map<String, String> expectedFields = restoredFields(canonical, app);
+            assertEquals(expectedFields, pick(restored.session().state().values(), expectedFields.keySet()),
                     fixture + " " + legacy.id() + " state");
             WindowState captured = restored.session().captureState();
-            assertEquals(canonical.fields(), pick(captured.fields(), canonical.fields().keySet()), fixture + " capture");
+            assertEquals(expectedFields, pick(captured.fields(), expectedFields.keySet()), fixture + " capture");
             assertEquals(legacy.type(), captured.type());
             assertEquals(legacy.ownerId(), captured.ownerId());
             assertEquals(legacy.bounds(), captured.bounds(), fixture + " bounds");
@@ -315,8 +311,6 @@ class LegacySnapshotCompatTest {
      * Восстановленная форма показывает прежний ввод текстами нового интерфейса: суммы «95 000,00», даты «05.10.2026»,
      * день года «15.03», некорректный ввод - дословно (спецификация v2, §6.0 «Закрытый набор элементов формы»).
      */
-    @Disabled("S1 core-forms-framework + core-forms-plan + core-forms-ops: FormSession.applyState and FormView field texts"
-            + " (enable after the S1 form tasks merge)")
     @Test
     void applyStateShowsExpectedDisplayTexts(@TempDir Path dir) throws Exception {
         List<String> mismatches = new ArrayList<>();
@@ -341,8 +335,6 @@ class LegacySnapshotCompatTest {
      * вариант {@link ChoiceForms#CUSTOM}; «Открыть план» по имени плана - вариант этого плана, «Из файла…»
      * ({@code __file__}) - {@link OpenPlanForm#FROM_FILE}.
      */
-    @Disabled("S1 core-forms-framework: ChoiceForms.currency, OpenPlanForm and FieldCodec.acceptLegacy"
-            + " (enable after the S1 form tasks merge)")
     @ParameterizedTest(name = "{0}")
     @MethodSource("fixtures")
     void legacyChoiceValuesSelectTheNewOptions(Fixture fixture, @TempDir Path dir) throws Exception {
@@ -369,7 +361,6 @@ class LegacySnapshotCompatTest {
      * Прежнее подтверждение пересоздаётся по назначению и цели ({@code ConfirmForms}), восстанавливаемо и записывается в
      * снимок с тем же контекстом и без полей ({@code AlertSession.captureState}).
      */
-    @Disabled("S1 core-forms-framework: ConfirmForms, AlertCatalog and AlertSession (enable after the S1 form tasks merge)")
     @ParameterizedTest(name = "{0}")
     @MethodSource("alertFixtures")
     void legacyAlertsAreRecreatedFromPurposeAndTarget(Fixture fixture, @TempDir Path dir) throws Exception {
@@ -561,6 +552,25 @@ class LegacySnapshotCompatTest {
         Map<String, String> fields = new LinkedHashMap<>();
         legacy.fields().forEach((id, value) -> fields.put(id, FieldCodec.acceptLegacy(legacy.type(), id, value)));
         return legacy.withFields(fields);
+    }
+
+    /**
+     * Ожидаемые значения после восстановления: имя плана из старого снимка становится полным путём варианта списка.
+     * Это единственное значение старого интерфейса, которое нельзя сохранить как есть - новый список выбирает файл по
+     * его стабильному коду-пути.
+     */
+    private static Map<String, String> restoredFields(WindowState canonical, AppState app) {
+        if (canonical.type() != WindowType.CHOICE
+                || !OpenPlanForm.PURPOSE.equals(canonical.contextValue(WindowType.CONTEXT_PURPOSE))) {
+            return canonical.fields();
+        }
+        String value = canonical.field("value");
+        if (!LegacyFixtures.SEED_PLAN_NAME.equals(value)) {
+            return canonical.fields();
+        }
+        Map<String, String> fields = new LinkedHashMap<>(canonical.fields());
+        fields.put("value", app.cashMemory().resolve(LegacyFixtures.SEED_PLAN_NAME + ".md").toString());
+        return Map.copyOf(fields);
     }
 
     /**

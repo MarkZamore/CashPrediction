@@ -1,12 +1,32 @@
 package ru.cashprediction.core.ui.forms.ops;
 
+import java.time.LocalDate;
+import java.util.List;
 import java.util.Map;
+import java.util.Optional;
+import ru.cashprediction.core.model.Kind;
+import ru.cashprediction.core.model.Money;
+import ru.cashprediction.core.model.OneTimeTransaction;
+import ru.cashprediction.core.model.TxId;
 import ru.cashprediction.core.ui.form.FormContext;
 import ru.cashprediction.core.ui.form.FormLogic;
 import ru.cashprediction.core.ui.form.FormOutcome;
 import ru.cashprediction.core.ui.form.FormSpec;
 import ru.cashprediction.core.ui.form.FormState;
 import ru.cashprediction.core.ui.form.FormView;
+import ru.cashprediction.core.ui.form.ButtonSpecs;
+import ru.cashprediction.core.ui.form.ButtonView;
+import ru.cashprediction.core.ui.form.FieldChecks;
+import ru.cashprediction.core.ui.form.FieldSpecs;
+import ru.cashprediction.core.ui.form.FieldView;
+import ru.cashprediction.core.ui.form.FormPage;
+import ru.cashprediction.core.ui.form.FormRow;
+import ru.cashprediction.core.ui.form.Option;
+import ru.cashprediction.core.ui.form.Orientation;
+import ru.cashprediction.core.ui.form.Presentation;
+import ru.cashprediction.core.ui.form.Problem;
+import ru.cashprediction.core.ui.text.UiText;
+import ru.cashprediction.core.session.WindowType;
 
 /**
  * §6.4 ONE_TIME_EDITOR «Разовая операция» (≡, 560; контекст {@code mode}, {@code txId}; представление {@code DIALOG}).
@@ -32,21 +52,79 @@ public final class OneTimeForm implements FormLogic {
 
     @Override
     public FormSpec spec(FormContext context) {
-        throw new UnsupportedOperationException("S1: core-forms-ops - OneTimeForm.spec");
+        return new FormSpec("oneTime", WindowType.ONE_TIME_EDITOR, "", Presentation.DIALOG,
+                UiText.get("oneTime.window"), "≡", 560, true, false, true,
+                List.of(new FormPage("main", List.of(
+                        new FormRow.Field(FieldSpecs.date("date", UiText.get("oneTime.date"))),
+                        new FormRow.Field(FieldSpecs.focused(FieldSpecs.text("title", UiText.get("oneTime.title"), UiText.get("oneTime.title.prompt")))),
+                        new FormRow.Field(FieldSpecs.radio("kind", UiText.get("oneTime.kind"), Orientation.HORIZONTAL, OpsForms.kindOptions())),
+                        new FormRow.Field(FieldSpecs.money("amount", UiText.get("oneTime.amount"))),
+                        new FormRow.Field(FieldSpecs.editableChoice("category", UiText.get("oneTime.category"), OpsForms.categoryOptions(context.app().document().plan().categories()))),
+                        new FormRow.Field(FieldSpecs.multiline("note", UiText.get("oneTime.note"), 2))))),
+                List.of(ButtonSpecs.ok(UiText.get("button.save")), ButtonSpecs.cancel()), ButtonSpecs.OK);
     }
 
     @Override
     public Map<String, String> defaults(FormContext context) {
-        throw new UnsupportedOperationException("S1: core-forms-ops - OneTimeForm.defaults");
+        OneTimeTransaction existing = existing(context);
+        LocalDate date = OpsForms.date(context.contextValue(CONTEXT_DATE));
+        LocalDate defaultDate = date == null ? OpsForms.effectiveToday(context.app().today(), context.app().document().plan().startDate()) : date;
+        if (existing != null) {
+            return Map.of("date", ru.cashprediction.core.ui.form.FieldCodec.date(existing.date()), "title", existing.title(),
+                    "kind", existing.kind().name(), "amount", ru.cashprediction.core.ui.form.FieldCodec.money(existing.amount()),
+                    "category", existing.category(), "note", existing.note());
+        }
+        return Map.of("date", ru.cashprediction.core.ui.form.FieldCodec.date(defaultDate), "title", "", "kind",
+                OpsForms.enumValue(Kind.class, context.contextValue("kind"), Kind.EXPENSE).name(), "amount", "", "category", "", "note", "");
     }
 
     @Override
     public FormView evaluate(FormState state, FormContext context) {
-        throw new UnsupportedOperationException("S1: core-forms-ops - OneTimeForm.evaluate");
+        Optional<String> error = FieldChecks.first(
+                FieldChecks.date(UiText.get("oneTime.date"), state.value("date"), true),
+                FieldChecks.requiredText(UiText.get("oneTime.title"), state.value("title")),
+                FieldChecks.money(UiText.get("oneTime.amount"), state.value("amount"), FieldChecks.MoneyRule.REQUIRED_POSITIVE));
+        LocalDate date = OpsForms.date(state.value("date"));
+        String warning = error.isPresent() || date == null || !date.isBefore(context.app().document().plan().startDate())
+                && !date.isAfter(context.app().document().plan().endDate()) ? ""
+                : UiText.get("oneTime.warning.outside", ru.cashprediction.core.ui.text.UiFormats.date(context.app().document().plan().startDate()),
+                        ru.cashprediction.core.ui.text.UiFormats.date(context.app().document().plan().endDate()));
+        Map<String, FieldView> fields = OpsForms.values(state, "date", "title", "kind", "amount", "category", "note");
+        boolean edit = existing(context) != null;
+        fields.put("title", new FieldView(state.value("title"), true, true, false, null, null, null));
+        fields.put("amount", new FieldView(state.value("amount"), true, true, false, null, null, null));
+        return new FormView(0, 0, edit ? UiText.get("oneTime.header.edit", existing(context).title()) : UiText.get("oneTime.header.new"), fields,
+                OpsForms.problem(error, warning), Map.of(ButtonSpecs.OK, error.isPresent() ? ButtonView.DISABLED : ButtonView.ENABLED), List.of(), List.of(), "", false);
     }
 
     @Override
     public FormOutcome onButton(String buttonId, FormState state, FormContext context) {
-        throw new UnsupportedOperationException("S1: core-forms-ops - OneTimeForm.onButton");
+        if (ButtonSpecs.CANCEL.equals(buttonId)) {
+            return new FormOutcome.Close(null);
+        }
+        if (!ButtonSpecs.OK.equals(buttonId)) {
+            return FormOutcome.stay();
+        }
+        FormView view = evaluate(state, context);
+        if (view.problem().severity() == Problem.Severity.ERROR) {
+            return new FormOutcome.Stay(view.problem());
+        }
+        OneTimeTransaction existing = existing(context);
+        TxId id = existing == null ? context.app().document().plan().nextTxId() : existing.id();
+        return new FormOutcome.Close(new OneTimeTransaction(id, OpsForms.date(state.value("date")), state.value("title"),
+                OpsForms.enumValue(Kind.class, state.value("kind"), Kind.EXPENSE), OpsForms.money(state.value("amount")),
+                state.value("category"), state.value("note")));
+    }
+
+    private OneTimeTransaction existing(FormContext context) {
+        if (!WindowType.MODE_EDIT.equals(context.contextValue(WindowType.CONTEXT_MODE))) {
+            return null;
+        }
+        String id = context.contextValue(WindowType.CONTEXT_TX_ID);
+        try {
+            return context.app().document().plan().findOneTime(new TxId(id)).orElse(null);
+        } catch (IllegalArgumentException ignored) {
+            return null;
+        }
     }
 }

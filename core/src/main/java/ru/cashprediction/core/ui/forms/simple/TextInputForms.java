@@ -1,66 +1,109 @@
 package ru.cashprediction.core.ui.forms.simple;
 
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import ru.cashprediction.core.diagnostics.PlanValidator;
+import ru.cashprediction.core.model.Money;
+import ru.cashprediction.core.session.WindowType;
+import ru.cashprediction.core.ui.form.ButtonRole;
+import ru.cashprediction.core.ui.form.ButtonSpec;
+import ru.cashprediction.core.ui.form.ButtonSpecs;
+import ru.cashprediction.core.ui.form.FieldChecks;
+import ru.cashprediction.core.ui.form.FieldCodec;
+import ru.cashprediction.core.ui.form.FieldSpecs;
+import ru.cashprediction.core.ui.form.FieldView;
+import ru.cashprediction.core.ui.form.FormContext;
 import ru.cashprediction.core.ui.form.FormLogic;
+import ru.cashprediction.core.ui.form.FormOutcome;
+import ru.cashprediction.core.ui.form.FormPage;
+import ru.cashprediction.core.ui.form.FormRow;
+import ru.cashprediction.core.ui.form.FormSpec;
+import ru.cashprediction.core.ui.form.FormState;
+import ru.cashprediction.core.ui.form.FormView;
+import ru.cashprediction.core.ui.form.Presentation;
+import ru.cashprediction.core.ui.form.Problem;
+import ru.cashprediction.core.ui.text.UiFormats;
+import ru.cashprediction.core.ui.text.UiText;
 
-/**
- * Формы ввода одного значения (представление {@code TEXT_INPUT}; JavaFX {@code TextInputDialog} → Swing
- * {@code SwingTextInputDialog} → Web {@code <dialog>}), тип окна TEXT_INPUT, поле {@code value}, контекст
- * {@code purpose}. Строка проблем обтекает содержимое, как в прежнем {@code StatefulTextInputDialog}.
- *
- * <ul>
- *   <li>{@link #rename()} — §6.9 «Переименовать план»: результат {@code Close(String новое имя)}; ошибки
- *       {@code PlanValidator.checkPlanName}, «Файл «{0}.md» уже существует», «Не удалось проверить имя файла: {0}».</li>
- *   <li>{@link #reconcile()} — §6.7 «Сверить баланс»: результат {@code Close(Money фактический баланс)}; разрешён
- *       минус; ошибка «Введите сумму, например 95 000,00 (можно отрицательную)».</li>
- *   <li>{@link #customMonths()} — §6.23 «Горизонт плана»: результат {@code Close(Integer месяцев 1..600)}.</li>
- *   <li>{@link #customCurrency()} — §6.8 «Своя валюта»: результат {@code Close(String валюта)}; ошибки «Введите
- *       обозначение валюты», «Не длиннее 10 символов», «Символ «|» и перевод строки недопустимы».</li>
- * </ul>
- *
- * <p>Класс без состояния, потокобезопасен.</p>
- */
+/** Логики окон ввода одного значения. */
 public final class TextInputForms {
-
-    /** Назначение «Переименовать план». */
     public static final String PURPOSE_RENAME = "rename";
-    /** Назначение «Сверить баланс». */
     public static final String PURPOSE_RECONCILE = "reconcile";
-    /** Назначение «Горизонт плана». */
     public static final String PURPOSE_CUSTOM_MONTHS = "customMonths";
-    /** Назначение «Своя валюта». */
     public static final String PURPOSE_CUSTOM_CURRENCY = "customCurrency";
-
-    private TextInputForms() {
-    }
-
-    /** @return логика §6.9 */
-    public static FormLogic rename() {
-        throw new UnsupportedOperationException("S1: core-forms-framework - TextInputForms.rename");
-    }
-
-    /** @return логика §6.7 */
-    public static FormLogic reconcile() {
-        throw new UnsupportedOperationException("S1: core-forms-framework - TextInputForms.reconcile");
-    }
-
-    /** @return логика §6.23 */
-    public static FormLogic customMonths() {
-        throw new UnsupportedOperationException("S1: core-forms-framework - TextInputForms.customMonths");
-    }
-
-    /** @return логика §6.8 «Своя валюта» */
-    public static FormLogic customCurrency() {
-        throw new UnsupportedOperationException("S1: core-forms-framework - TextInputForms.customCurrency");
-    }
-
-    /**
-     * Логика по назначению (для восстановления окна из снимка).
-     *
-     * @param purpose назначение
-     * @return логика
-     * @throws IllegalArgumentException если назначение неизвестно (текст {@code restore.warn.unknownPurpose})
-     */
+    private TextInputForms() { }
+    public static FormLogic rename() { return new Single(PURPOSE_RENAME); }
+    public static FormLogic reconcile() { return new Single(PURPOSE_RECONCILE); }
+    public static FormLogic customMonths() { return new Single(PURPOSE_CUSTOM_MONTHS); }
+    public static FormLogic customCurrency() { return new Single(PURPOSE_CUSTOM_CURRENCY); }
     public static FormLogic forPurpose(String purpose) {
-        throw new UnsupportedOperationException("S1: core-forms-framework - TextInputForms.forPurpose");
+        return switch (purpose == null ? "" : purpose) {
+            case PURPOSE_RENAME -> rename(); case PURPOSE_RECONCILE -> reconcile(); case PURPOSE_CUSTOM_MONTHS -> customMonths(); case PURPOSE_CUSTOM_CURRENCY -> customCurrency();
+            default -> throw new IllegalArgumentException("restore.warn.unknownPurpose");
+        };
+    }
+
+    /** Общая реализация закрытого набора одно-полевых форм. */
+    private static final class Single implements FormLogic {
+        private final String purpose;
+        private Single(String purpose) { this.purpose = purpose; }
+        @Override public FormSpec spec(FormContext context) {
+            return new FormSpec(purpose, WindowType.TEXT_INPUT, purpose, Presentation.TEXT_INPUT, title(context), "", 460, true, false, true,
+                    List.of(new FormPage("main", List.of(new FormRow.Field(FieldSpecs.focused(field(context)))))), buttons(), okId());
+        }
+        @Override public Map<String, String> defaults(FormContext context) {
+            return Map.of("value", switch (purpose) {
+                case PURPOSE_RENAME -> context.app().document().plan().name();
+                case PURPOSE_RECONCILE -> context.app().document().forecastAvailable() ? context.app().document().forecast().balanceAt(context.app().today()).formatPlain() : "";
+                case PURPOSE_CUSTOM_MONTHS -> "12";
+                case PURPOSE_CUSTOM_CURRENCY -> context.app().document().plan().currency();
+                default -> "";
+            });
+        }
+        @Override public FormView evaluate(FormState state, FormContext context) {
+            Optional<String> error = validation(state.value("value"));
+            return new FormView(0, 0, header(context), Map.of("value", FieldView.of(FieldCodec.display(field(context).kind(), state.value("value")))), error.map(Problem::error).orElse(Problem.NONE), Map.of(okId(), error.isEmpty() ? ru.cashprediction.core.ui.form.ButtonView.ENABLED : ru.cashprediction.core.ui.form.ButtonView.DISABLED), List.of(), List.of(), "", false);
+        }
+        @Override public FormOutcome onButton(String buttonId, FormState state, FormContext context) {
+            if (ButtonSpecs.CANCEL.equals(buttonId)) return new FormOutcome.Close(null);
+            Optional<String> error = validation(state.value("value"));
+            if (error.isPresent()) return new FormOutcome.Stay(Problem.error(error.get()));
+            Object result = switch (purpose) {
+                case PURPOSE_RECONCILE -> FieldCodec.parseMoney(state.value("value")).orElse(Money.ZERO);
+                case PURPOSE_CUSTOM_MONTHS -> FieldCodec.parseLong(state.value("value")).isPresent() ? (int) FieldCodec.parseLong(state.value("value")).getAsLong() : 0;
+                default -> state.value("value").strip();
+            };
+            return new FormOutcome.Close(result);
+        }
+        private String title(FormContext context) { return switch (purpose) {
+            case PURPOSE_RENAME -> UiText.get("dialog.rename.title", context.app().document().plan().name());
+            case PURPOSE_RECONCILE -> UiText.get("dialog.reconcile.title", UiFormats.date(context.app().today()));
+            case PURPOSE_CUSTOM_MONTHS -> UiText.get("dialog.customMonths.title");
+            case PURPOSE_CUSTOM_CURRENCY -> UiText.get("dialog.customCurrency.title");
+            default -> "";
+        }; }
+        private String header(FormContext context) { return switch (purpose) {
+            case PURPOSE_RECONCILE -> UiText.get("dialog.reconcile.header", context.app().document().forecastAvailable() ? context.app().document().forecast().balanceAt(context.app().today()).format(context.app().document().plan().currency()) : "");
+            case PURPOSE_RENAME -> context.app().document().fileOptional().isPresent() ? UiText.get("dialog.rename.file") : "";
+            default -> "";
+        }; }
+        private ru.cashprediction.core.ui.form.FieldSpec field(FormContext context) { return switch (purpose) {
+            case PURPOSE_RECONCILE -> FieldSpecs.money("value", UiText.get("dialog.reconcile.value"));
+            case PURPOSE_CUSTOM_MONTHS -> FieldSpecs.spinner("value", UiText.get("dialog.customMonths.value"), 1, 600);
+            case PURPOSE_CUSTOM_CURRENCY -> FieldSpecs.text("value", UiText.get("dialog.customCurrency.value"), "");
+            default -> FieldSpecs.text("value", UiText.get("dialog.rename.value"), "");
+        }; }
+        private Optional<String> validation(String value) { return switch (purpose) {
+            case PURPOSE_RENAME -> PlanValidator.checkPlanName(value);
+            case PURPOSE_RECONCILE -> FieldChecks.money(UiText.get("dialog.reconcile.value"), value, FieldChecks.MoneyRule.ANY).map(x -> UiText.get("dialog.reconcile.error"));
+            case PURPOSE_CUSTOM_MONTHS -> FieldCodec.parseLong(value).isPresent() && FieldCodec.parseLong(value).getAsLong() >= 1 && FieldCodec.parseLong(value).getAsLong() <= 600 ? Optional.empty() : Optional.of(UiText.get("dialog.customMonths.error"));
+            case PURPOSE_CUSTOM_CURRENCY -> currencyError(value);
+            default -> Optional.empty();
+        }; }
+        private Optional<String> currencyError(String value) { if (value == null || value.isBlank()) return Optional.of(UiText.get("dialog.customCurrency.required")); if (value.codePointCount(0, value.length()) > 10) return Optional.of(UiText.get("dialog.customCurrency.long")); return value.contains("|") || value.contains("\n") || value.contains("\r") ? Optional.of(UiText.get("dialog.customCurrency.invalid")) : Optional.empty(); }
+        private List<ButtonSpec> buttons() { return List.of(ButtonSpecs.of(okId(), UiText.get(okText()), ButtonRole.OK), ButtonSpecs.cancel()); }
+        private String okId() { return switch (purpose) { case PURPOSE_RENAME -> "rename"; case PURPOSE_RECONCILE -> "reconcile"; default -> "apply"; }; }
+        private String okText() { return switch (purpose) { case PURPOSE_RENAME -> "button.rename"; case PURPOSE_RECONCILE -> "button.reconcile"; default -> "button.apply"; }; }
     }
 }
