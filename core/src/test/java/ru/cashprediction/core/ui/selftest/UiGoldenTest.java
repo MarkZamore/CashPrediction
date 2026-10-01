@@ -101,7 +101,12 @@ class UiGoldenTest {
                 String json = Files.readString(actual);
                 Path golden = goldenRoot.resolve(name).resolve(dump.step() + ".json");
                 if (Boolean.getBoolean("cashprediction.golden.update")) {
-                    Files.createDirectories(golden.getParent()); Files.writeString(golden, json);
+                    // Порядок ключей Map не является изменением интерфейса: не создаём ложный diff между JVM.
+                    if (!Files.isRegularFile(golden) || !DumpDiff.diff(
+                            JsonParser.parse(Files.readString(golden)), JsonParser.parse(json), 0).isEmpty()) {
+                        Files.createDirectories(golden.getParent());
+                        Files.writeString(golden, json);
+                    }
                 } else {
                     assertTrue(Files.isRegularFile(golden), "missing reviewed golden: " + golden);
                     var differences = DumpDiff.diff(JsonParser.parse(Files.readString(golden)), JsonParser.parse(json), 0);

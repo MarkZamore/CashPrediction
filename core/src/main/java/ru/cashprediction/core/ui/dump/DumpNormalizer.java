@@ -21,6 +21,8 @@ import java.lang.reflect.ParameterizedType;
 public final class DumpNormalizer {
 
     private static final Pattern CLOCK = Pattern.compile("(?<![0-9])(?:[01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9](?![0-9])");
+    /** Версия среды меняется между локальным JDK и CI, но нормализуется только в служебной строке about. */
+    private static final Pattern ABOUT_JAVA = Pattern.compile("(?m)(, Java )[0-9][A-Za-z0-9.+_-]*(\\.$)");
 
     private DumpNormalizer() {
     }
@@ -204,6 +206,10 @@ public final class DumpNormalizer {
                     values[index] = Math.round(coordinate / 2.0) * 2.0;
                 } else {
                     values[index] = normalizeValue(raw, cashMemory, registryNode);
+                    if (value instanceof UiDump.Alert alert && "about".equals(alert.purpose())
+                            && component.getName().equals("content")) {
+                        values[index] = ABOUT_JAVA.matcher((String) values[index]).replaceAll("$1<java>$2");
+                    }
                 }
             }
             return type.getDeclaredConstructor(parameterTypes).newInstance(values);

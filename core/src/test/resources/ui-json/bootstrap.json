@@ -1,0 +1,2797 @@
+{
+  "seq": 42,
+  "client": "web",
+  "testApi": false,
+  "profile": {
+    "kind": "WEB",
+    "chooser": "SERVER_BROWSER",
+    "nativeReplacePrompt": false,
+    "toolkitVersion": ""
+  },
+  "screen": {
+    "revision": 7,
+    "windowTitle": "CashPrediction - Пример",
+    "menuBar": {
+      "menus": [
+        {
+          "kind": "Submenu",
+          "id": "file",
+          "text": "Файл",
+          "tooltip": "",
+          "enabled": true,
+          "children": [
+            {
+              "kind": "Action",
+              "id": "file.new",
+              "command": "file.new",
+              "args": {
+                "rowId": "",
+                "date": null,
+                "cardId": "",
+                "key": "",
+                "value": ""
+              },
+              "text": "Новый план…",
+              "accel": {
+                "ctrl": false,
+                "shift": true,
+                "alt": true,
+                "key": "N"
+              },
+              "tooltip": "Создать план с помощью мастера",
+              "enabled": true
+            },
+            {
+              "kind": "Action",
+              "id": "file.open",
+              "command": "file.open",
+              "args": {
+                "rowId": "",
+                "date": null,
+                "cardId": "",
+                "key": "",
+                "value": ""
+              },
+              "text": "Открыть…",
+              "accel": {
+                "ctrl": false,
+                "shift": true,
+                "alt": true,
+                "key": "O"
+              },
+              "tooltip": "Выбрать план из папки CashMemory",
+              "enabled": true
+            },
+            {
+              "kind": "Action",
+              "id": "file.openFile",
+              "command": "file.openFile",
+              "args": {
+                "rowId": "",
+                "date": null,
+                "cardId": "",
+                "key": "",
+                "value": ""
+              },
+              "text": "Открыть из файла…",
+              "accel": null,
+              "tooltip": "Открыть файл плана .md из любой папки",
+              "enabled": true
+            },
+            {
+              "kind": "Action",
+              "id": "file.sample",
+              "command": "file.sample",
+              "args": {
+                "rowId": "",
+                "date": null,
+                "cardId": "",
+                "key": "",
+                "value": ""
+              },
+              "text": "Открыть пример",
+              "accel": null,
+              "tooltip": "Несохранённый план «Пример» с зарплатой, арендой, кредитом и целью",
+              "enabled": true
+            },
+            {
+              "kind": "Submenu",
+              "id": "file.recent",
+              "text": "Недавние",
+              "tooltip": "Недавно открытые планы",
+              "enabled": true,
+              "children": [
+                {
+                  "kind": "Info",
+                  "id": "file.recent.empty",
+                  "text": "(список пуст)"
+                }
+              ]
+            },
+            {
+              "kind": "Separator",
+              "id": "file.sep.1"
+            },
+            {
+              "kind": "Action",
+              "id": "file.save",
+              "command": "file.save",
+              "args": {
+                "rowId": "",
+                "date": null,
+                "cardId": "",
+                "key": "",
+                "value": ""
+              },
+              "text": "Сохранить",
+              "accel": {
+                "ctrl": true,
+                "shift": false,
+                "alt": false,
+                "key": "S"
+              },
+              "tooltip": "Сохранить план в файл .md",
+              "enabled": true
+            },
+            {
+              "kind": "Action",
+              "id": "file.saveAs",
+              "command": "file.saveAs",
+              "args": {
+                "rowId": "",
+                "date": null,
+                "cardId": "",
+                "key": "",
+                "value": ""
+              },
+              "text": "Сохранить как…",
+              "accel": {
+                "ctrl": true,
+                "shift": true,
+                "alt": false,
+                "key": "S"
+              },
+              "tooltip": "Сохранить план в другой файл .md",
+              "enabled": true
+            },
+            {
+              "kind": "Action",
+              "id": "file.rename",
+              "command": "file.rename",
+              "args": {
+                "rowId": "",
+                "date": null,
+                "cardId": "",
+                "key": "",
+                "value": ""
+              },
+              "text": "Переименовать…",
+              "accel": {
+                "ctrl": false,
+                "shift": false,
+                "alt": false,
+                "key": "F2"
+              },
+              "tooltip": "Новое имя плана и его файла",
+              "enabled": true
+            },
+            {
+              "kind": "Separator",
+              "id": "file.sep.2"
+            },
+            {
+              "kind": "Check",
+              "id": "file.autosave",
+              "command": "file.autosave",
+              "args": {
+                "rowId": "",
+                "date": null,
+                "cardId": "",
+                "key": "",
+                "value": ""
+              },
+              "text": "Автосохранение",
+              "accel": null,
+              "tooltip": "Сохранять план примерно через секунду после каждого изменения",
+              "enabled": true,
+              "checked": false
+            },
+            {
+              "kind": "Action",
+              "id": "file.exportCsv",
+              "command": "file.exportCsv",
+              "args": {
+                "rowId": "",
+                "date": null,
+                "cardId": "",
+                "key": "",
+                "value": ""
+              },
+              "text": "Экспорт CSV…",
+              "accel": {
+                "ctrl": false,
+                "shift": true,
+                "alt": true,
+                "key": "C"
+              },
+              "tooltip": "Таблица прогноза в файл CSV для Excel",
+              "enabled": true
+            },
+            {
+              "kind": "Action",
+              "id": "file.savePng",
+              "command": "file.savePng",
+              "args": {
+                "rowId": "",
+                "date": null,
+                "cardId": "",
+                "key": "",
+                "value": ""
+              },
+              "text": "Сохранить график PNG…",
+              "accel": null,
+              "tooltip": "Изображение графика баланса в файл PNG",
+              "enabled": true
+            },
+            {
+              "kind": "Action",
+              "id": "file.cashMemory",
+              "command": "file.cashMemory",
+              "args": {
+                "rowId": "",
+                "date": null,
+                "cardId": "",
+                "key": "",
+                "value": ""
+              },
+              "text": "Папка CashMemory…",
+              "accel": null,
+              "tooltip": "Где хранятся данные; открыть планы из другой папки",
+              "enabled": true
+            },
+            {
+              "kind": "Separator",
+              "id": "file.sep.3"
+            },
+            {
+              "kind": "Action",
+              "id": "file.exit",
+              "command": "file.exit",
+              "args": {
+                "rowId": "",
+                "date": null,
+                "cardId": "",
+                "key": "",
+                "value": ""
+              },
+              "text": "Выход",
+              "accel": null,
+              "tooltip": "Закрыть программу и остановить сервер",
+              "enabled": true
+            }
+          ]
+        },
+        {
+          "kind": "Submenu",
+          "id": "edit",
+          "text": "Правка",
+          "tooltip": "",
+          "enabled": true,
+          "children": [
+            {
+              "kind": "Action",
+              "id": "edit.addIncome",
+              "command": "edit.addIncome",
+              "args": {
+                "rowId": "",
+                "date": null,
+                "cardId": "",
+                "key": "",
+                "value": ""
+              },
+              "text": "Добавить доход…",
+              "accel": {
+                "ctrl": true,
+                "shift": false,
+                "alt": false,
+                "key": "I"
+              },
+              "tooltip": "Новая регулярная операция: доход",
+              "enabled": true
+            },
+            {
+              "kind": "Action",
+              "id": "edit.addExpense",
+              "command": "edit.addExpense",
+              "args": {
+                "rowId": "",
+                "date": null,
+                "cardId": "",
+                "key": "",
+                "value": ""
+              },
+              "text": "Добавить расход…",
+              "accel": {
+                "ctrl": true,
+                "shift": false,
+                "alt": false,
+                "key": "E"
+              },
+              "tooltip": "Новая регулярная операция: расход",
+              "enabled": true
+            },
+            {
+              "kind": "Action",
+              "id": "edit.addOneTime",
+              "command": "edit.addOneTime",
+              "args": {
+                "rowId": "",
+                "date": null,
+                "cardId": "",
+                "key": "",
+                "value": ""
+              },
+              "text": "Разовая операция…",
+              "accel": {
+                "ctrl": false,
+                "shift": true,
+                "alt": true,
+                "key": "T"
+              },
+              "tooltip": "Доход или расход один раз",
+              "enabled": true
+            },
+            {
+              "kind": "Action",
+              "id": "edit.edit",
+              "command": "edit.edit",
+              "args": {
+                "rowId": "",
+                "date": null,
+                "cardId": "",
+                "key": "",
+                "value": ""
+              },
+              "text": "Изменить…",
+              "accel": {
+                "ctrl": false,
+                "shift": false,
+                "alt": false,
+                "key": "ENTER"
+              },
+              "tooltip": "Изменить операцию выделенной строки",
+              "enabled": false
+            },
+            {
+              "kind": "Action",
+              "id": "edit.delete",
+              "command": "edit.delete",
+              "args": {
+                "rowId": "",
+                "date": null,
+                "cardId": "",
+                "key": "",
+                "value": ""
+              },
+              "text": "Удалить…",
+              "accel": {
+                "ctrl": false,
+                "shift": false,
+                "alt": false,
+                "key": "DELETE"
+              },
+              "tooltip": "Удалить операцию выделенной строки",
+              "enabled": false
+            },
+            {
+              "kind": "Action",
+              "id": "edit.adjust",
+              "command": "edit.adjust",
+              "args": {
+                "rowId": "",
+                "date": null,
+                "cardId": "",
+                "key": "",
+                "value": ""
+              },
+              "text": "Скорректировать событие…",
+              "accel": {
+                "ctrl": true,
+                "shift": false,
+                "alt": false,
+                "key": "J"
+              },
+              "tooltip": "Пропустить, изменить сумму или перенести выделенное событие правила",
+              "enabled": false
+            },
+            {
+              "kind": "Action",
+              "id": "edit.skip",
+              "command": "edit.skip",
+              "args": {
+                "rowId": "",
+                "date": null,
+                "cardId": "",
+                "key": "",
+                "value": ""
+              },
+              "text": "Пропустить событие",
+              "accel": null,
+              "tooltip": "Событие не произойдёт; правило не меняется",
+              "enabled": false
+            },
+            {
+              "kind": "Action",
+              "id": "edit.reset",
+              "command": "edit.reset",
+              "args": {
+                "rowId": "",
+                "date": null,
+                "cardId": "",
+                "key": "",
+                "value": ""
+              },
+              "text": "Вернуть как по правилу",
+              "accel": null,
+              "tooltip": "Удалить корректировку выделенного события",
+              "enabled": false
+            },
+            {
+              "kind": "Separator",
+              "id": "edit.sep.1"
+            },
+            {
+              "kind": "Action",
+              "id": "edit.undo",
+              "command": "edit.undo",
+              "args": {
+                "rowId": "",
+                "date": null,
+                "cardId": "",
+                "key": "",
+                "value": ""
+              },
+              "text": "Отменить",
+              "accel": {
+                "ctrl": true,
+                "shift": false,
+                "alt": false,
+                "key": "Z"
+              },
+              "tooltip": "Отменить последнее изменение плана",
+              "enabled": false
+            },
+            {
+              "kind": "Action",
+              "id": "edit.redo",
+              "command": "edit.redo",
+              "args": {
+                "rowId": "",
+                "date": null,
+                "cardId": "",
+                "key": "",
+                "value": ""
+              },
+              "text": "Повторить",
+              "accel": {
+                "ctrl": true,
+                "shift": false,
+                "alt": false,
+                "key": "Y"
+              },
+              "tooltip": "Повторить отменённое изменение",
+              "enabled": false
+            },
+            {
+              "kind": "Separator",
+              "id": "edit.sep.2"
+            },
+            {
+              "kind": "Action",
+              "id": "edit.planSettings",
+              "command": "edit.planSettings",
+              "args": {
+                "rowId": "",
+                "date": null,
+                "cardId": "",
+                "key": "",
+                "value": ""
+              },
+              "text": "Параметры плана…",
+              "accel": null,
+              "tooltip": "Имя, валюта, начало, баланс, горизонт, подушка, цель",
+              "enabled": true
+            },
+            {
+              "kind": "Action",
+              "id": "edit.actualize",
+              "command": "edit.actualize",
+              "args": {
+                "rowId": "",
+                "date": null,
+                "cardId": "",
+                "key": "",
+                "value": ""
+              },
+              "text": "Актуализировать на сегодня…",
+              "accel": null,
+              "tooltip": "Перенести начало плана на сегодня с прогнозным балансом",
+              "enabled": true
+            },
+            {
+              "kind": "Action",
+              "id": "edit.reconcile",
+              "command": "edit.reconcile",
+              "args": {
+                "rowId": "",
+                "date": null,
+                "cardId": "",
+                "key": "",
+                "value": ""
+              },
+              "text": "Сверить баланс…",
+              "accel": null,
+              "tooltip": "Ввести фактический баланс: разница станет разовой операцией",
+              "enabled": true
+            }
+          ]
+        },
+        {
+          "kind": "Submenu",
+          "id": "view",
+          "text": "Вид",
+          "tooltip": "",
+          "enabled": true,
+          "children": [
+            {
+              "kind": "Radio",
+              "id": "view.table",
+              "group": "mode",
+              "command": "view.table",
+              "args": {
+                "rowId": "",
+                "date": null,
+                "cardId": "",
+                "key": "",
+                "value": ""
+              },
+              "text": "Таблица",
+              "accel": {
+                "ctrl": true,
+                "shift": false,
+                "alt": false,
+                "key": "DIGIT1"
+              },
+              "tooltip": "Таблица событий с балансом",
+              "enabled": true,
+              "selected": true
+            },
+            {
+              "kind": "Radio",
+              "id": "view.chart",
+              "group": "mode",
+              "command": "view.chart",
+              "args": {
+                "rowId": "",
+                "date": null,
+                "cardId": "",
+                "key": "",
+                "value": ""
+              },
+              "text": "График",
+              "accel": {
+                "ctrl": true,
+                "shift": false,
+                "alt": false,
+                "key": "DIGIT2"
+              },
+              "tooltip": "График баланса во времени",
+              "enabled": true,
+              "selected": false
+            },
+            {
+              "kind": "Separator",
+              "id": "view.sep.1"
+            },
+            {
+              "kind": "Check",
+              "id": "view.flag.showIncome",
+              "command": "view.flag.showIncome",
+              "args": {
+                "rowId": "",
+                "date": null,
+                "cardId": "",
+                "key": "",
+                "value": ""
+              },
+              "text": "Доходы",
+              "accel": null,
+              "tooltip": "Показывать доходы",
+              "enabled": true,
+              "checked": true
+            },
+            {
+              "kind": "Check",
+              "id": "view.flag.showExpense",
+              "command": "view.flag.showExpense",
+              "args": {
+                "rowId": "",
+                "date": null,
+                "cardId": "",
+                "key": "",
+                "value": ""
+              },
+              "text": "Расходы",
+              "accel": null,
+              "tooltip": "Показывать расходы",
+              "enabled": true,
+              "checked": true
+            },
+            {
+              "kind": "Check",
+              "id": "view.flag.showOneTime",
+              "command": "view.flag.showOneTime",
+              "args": {
+                "rowId": "",
+                "date": null,
+                "cardId": "",
+                "key": "",
+                "value": ""
+              },
+              "text": "Разовые операции",
+              "accel": null,
+              "tooltip": "Показывать разовые операции",
+              "enabled": true,
+              "checked": true
+            },
+            {
+              "kind": "Check",
+              "id": "view.flag.showSkipped",
+              "command": "view.flag.showSkipped",
+              "args": {
+                "rowId": "",
+                "date": null,
+                "cardId": "",
+                "key": "",
+                "value": ""
+              },
+              "text": "Пропущенные события",
+              "accel": null,
+              "tooltip": "Показывать пропущенные события (зачёркнутыми)",
+              "enabled": true,
+              "checked": false
+            },
+            {
+              "kind": "Check",
+              "id": "view.flag.monthTotals",
+              "command": "view.flag.monthTotals",
+              "args": {
+                "rowId": "",
+                "date": null,
+                "cardId": "",
+                "key": "",
+                "value": ""
+              },
+              "text": "Итоги по месяцам",
+              "accel": null,
+              "tooltip": "Строки «Октябрь 2026 - итог» в таблице",
+              "enabled": true,
+              "checked": true
+            },
+            {
+              "kind": "Check",
+              "id": "view.flag.chartMarkers",
+              "command": "view.flag.chartMarkers",
+              "args": {
+                "rowId": "",
+                "date": null,
+                "cardId": "",
+                "key": "",
+                "value": ""
+              },
+              "text": "Маркеры событий на графике",
+              "accel": null,
+              "tooltip": "События на линии баланса",
+              "enabled": true,
+              "checked": true
+            },
+            {
+              "kind": "Check",
+              "id": "view.flag.chartBars",
+              "command": "view.flag.chartBars",
+              "args": {
+                "rowId": "",
+                "date": null,
+                "cardId": "",
+                "key": "",
+                "value": ""
+              },
+              "text": "Столбцы итогов месяцев на графике",
+              "accel": null,
+              "tooltip": "Итог каждого месяца столбцом под графиком",
+              "enabled": true,
+              "checked": false
+            },
+            {
+              "kind": "Check",
+              "id": "view.flag.summaryPanel",
+              "command": "view.flag.summaryPanel",
+              "args": {
+                "rowId": "",
+                "date": null,
+                "cardId": "",
+                "key": "",
+                "value": ""
+              },
+              "text": "Панель сводки",
+              "accel": null,
+              "tooltip": "Карточки «Сейчас», «Через N месяцев», «Минимум», «Цель»",
+              "enabled": true,
+              "checked": true
+            },
+            {
+              "kind": "Separator",
+              "id": "view.sep.2"
+            },
+            {
+              "kind": "Radio",
+              "id": "view.period.M3",
+              "group": "period",
+              "command": "view.period.M3",
+              "args": {
+                "rowId": "",
+                "date": null,
+                "cardId": "",
+                "key": "",
+                "value": ""
+              },
+              "text": "Период: 3 месяца",
+              "accel": null,
+              "tooltip": "Показывать ближайшие 3 месяца (план не меняется)",
+              "enabled": true,
+              "selected": false
+            },
+            {
+              "kind": "Radio",
+              "id": "view.period.M6",
+              "group": "period",
+              "command": "view.period.M6",
+              "args": {
+                "rowId": "",
+                "date": null,
+                "cardId": "",
+                "key": "",
+                "value": ""
+              },
+              "text": "Период: 6 месяцев",
+              "accel": null,
+              "tooltip": "Показывать ближайшие 6 месяцев (план не меняется)",
+              "enabled": true,
+              "selected": false
+            },
+            {
+              "kind": "Radio",
+              "id": "view.period.M12",
+              "group": "period",
+              "command": "view.period.M12",
+              "args": {
+                "rowId": "",
+                "date": null,
+                "cardId": "",
+                "key": "",
+                "value": ""
+              },
+              "text": "Период: 12 месяцев",
+              "accel": null,
+              "tooltip": "Показывать ближайшие 12 месяцев (план не меняется)",
+              "enabled": true,
+              "selected": true
+            },
+            {
+              "kind": "Radio",
+              "id": "view.period.M24",
+              "group": "period",
+              "command": "view.period.M24",
+              "args": {
+                "rowId": "",
+                "date": null,
+                "cardId": "",
+                "key": "",
+                "value": ""
+              },
+              "text": "Период: 24 месяца",
+              "accel": null,
+              "tooltip": "Показывать ближайшие 24 месяца (план не меняется)",
+              "enabled": true,
+              "selected": false
+            },
+            {
+              "kind": "Radio",
+              "id": "view.period.ALL",
+              "group": "period",
+              "command": "view.period.ALL",
+              "args": {
+                "rowId": "",
+                "date": null,
+                "cardId": "",
+                "key": "",
+                "value": ""
+              },
+              "text": "Период: весь горизонт",
+              "accel": null,
+              "tooltip": "Показывать весь горизонт плана (план не меняется)",
+              "enabled": true,
+              "selected": false
+            },
+            {
+              "kind": "Separator",
+              "id": "view.sep.3"
+            },
+            {
+              "kind": "Slider",
+              "id": "view.horizonSlider",
+              "command": "view.horizonSlider",
+              "min": 1,
+              "max": 120,
+              "majorTick": 12,
+              "value": 12,
+              "labels": [
+                "Горизонт плана: 1 месяц",
+                "Горизонт плана: 2 месяца",
+                "Горизонт плана: 3 месяца",
+                "Горизонт плана: 4 месяца",
+                "Горизонт плана: 5 месяцев",
+                "Горизонт плана: 6 месяцев",
+                "Горизонт плана: 7 месяцев",
+                "Горизонт плана: 8 месяцев",
+                "Горизонт плана: 9 месяцев",
+                "Горизонт плана: 10 месяцев",
+                "Горизонт плана: 11 месяцев",
+                "Горизонт плана: 12 месяцев",
+                "Горизонт плана: 13 месяцев",
+                "Горизонт плана: 14 месяцев",
+                "Горизонт плана: 15 месяцев",
+                "Горизонт плана: 16 месяцев",
+                "Горизонт плана: 17 месяцев",
+                "Горизонт плана: 18 месяцев",
+                "Горизонт плана: 19 месяцев",
+                "Горизонт плана: 20 месяцев",
+                "Горизонт плана: 21 месяц",
+                "Горизонт плана: 22 месяца",
+                "Горизонт плана: 23 месяца",
+                "Горизонт плана: 24 месяца",
+                "Горизонт плана: 25 месяцев",
+                "Горизонт плана: 26 месяцев",
+                "Горизонт плана: 27 месяцев",
+                "Горизонт плана: 28 месяцев",
+                "Горизонт плана: 29 месяцев",
+                "Горизонт плана: 30 месяцев",
+                "Горизонт плана: 31 месяц",
+                "Горизонт плана: 32 месяца",
+                "Горизонт плана: 33 месяца",
+                "Горизонт плана: 34 месяца",
+                "Горизонт плана: 35 месяцев",
+                "Горизонт плана: 36 месяцев",
+                "Горизонт плана: 37 месяцев",
+                "Горизонт плана: 38 месяцев",
+                "Горизонт плана: 39 месяцев",
+                "Горизонт плана: 40 месяцев",
+                "Горизонт плана: 41 месяц",
+                "Горизонт плана: 42 месяца",
+                "Горизонт плана: 43 месяца",
+                "Горизонт плана: 44 месяца",
+                "Горизонт плана: 45 месяцев",
+                "Горизонт плана: 46 месяцев",
+                "Горизонт плана: 47 месяцев",
+                "Горизонт плана: 48 месяцев",
+                "Горизонт плана: 49 месяцев",
+                "Горизонт плана: 50 месяцев",
+                "Горизонт плана: 51 месяц",
+                "Горизонт плана: 52 месяца",
+                "Горизонт плана: 53 месяца",
+                "Горизонт плана: 54 месяца",
+                "Горизонт плана: 55 месяцев",
+                "Горизонт плана: 56 месяцев",
+                "Горизонт плана: 57 месяцев",
+                "Горизонт плана: 58 месяцев",
+                "Горизонт плана: 59 месяцев",
+                "Горизонт плана: 60 месяцев",
+                "Горизонт плана: 61 месяц",
+                "Горизонт плана: 62 месяца",
+                "Горизонт плана: 63 месяца",
+                "Горизонт плана: 64 месяца",
+                "Горизонт плана: 65 месяцев",
+                "Горизонт плана: 66 месяцев",
+                "Горизонт плана: 67 месяцев",
+                "Горизонт плана: 68 месяцев",
+                "Горизонт плана: 69 месяцев",
+                "Горизонт плана: 70 месяцев",
+                "Горизонт плана: 71 месяц",
+                "Горизонт плана: 72 месяца",
+                "Горизонт плана: 73 месяца",
+                "Горизонт плана: 74 месяца",
+                "Горизонт плана: 75 месяцев",
+                "Горизонт плана: 76 месяцев",
+                "Горизонт плана: 77 месяцев",
+                "Горизонт плана: 78 месяцев",
+                "Горизонт плана: 79 месяцев",
+                "Горизонт плана: 80 месяцев",
+                "Горизонт плана: 81 месяц",
+                "Горизонт плана: 82 месяца",
+                "Горизонт плана: 83 месяца",
+                "Горизонт плана: 84 месяца",
+                "Горизонт плана: 85 месяцев",
+                "Горизонт плана: 86 месяцев",
+                "Горизонт плана: 87 месяцев",
+                "Горизонт плана: 88 месяцев",
+                "Горизонт плана: 89 месяцев",
+                "Горизонт плана: 90 месяцев",
+                "Горизонт плана: 91 месяц",
+                "Горизонт плана: 92 месяца",
+                "Горизонт плана: 93 месяца",
+                "Горизонт плана: 94 месяца",
+                "Горизонт плана: 95 месяцев",
+                "Горизонт плана: 96 месяцев",
+                "Горизонт плана: 97 месяцев",
+                "Горизонт плана: 98 месяцев",
+                "Горизонт плана: 99 месяцев",
+                "Горизонт плана: 100 месяцев",
+                "Горизонт плана: 101 месяц",
+                "Горизонт плана: 102 месяца",
+                "Горизонт плана: 103 месяца",
+                "Горизонт плана: 104 месяца",
+                "Горизонт плана: 105 месяцев",
+                "Горизонт плана: 106 месяцев",
+                "Горизонт плана: 107 месяцев",
+                "Горизонт плана: 108 месяцев",
+                "Горизонт плана: 109 месяцев",
+                "Горизонт плана: 110 месяцев",
+                "Горизонт плана: 111 месяцев",
+                "Горизонт плана: 112 месяцев",
+                "Горизонт плана: 113 месяцев",
+                "Горизонт плана: 114 месяцев",
+                "Горизонт плана: 115 месяцев",
+                "Горизонт плана: 116 месяцев",
+                "Горизонт плана: 117 месяцев",
+                "Горизонт плана: 118 месяцев",
+                "Горизонт плана: 119 месяцев",
+                "Горизонт плана: 120 месяцев"
+              ],
+              "currentLabel": "Горизонт плана: 12 месяцев",
+              "tooltip": "Сколько месяцев вперёд считать прогноз (меняет план)",
+              "widthPx": 240
+            },
+            {
+              "kind": "Action",
+              "id": "view.horizonMonths",
+              "command": "view.horizonMonths",
+              "args": {
+                "rowId": "",
+                "date": null,
+                "cardId": "",
+                "key": "",
+                "value": ""
+              },
+              "text": "Горизонт: другое число месяцев…",
+              "accel": null,
+              "tooltip": "Ввести горизонт от 1 до 600 месяцев",
+              "enabled": true
+            },
+            {
+              "kind": "Separator",
+              "id": "view.sep.4"
+            },
+            {
+              "kind": "Action",
+              "id": "view.focusFilter",
+              "command": "view.focusFilter",
+              "args": {
+                "rowId": "",
+                "date": null,
+                "cardId": "",
+                "key": "",
+                "value": ""
+              },
+              "text": "Перейти к фильтру",
+              "accel": {
+                "ctrl": true,
+                "shift": false,
+                "alt": false,
+                "key": "F"
+              },
+              "tooltip": "Перейти к полю фильтра",
+              "enabled": true
+            }
+          ]
+        },
+        {
+          "kind": "Submenu",
+          "id": "tools",
+          "text": "Инструменты",
+          "tooltip": "",
+          "enabled": true,
+          "children": [
+            {
+              "kind": "Action",
+              "id": "tools.goal",
+              "command": "tools.goal",
+              "args": {
+                "rowId": "",
+                "date": null,
+                "cardId": "",
+                "key": "",
+                "value": ""
+              },
+              "text": "Калькулятор цели…",
+              "accel": {
+                "ctrl": true,
+                "shift": false,
+                "alt": false,
+                "key": "G"
+              },
+              "tooltip": "Когда накопится сумма и сколько откладывать, чтобы успеть к дате",
+              "enabled": true
+            },
+            {
+              "kind": "Submenu",
+              "id": "tools.whatIf",
+              "text": "Что-если",
+              "tooltip": "Прогноз при других доходах и расходах, план не меняется",
+              "enabled": true,
+              "children": [
+                {
+                  "kind": "Check",
+                  "id": "whatIf.income",
+                  "command": "whatIf.income",
+                  "args": {
+                    "rowId": "",
+                    "date": null,
+                    "cardId": "",
+                    "key": "",
+                    "value": ""
+                  },
+                  "text": "Доходы -10 %",
+                  "accel": null,
+                  "tooltip": "Все доходы на 10 % меньше",
+                  "enabled": true,
+                  "checked": false
+                },
+                {
+                  "kind": "Check",
+                  "id": "whatIf.expense",
+                  "command": "whatIf.expense",
+                  "args": {
+                    "rowId": "",
+                    "date": null,
+                    "cardId": "",
+                    "key": "",
+                    "value": ""
+                  },
+                  "text": "Расходы +10 %",
+                  "accel": null,
+                  "tooltip": "Все расходы на 10 % больше",
+                  "enabled": true,
+                  "checked": false
+                },
+                {
+                  "kind": "Spinner",
+                  "id": "whatIf.extra",
+                  "command": "whatIf.extra",
+                  "label": "Откладывать доп. в месяц, ₽:",
+                  "min": 0,
+                  "max": 10000000,
+                  "step": 1000,
+                  "value": 0,
+                  "tooltip": "Сколько дополнительно откладывать в конце каждого месяца (0 - выключено)",
+                  "fieldWidthPx": 120,
+                  "applyDelayMs": 600
+                },
+                {
+                  "kind": "Separator",
+                  "id": "tools.whatIf.sep.1"
+                },
+                {
+                  "kind": "Action",
+                  "id": "whatIf.apply",
+                  "command": "whatIf.apply",
+                  "args": {
+                    "rowId": "",
+                    "date": null,
+                    "cardId": "",
+                    "key": "",
+                    "value": ""
+                  },
+                  "text": "Применить к плану…",
+                  "accel": null,
+                  "tooltip": "Пересчитать суммы плана по «что-если»",
+                  "enabled": false
+                },
+                {
+                  "kind": "Action",
+                  "id": "whatIf.reset",
+                  "command": "whatIf.reset",
+                  "args": {
+                    "rowId": "",
+                    "date": null,
+                    "cardId": "",
+                    "key": "",
+                    "value": ""
+                  },
+                  "text": "Сбросить «что-если»",
+                  "accel": null,
+                  "tooltip": "Выключить «что-если»",
+                  "enabled": false
+                }
+              ]
+            },
+            {
+              "kind": "Separator",
+              "id": "tools.sep.1"
+            },
+            {
+              "kind": "Action",
+              "id": "tools.validate",
+              "command": "tools.validate",
+              "args": {
+                "rowId": "",
+                "date": null,
+                "cardId": "",
+                "key": "",
+                "value": ""
+              },
+              "text": "Проверить план…",
+              "accel": null,
+              "tooltip": "Ошибки и предупреждения плана, файла и прогноза",
+              "enabled": true
+            },
+            {
+              "kind": "Action",
+              "id": "tools.cleanup",
+              "command": "tools.cleanup",
+              "args": {
+                "rowId": "",
+                "date": null,
+                "cardId": "",
+                "key": "",
+                "value": ""
+              },
+              "text": "Очистить неиспользуемые корректировки",
+              "accel": null,
+              "tooltip": "Удалить корректировки событий, которых больше нет",
+              "enabled": true
+            },
+            {
+              "kind": "Action",
+              "id": "tools.currency",
+              "command": "tools.currency",
+              "args": {
+                "rowId": "",
+                "date": null,
+                "cardId": "",
+                "key": "",
+                "value": ""
+              },
+              "text": "Валюта…",
+              "accel": null,
+              "tooltip": "Обозначение валюты плана",
+              "enabled": true
+            }
+          ]
+        },
+        {
+          "kind": "Submenu",
+          "id": "recovery",
+          "text": "Восстановление",
+          "tooltip": "",
+          "enabled": true,
+          "children": [
+            {
+              "kind": "Radio",
+              "id": "recovery.store.server",
+              "group": "store",
+              "command": "recovery.store.server",
+              "args": {
+                "rowId": "",
+                "date": null,
+                "cardId": "",
+                "key": "",
+                "value": ""
+              },
+              "text": "Хранилище: сервер (web-session.md)",
+              "accel": null,
+              "tooltip": "Web-клиент хранит снимок сеанса на сервере",
+              "enabled": false,
+              "selected": true
+            },
+            {
+              "kind": "Separator",
+              "id": "recovery.sep.1"
+            },
+            {
+              "kind": "Action",
+              "id": "recovery.snapshotNow",
+              "command": "recovery.snapshotNow",
+              "args": {
+                "rowId": "",
+                "date": null,
+                "cardId": "",
+                "key": "",
+                "value": ""
+              },
+              "text": "Сделать снимок сейчас",
+              "accel": null,
+              "tooltip": "Записать снимок сеанса немедленно",
+              "enabled": true
+            },
+            {
+              "kind": "Action",
+              "id": "recovery.showLast",
+              "command": "recovery.showLast",
+              "args": {
+                "rowId": "",
+                "date": null,
+                "cardId": "",
+                "key": "",
+                "value": ""
+              },
+              "text": "Показать последний снимок…",
+              "accel": null,
+              "tooltip": "Содержимое сохранённых снимков",
+              "enabled": true
+            },
+            {
+              "kind": "Action",
+              "id": "recovery.clear",
+              "command": "recovery.clear",
+              "args": {
+                "rowId": "",
+                "date": null,
+                "cardId": "",
+                "key": "",
+                "value": ""
+              },
+              "text": "Очистить снимки…",
+              "accel": null,
+              "tooltip": "Удалить сохранённые снимки (запись сеанса продолжится)",
+              "enabled": true
+            },
+            {
+              "kind": "Separator",
+              "id": "recovery.sep.2"
+            },
+            {
+              "kind": "Submenu",
+              "id": "recovery.simulate",
+              "text": "Симулировать сбой",
+              "tooltip": "Проверить восстановление после сбоя",
+              "enabled": true,
+              "children": [
+                {
+                  "kind": "Action",
+                  "id": "recovery.simulate.halt",
+                  "command": "recovery.simulate.halt",
+                  "args": {
+                    "rowId": "",
+                    "date": null,
+                    "cardId": "",
+                    "key": "",
+                    "value": ""
+                  },
+                  "text": "Аварийное завершение процесса…",
+                  "accel": null,
+                  "tooltip": "Runtime.halt без сохранения (с подтверждением)",
+                  "enabled": true
+                },
+                {
+                  "kind": "Action",
+                  "id": "recovery.simulate.exception",
+                  "command": "recovery.simulate.exception",
+                  "args": {
+                    "rowId": "",
+                    "date": null,
+                    "cardId": "",
+                    "key": "",
+                    "value": ""
+                  },
+                  "text": "Необработанное исключение",
+                  "accel": null,
+                  "tooltip": "Исключение в потоке интерфейса: сообщение и завершение",
+                  "enabled": true
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "kind": "Submenu",
+          "id": "help",
+          "text": "Справка",
+          "tooltip": "",
+          "enabled": true,
+          "children": [
+            {
+              "kind": "Action",
+              "id": "help.about",
+              "command": "help.about",
+              "args": {
+                "rowId": "",
+                "date": null,
+                "cardId": "",
+                "key": "",
+                "value": ""
+              },
+              "text": "О программе",
+              "accel": {
+                "ctrl": false,
+                "shift": false,
+                "alt": false,
+                "key": "F1"
+              },
+              "tooltip": "Версия и папка с данными",
+              "enabled": true
+            },
+            {
+              "kind": "Action",
+              "id": "help.hotkeys",
+              "command": "help.hotkeys",
+              "args": {
+                "rowId": "",
+                "date": null,
+                "cardId": "",
+                "key": "",
+                "value": ""
+              },
+              "text": "Горячие клавиши…",
+              "accel": null,
+              "tooltip": "Список сочетаний клавиш",
+              "enabled": true
+            },
+            {
+              "kind": "Action",
+              "id": "help.format",
+              "command": "help.format",
+              "args": {
+                "rowId": "",
+                "date": null,
+                "cardId": "",
+                "key": "",
+                "value": ""
+              },
+              "text": "Формат файла .md…",
+              "accel": null,
+              "tooltip": "Как устроен файл плана",
+              "enabled": true
+            }
+          ]
+        }
+      ]
+    },
+    "toolbar": {
+      "items": [
+        {
+          "kind": "SplitButton",
+          "id": "tb.add",
+          "text": "Добавить доход",
+          "tooltip": "Новый регулярный доход (Ctrl+I). Стрелка - расход, разовая операция, корректировка",
+          "main": {
+            "kind": "Action",
+            "id": "edit.addIncome",
+            "command": "edit.addIncome",
+            "args": {
+              "rowId": "",
+              "date": null,
+              "cardId": "",
+              "key": "",
+              "value": ""
+            },
+            "text": "Добавить доход",
+            "accel": null,
+            "tooltip": "Новый регулярный доход (Ctrl+I). Стрелка - расход, разовая операция, корректировка",
+            "enabled": true
+          },
+          "items": [
+            {
+              "kind": "Action",
+              "id": "edit.addExpense",
+              "command": "edit.addExpense",
+              "args": {
+                "rowId": "",
+                "date": null,
+                "cardId": "",
+                "key": "",
+                "value": ""
+              },
+              "text": "Добавить расход…",
+              "accel": null,
+              "tooltip": "Новая регулярная операция: расход",
+              "enabled": true
+            },
+            {
+              "kind": "Action",
+              "id": "edit.addOneTime",
+              "command": "edit.addOneTime",
+              "args": {
+                "rowId": "",
+                "date": null,
+                "cardId": "",
+                "key": "",
+                "value": ""
+              },
+              "text": "Разовая операция…",
+              "accel": null,
+              "tooltip": "Доход или расход один раз",
+              "enabled": true
+            },
+            {
+              "kind": "Separator",
+              "id": "tb.add.sep.1"
+            },
+            {
+              "kind": "Action",
+              "id": "edit.adjust",
+              "command": "edit.adjust",
+              "args": {
+                "rowId": "",
+                "date": null,
+                "cardId": "",
+                "key": "",
+                "value": ""
+              },
+              "text": "Скорректировать выбранное событие…",
+              "accel": null,
+              "tooltip": "Пропустить, изменить сумму или перенести выделенное событие правила",
+              "enabled": false
+            }
+          ]
+        },
+        {
+          "kind": "Separator",
+          "id": "tb.sep.1"
+        },
+        {
+          "kind": "Toggle",
+          "id": "tb.table",
+          "command": "view.table",
+          "text": "Таблица",
+          "tooltip": "Таблица событий с балансом (Ctrl+1)",
+          "selected": true,
+          "group": "mode"
+        },
+        {
+          "kind": "Toggle",
+          "id": "tb.chart",
+          "command": "view.chart",
+          "text": "График",
+          "tooltip": "График баланса во времени (Ctrl+2)",
+          "selected": false,
+          "group": "mode"
+        },
+        {
+          "kind": "Separator",
+          "id": "tb.sep.2"
+        },
+        {
+          "kind": "MenuButton",
+          "id": "tb.period",
+          "text": "Период: 12 месяцев",
+          "tooltip": "Какой отрезок плана показывать в таблице и на графике (горизонт плана не меняется)",
+          "emphasis": "NONE",
+          "items": [
+            {
+              "kind": "Radio",
+              "id": "view.period.M3",
+              "group": "period",
+              "command": "view.period.M3",
+              "args": {
+                "rowId": "",
+                "date": null,
+                "cardId": "",
+                "key": "",
+                "value": ""
+              },
+              "text": "Период: 3 месяца",
+              "accel": null,
+              "tooltip": "Показывать ближайшие 3 месяца (план не меняется)",
+              "enabled": true,
+              "selected": false
+            },
+            {
+              "kind": "Radio",
+              "id": "view.period.M6",
+              "group": "period",
+              "command": "view.period.M6",
+              "args": {
+                "rowId": "",
+                "date": null,
+                "cardId": "",
+                "key": "",
+                "value": ""
+              },
+              "text": "Период: 6 месяцев",
+              "accel": null,
+              "tooltip": "Показывать ближайшие 6 месяцев (план не меняется)",
+              "enabled": true,
+              "selected": false
+            },
+            {
+              "kind": "Radio",
+              "id": "view.period.M12",
+              "group": "period",
+              "command": "view.period.M12",
+              "args": {
+                "rowId": "",
+                "date": null,
+                "cardId": "",
+                "key": "",
+                "value": ""
+              },
+              "text": "Период: 12 месяцев",
+              "accel": null,
+              "tooltip": "Показывать ближайшие 12 месяцев (план не меняется)",
+              "enabled": true,
+              "selected": true
+            },
+            {
+              "kind": "Radio",
+              "id": "view.period.M24",
+              "group": "period",
+              "command": "view.period.M24",
+              "args": {
+                "rowId": "",
+                "date": null,
+                "cardId": "",
+                "key": "",
+                "value": ""
+              },
+              "text": "Период: 24 месяца",
+              "accel": null,
+              "tooltip": "Показывать ближайшие 24 месяца (план не меняется)",
+              "enabled": true,
+              "selected": false
+            },
+            {
+              "kind": "Radio",
+              "id": "view.period.ALL",
+              "group": "period",
+              "command": "view.period.ALL",
+              "args": {
+                "rowId": "",
+                "date": null,
+                "cardId": "",
+                "key": "",
+                "value": ""
+              },
+              "text": "Период: весь горизонт",
+              "accel": null,
+              "tooltip": "Показывать весь горизонт плана (план не меняется)",
+              "enabled": true,
+              "selected": false
+            },
+            {
+              "kind": "Separator",
+              "id": "tb.period.sep.1"
+            },
+            {
+              "kind": "Slider",
+              "id": "view.horizonSlider",
+              "command": "view.horizonSlider",
+              "min": 1,
+              "max": 120,
+              "majorTick": 12,
+              "value": 12,
+              "labels": [
+                "Горизонт плана: 1 месяц",
+                "Горизонт плана: 2 месяца",
+                "Горизонт плана: 3 месяца",
+                "Горизонт плана: 4 месяца",
+                "Горизонт плана: 5 месяцев",
+                "Горизонт плана: 6 месяцев",
+                "Горизонт плана: 7 месяцев",
+                "Горизонт плана: 8 месяцев",
+                "Горизонт плана: 9 месяцев",
+                "Горизонт плана: 10 месяцев",
+                "Горизонт плана: 11 месяцев",
+                "Горизонт плана: 12 месяцев",
+                "Горизонт плана: 13 месяцев",
+                "Горизонт плана: 14 месяцев",
+                "Горизонт плана: 15 месяцев",
+                "Горизонт плана: 16 месяцев",
+                "Горизонт плана: 17 месяцев",
+                "Горизонт плана: 18 месяцев",
+                "Горизонт плана: 19 месяцев",
+                "Горизонт плана: 20 месяцев",
+                "Горизонт плана: 21 месяц",
+                "Горизонт плана: 22 месяца",
+                "Горизонт плана: 23 месяца",
+                "Горизонт плана: 24 месяца",
+                "Горизонт плана: 25 месяцев",
+                "Горизонт плана: 26 месяцев",
+                "Горизонт плана: 27 месяцев",
+                "Горизонт плана: 28 месяцев",
+                "Горизонт плана: 29 месяцев",
+                "Горизонт плана: 30 месяцев",
+                "Горизонт плана: 31 месяц",
+                "Горизонт плана: 32 месяца",
+                "Горизонт плана: 33 месяца",
+                "Горизонт плана: 34 месяца",
+                "Горизонт плана: 35 месяцев",
+                "Горизонт плана: 36 месяцев",
+                "Горизонт плана: 37 месяцев",
+                "Горизонт плана: 38 месяцев",
+                "Горизонт плана: 39 месяцев",
+                "Горизонт плана: 40 месяцев",
+                "Горизонт плана: 41 месяц",
+                "Горизонт плана: 42 месяца",
+                "Горизонт плана: 43 месяца",
+                "Горизонт плана: 44 месяца",
+                "Горизонт плана: 45 месяцев",
+                "Горизонт плана: 46 месяцев",
+                "Горизонт плана: 47 месяцев",
+                "Горизонт плана: 48 месяцев",
+                "Горизонт плана: 49 месяцев",
+                "Горизонт плана: 50 месяцев",
+                "Горизонт плана: 51 месяц",
+                "Горизонт плана: 52 месяца",
+                "Горизонт плана: 53 месяца",
+                "Горизонт плана: 54 месяца",
+                "Горизонт плана: 55 месяцев",
+                "Горизонт плана: 56 месяцев",
+                "Горизонт плана: 57 месяцев",
+                "Горизонт плана: 58 месяцев",
+                "Горизонт плана: 59 месяцев",
+                "Горизонт плана: 60 месяцев",
+                "Горизонт плана: 61 месяц",
+                "Горизонт плана: 62 месяца",
+                "Горизонт плана: 63 месяца",
+                "Горизонт плана: 64 месяца",
+                "Горизонт плана: 65 месяцев",
+                "Горизонт плана: 66 месяцев",
+                "Горизонт плана: 67 месяцев",
+                "Горизонт плана: 68 месяцев",
+                "Горизонт плана: 69 месяцев",
+                "Горизонт плана: 70 месяцев",
+                "Горизонт плана: 71 месяц",
+                "Горизонт плана: 72 месяца",
+                "Горизонт плана: 73 месяца",
+                "Горизонт плана: 74 месяца",
+                "Горизонт плана: 75 месяцев",
+                "Горизонт плана: 76 месяцев",
+                "Горизонт плана: 77 месяцев",
+                "Горизонт плана: 78 месяцев",
+                "Горизонт плана: 79 месяцев",
+                "Горизонт плана: 80 месяцев",
+                "Горизонт плана: 81 месяц",
+                "Горизонт плана: 82 месяца",
+                "Горизонт плана: 83 месяца",
+                "Горизонт плана: 84 месяца",
+                "Горизонт плана: 85 месяцев",
+                "Горизонт плана: 86 месяцев",
+                "Горизонт плана: 87 месяцев",
+                "Горизонт плана: 88 месяцев",
+                "Горизонт плана: 89 месяцев",
+                "Горизонт плана: 90 месяцев",
+                "Горизонт плана: 91 месяц",
+                "Горизонт плана: 92 месяца",
+                "Горизонт плана: 93 месяца",
+                "Горизонт плана: 94 месяца",
+                "Горизонт плана: 95 месяцев",
+                "Горизонт плана: 96 месяцев",
+                "Горизонт плана: 97 месяцев",
+                "Горизонт плана: 98 месяцев",
+                "Горизонт плана: 99 месяцев",
+                "Горизонт плана: 100 месяцев",
+                "Горизонт плана: 101 месяц",
+                "Горизонт плана: 102 месяца",
+                "Горизонт плана: 103 месяца",
+                "Горизонт плана: 104 месяца",
+                "Горизонт плана: 105 месяцев",
+                "Горизонт плана: 106 месяцев",
+                "Горизонт плана: 107 месяцев",
+                "Горизонт плана: 108 месяцев",
+                "Горизонт плана: 109 месяцев",
+                "Горизонт плана: 110 месяцев",
+                "Горизонт плана: 111 месяцев",
+                "Горизонт плана: 112 месяцев",
+                "Горизонт плана: 113 месяцев",
+                "Горизонт плана: 114 месяцев",
+                "Горизонт плана: 115 месяцев",
+                "Горизонт плана: 116 месяцев",
+                "Горизонт плана: 117 месяцев",
+                "Горизонт плана: 118 месяцев",
+                "Горизонт плана: 119 месяцев",
+                "Горизонт плана: 120 месяцев"
+              ],
+              "currentLabel": "Горизонт плана: 12 месяцев",
+              "tooltip": "Сколько месяцев вперёд считать прогноз (меняет план)",
+              "widthPx": 240
+            },
+            {
+              "kind": "Action",
+              "id": "view.horizonMonths",
+              "command": "view.horizonMonths",
+              "args": {
+                "rowId": "",
+                "date": null,
+                "cardId": "",
+                "key": "",
+                "value": ""
+              },
+              "text": "Горизонт: другое число месяцев…",
+              "accel": null,
+              "tooltip": "Ввести горизонт от 1 до 600 месяцев",
+              "enabled": true
+            }
+          ]
+        },
+        {
+          "kind": "MenuButton",
+          "id": "tb.whatIf",
+          "text": "Что-если",
+          "tooltip": "Прогноз при других доходах, расходах или доп. экономии, не меняя план",
+          "emphasis": "NONE",
+          "items": [
+            {
+              "kind": "Check",
+              "id": "whatIf.income",
+              "command": "whatIf.income",
+              "args": {
+                "rowId": "",
+                "date": null,
+                "cardId": "",
+                "key": "",
+                "value": ""
+              },
+              "text": "Доходы -10 %",
+              "accel": null,
+              "tooltip": "Все доходы на 10 % меньше",
+              "enabled": true,
+              "checked": false
+            },
+            {
+              "kind": "Check",
+              "id": "whatIf.expense",
+              "command": "whatIf.expense",
+              "args": {
+                "rowId": "",
+                "date": null,
+                "cardId": "",
+                "key": "",
+                "value": ""
+              },
+              "text": "Расходы +10 %",
+              "accel": null,
+              "tooltip": "Все расходы на 10 % больше",
+              "enabled": true,
+              "checked": false
+            },
+            {
+              "kind": "Spinner",
+              "id": "whatIf.extra",
+              "command": "whatIf.extra",
+              "label": "Откладывать доп. в месяц, ₽:",
+              "min": 0,
+              "max": 10000000,
+              "step": 1000,
+              "value": 0,
+              "tooltip": "Сколько дополнительно откладывать в конце каждого месяца (0 - выключено)",
+              "fieldWidthPx": 120,
+              "applyDelayMs": 600
+            },
+            {
+              "kind": "Separator",
+              "id": "tb.whatIf.sep.1"
+            },
+            {
+              "kind": "Action",
+              "id": "whatIf.apply",
+              "command": "whatIf.apply",
+              "args": {
+                "rowId": "",
+                "date": null,
+                "cardId": "",
+                "key": "",
+                "value": ""
+              },
+              "text": "Применить к плану…",
+              "accel": null,
+              "tooltip": "Пересчитать суммы плана по «что-если»",
+              "enabled": false
+            },
+            {
+              "kind": "Action",
+              "id": "whatIf.reset",
+              "command": "whatIf.reset",
+              "args": {
+                "rowId": "",
+                "date": null,
+                "cardId": "",
+                "key": "",
+                "value": ""
+              },
+              "text": "Сбросить «что-если»",
+              "accel": null,
+              "tooltip": "Выключить «что-если»",
+              "enabled": false
+            }
+          ]
+        },
+        {
+          "kind": "Separator",
+          "id": "tb.sep.3"
+        },
+        {
+          "kind": "FilterField",
+          "id": "tb.filter",
+          "text": "",
+          "prompt": "Фильтр… (Ctrl+F)",
+          "tooltip": "Показывать строки, где название, категория или заметка содержат текст",
+          "widthPx": 220,
+          "debounceMs": 300,
+          "clearVisible": false,
+          "clearTooltip": "Очистить фильтр"
+        },
+        {
+          "kind": "Spacer",
+          "id": "tb.spacer"
+        },
+        {
+          "kind": "Button",
+          "id": "tb.undo",
+          "command": "edit.undo",
+          "glyphOrText": "↶",
+          "tooltip": "Отменить (Ctrl+Z)",
+          "enabled": false,
+          "emphasis": "NONE"
+        },
+        {
+          "kind": "Button",
+          "id": "tb.redo",
+          "command": "edit.redo",
+          "glyphOrText": "↷",
+          "tooltip": "Повторить (Ctrl+Y)",
+          "enabled": false,
+          "emphasis": "NONE"
+        },
+        {
+          "kind": "Button",
+          "id": "tb.save",
+          "command": "file.save",
+          "glyphOrText": "Сохранить",
+          "tooltip": "Сохранить план в файл .md (Ctrl+S)",
+          "enabled": true,
+          "emphasis": "NONE"
+        }
+      ]
+    },
+    "summary": {
+      "visible": true,
+      "cards": [
+        {
+          "id": "now",
+          "title": "Сейчас",
+          "value": "177 000 ₽",
+          "valueColor": "TEXT_PRIMARY",
+          "caption": "на 13.09.2026",
+          "captionColor": "TEXT_MUTED",
+          "date": "2026-09-13",
+          "popupHeader": "Сейчас: 177 000,00 ₽",
+          "explanation": "Баланс на конец сегодняшнего дня (или дня начала плана, если он впереди)"
+        },
+        {
+          "id": "m1",
+          "title": "Через 1 месяц",
+          "value": "223 654 ₽",
+          "valueColor": "TEXT_PRIMARY",
+          "caption": "13.10.2026 · +46 654",
+          "captionColor": "TEXT_MUTED",
+          "date": "2026-10-13",
+          "popupHeader": "Через 1 месяц: 223 654,33 ₽",
+          "explanation": "Баланс через 1 месяц и изменение относительно «Сейчас»: +46 654,33"
+        },
+        {
+          "id": "m3",
+          "title": "Через 3 месяца",
+          "value": "312 963 ₽",
+          "valueColor": "TEXT_PRIMARY",
+          "caption": "13.12.2026 · +135 963",
+          "captionColor": "TEXT_MUTED",
+          "date": "2026-12-13",
+          "popupHeader": "Через 3 месяца: 312 962,99 ₽",
+          "explanation": "Баланс через 3 месяца и изменение относительно «Сейчас»: +135 962,99"
+        },
+        {
+          "id": "m6",
+          "title": "Через 6 месяцев",
+          "value": "508 926 ₽",
+          "valueColor": "TEXT_PRIMARY",
+          "caption": "13.03.2027 · +331 926",
+          "captionColor": "TEXT_MUTED",
+          "date": "2027-03-13",
+          "popupHeader": "Через 6 месяцев: 508 925,98 ₽",
+          "explanation": "Баланс через 6 месяцев и изменение относительно «Сейчас»: +331 925,98"
+        },
+        {
+          "id": "m12",
+          "title": "Через 12 месяцев",
+          "value": "за горизонтом",
+          "valueColor": "TEXT_MUTED",
+          "caption": "за горизонтом плана",
+          "captionColor": "TEXT_MUTED",
+          "date": null,
+          "popupHeader": "Через 12 месяцев: за горизонтом",
+          "explanation": "Дата 13.09.2027 за пределами горизонта: увеличьте горизонт в меню «Вид»"
+        },
+        {
+          "id": "min",
+          "title": "Минимум",
+          "value": "147 654 ₽",
+          "valueColor": "TEXT_PRIMARY",
+          "caption": "03.10.2026",
+          "captionColor": "TEXT_MUTED",
+          "date": "2026-10-03",
+          "popupHeader": "Минимум: 147 654,33 ₽",
+          "explanation": "Самый низкий баланс до конца плана"
+        },
+        {
+          "id": "firstNegative",
+          "title": "Первый минус",
+          "value": "нет",
+          "valueColor": "TEXT_PRIMARY",
+          "caption": "подушка не нарушается",
+          "captionColor": "TEXT_MUTED",
+          "date": null,
+          "popupHeader": "Первый минус: нет",
+          "explanation": "Первый день, когда баланс уходит ниже нуля"
+        },
+        {
+          "id": "avg",
+          "title": "Средний итог/мес",
+          "value": "+50 355 ₽",
+          "valueColor": "TEXT_PRIMARY",
+          "caption": "доходы 1,5 млн · расходы 896 тыс",
+          "captionColor": "TEXT_MUTED",
+          "date": null,
+          "popupHeader": "Средний итог/мес: 50 355,46 ₽",
+          "explanation": "Сколько в среднем прибавляется за месяц. Доходы 1 500 000,00 ₽, расходы 896 148,04 ₽"
+        },
+        {
+          "id": "goal",
+          "title": "Цель",
+          "value": "20.11.2026",
+          "valueColor": "TEXT_PRIMARY",
+          "caption": "«Отпуск» 300 000 ₽",
+          "captionColor": "TEXT_MUTED",
+          "date": "2026-11-20",
+          "popupHeader": "Цель: 20.11.2026",
+          "explanation": "Когда баланс впервые достигнет цели «Отпуск» 300 000,00 ₽"
+        }
+      ],
+      "unavailableText": ""
+    },
+    "table": {
+      "revision": 7,
+      "columns": [
+        {
+          "id": "date",
+          "title": "Дата",
+          "widthPx": 92,
+          "grows": false,
+          "align": "LEFT",
+          "bold": false,
+          "headerTooltip": "Фактическая дата события"
+        },
+        {
+          "id": "day",
+          "title": "День",
+          "widthPx": 44,
+          "grows": false,
+          "align": "CENTER",
+          "bold": false,
+          "headerTooltip": "День недели"
+        },
+        {
+          "id": "title",
+          "title": "Операция",
+          "widthPx": 220,
+          "grows": true,
+          "align": "LEFT",
+          "bold": false,
+          "headerTooltip": "Название операции"
+        },
+        {
+          "id": "category",
+          "title": "Категория",
+          "widthPx": 130,
+          "grows": false,
+          "align": "LEFT",
+          "bold": false,
+          "headerTooltip": "Категория операции"
+        },
+        {
+          "id": "income",
+          "title": "Доход",
+          "widthPx": 120,
+          "grows": false,
+          "align": "RIGHT",
+          "bold": false,
+          "headerTooltip": "Поступление денег"
+        },
+        {
+          "id": "expense",
+          "title": "Расход",
+          "widthPx": 120,
+          "grows": false,
+          "align": "RIGHT",
+          "bold": false,
+          "headerTooltip": "Трата денег"
+        },
+        {
+          "id": "balance",
+          "title": "Баланс",
+          "widthPx": 130,
+          "grows": false,
+          "align": "RIGHT",
+          "bold": true,
+          "headerTooltip": "Сколько денег останется после события"
+        },
+        {
+          "id": "marks",
+          "title": "Отметки",
+          "widthPx": 90,
+          "grows": false,
+          "align": "CENTER",
+          "bold": false,
+          "headerTooltip": "✎ сумма изменена · → перенесено · ⇄ сдвиг с выходного · ≡ разовая · ✕ пропущено · Δ что-если"
+        }
+      ],
+      "rowCount": 111,
+      "selectedRowId": "",
+      "scrollToRowId": "r2@2026-09-20",
+      "placeholder": null
+    },
+    "chart": {
+      "revision": 7
+    },
+    "status": {
+      "segments": [
+        {
+          "id": "file",
+          "text": "Файл: не сохранён",
+          "tooltip": "План ещё не записан на диск: Ctrl+S сохранит его в CashMemory",
+          "color": "TEXT_PRIMARY",
+          "grow": false,
+          "visible": true
+        },
+        {
+          "id": "dirty",
+          "text": "без изменений",
+          "tooltip": "",
+          "color": "TEXT_MUTED",
+          "grow": false,
+          "visible": true
+        },
+        {
+          "id": "rows",
+          "text": "Строк: 102",
+          "tooltip": "",
+          "color": "TEXT_PRIMARY",
+          "grow": false,
+          "visible": true
+        },
+        {
+          "id": "horizon",
+          "text": "Горизонт: 12 месяцев (до 31.08.2027)",
+          "tooltip": "",
+          "color": "TEXT_PRIMARY",
+          "grow": false,
+          "visible": true
+        },
+        {
+          "id": "message",
+          "text": "",
+          "tooltip": "",
+          "color": "TEXT_PRIMARY",
+          "grow": true,
+          "visible": true
+        },
+        {
+          "id": "whatIf",
+          "text": "",
+          "tooltip": "",
+          "color": "TEXT_PRIMARY",
+          "grow": false,
+          "visible": false
+        },
+        {
+          "id": "autosave",
+          "text": "",
+          "tooltip": "",
+          "color": "TEXT_PRIMARY",
+          "grow": false,
+          "visible": false
+        },
+        {
+          "id": "session",
+          "text": "Снимок сеанса: ещё не записан",
+          "tooltip": "",
+          "color": "TEXT_PRIMARY",
+          "grow": false,
+          "visible": true
+        }
+      ]
+    },
+    "mode": "TABLE"
+  },
+  "hotkeys": [
+    {
+      "command": "file.new",
+      "chord": {
+        "ctrl": true,
+        "shift": false,
+        "alt": false,
+        "key": "N"
+      },
+      "scopes": [
+        "CARD",
+        "FILTER",
+        "MAIN",
+        "POPUP",
+        "TABLE",
+        "TEXT_INPUT"
+      ],
+      "shown": false
+    },
+    {
+      "command": "file.new",
+      "chord": {
+        "ctrl": false,
+        "shift": true,
+        "alt": true,
+        "key": "N"
+      },
+      "scopes": [
+        "CARD",
+        "FILTER",
+        "MAIN",
+        "POPUP",
+        "TABLE",
+        "TEXT_INPUT"
+      ],
+      "shown": true
+    },
+    {
+      "command": "file.open",
+      "chord": {
+        "ctrl": true,
+        "shift": false,
+        "alt": false,
+        "key": "O"
+      },
+      "scopes": [
+        "CARD",
+        "FILTER",
+        "MAIN",
+        "POPUP",
+        "TABLE",
+        "TEXT_INPUT"
+      ],
+      "shown": false
+    },
+    {
+      "command": "file.open",
+      "chord": {
+        "ctrl": false,
+        "shift": true,
+        "alt": true,
+        "key": "O"
+      },
+      "scopes": [
+        "CARD",
+        "FILTER",
+        "MAIN",
+        "POPUP",
+        "TABLE",
+        "TEXT_INPUT"
+      ],
+      "shown": true
+    },
+    {
+      "command": "file.save",
+      "chord": {
+        "ctrl": true,
+        "shift": false,
+        "alt": false,
+        "key": "S"
+      },
+      "scopes": [
+        "CARD",
+        "FILTER",
+        "MAIN",
+        "POPUP",
+        "TABLE",
+        "TEXT_INPUT"
+      ],
+      "shown": true
+    },
+    {
+      "command": "file.saveAs",
+      "chord": {
+        "ctrl": true,
+        "shift": true,
+        "alt": false,
+        "key": "S"
+      },
+      "scopes": [
+        "CARD",
+        "FILTER",
+        "MAIN",
+        "POPUP",
+        "TABLE",
+        "TEXT_INPUT"
+      ],
+      "shown": true
+    },
+    {
+      "command": "file.rename",
+      "chord": {
+        "ctrl": false,
+        "shift": false,
+        "alt": false,
+        "key": "F2"
+      },
+      "scopes": [
+        "CARD",
+        "FILTER",
+        "MAIN",
+        "TABLE"
+      ],
+      "shown": true
+    },
+    {
+      "command": "file.exportCsv",
+      "chord": {
+        "ctrl": true,
+        "shift": true,
+        "alt": false,
+        "key": "C"
+      },
+      "scopes": [
+        "CARD",
+        "FILTER",
+        "MAIN",
+        "TABLE"
+      ],
+      "shown": false
+    },
+    {
+      "command": "file.exportCsv",
+      "chord": {
+        "ctrl": false,
+        "shift": true,
+        "alt": true,
+        "key": "C"
+      },
+      "scopes": [
+        "CARD",
+        "FILTER",
+        "MAIN",
+        "TABLE"
+      ],
+      "shown": true
+    },
+    {
+      "command": "edit.addIncome",
+      "chord": {
+        "ctrl": true,
+        "shift": false,
+        "alt": false,
+        "key": "I"
+      },
+      "scopes": [
+        "CARD",
+        "FILTER",
+        "MAIN",
+        "TABLE"
+      ],
+      "shown": true
+    },
+    {
+      "command": "edit.addExpense",
+      "chord": {
+        "ctrl": true,
+        "shift": false,
+        "alt": false,
+        "key": "E"
+      },
+      "scopes": [
+        "CARD",
+        "FILTER",
+        "MAIN",
+        "TABLE"
+      ],
+      "shown": true
+    },
+    {
+      "command": "edit.addOneTime",
+      "chord": {
+        "ctrl": true,
+        "shift": false,
+        "alt": false,
+        "key": "T"
+      },
+      "scopes": [
+        "CARD",
+        "FILTER",
+        "MAIN",
+        "TABLE"
+      ],
+      "shown": false
+    },
+    {
+      "command": "edit.addOneTime",
+      "chord": {
+        "ctrl": false,
+        "shift": true,
+        "alt": true,
+        "key": "T"
+      },
+      "scopes": [
+        "CARD",
+        "FILTER",
+        "MAIN",
+        "TABLE"
+      ],
+      "shown": true
+    },
+    {
+      "command": "edit.adjust",
+      "chord": {
+        "ctrl": true,
+        "shift": false,
+        "alt": false,
+        "key": "J"
+      },
+      "scopes": [
+        "CARD",
+        "FILTER",
+        "MAIN",
+        "TABLE"
+      ],
+      "shown": true
+    },
+    {
+      "command": "edit.edit",
+      "chord": {
+        "ctrl": false,
+        "shift": false,
+        "alt": false,
+        "key": "ENTER"
+      },
+      "scopes": [
+        "TABLE"
+      ],
+      "shown": true
+    },
+    {
+      "command": "edit.delete",
+      "chord": {
+        "ctrl": false,
+        "shift": false,
+        "alt": false,
+        "key": "DELETE"
+      },
+      "scopes": [
+        "TABLE"
+      ],
+      "shown": true
+    },
+    {
+      "command": "edit.undo",
+      "chord": {
+        "ctrl": true,
+        "shift": false,
+        "alt": false,
+        "key": "Z"
+      },
+      "scopes": [
+        "CARD",
+        "MAIN",
+        "TABLE"
+      ],
+      "shown": true
+    },
+    {
+      "command": "edit.redo",
+      "chord": {
+        "ctrl": true,
+        "shift": false,
+        "alt": false,
+        "key": "Y"
+      },
+      "scopes": [
+        "CARD",
+        "MAIN",
+        "TABLE"
+      ],
+      "shown": true
+    },
+    {
+      "command": "edit.redo",
+      "chord": {
+        "ctrl": true,
+        "shift": true,
+        "alt": false,
+        "key": "Z"
+      },
+      "scopes": [
+        "CARD",
+        "MAIN",
+        "TABLE"
+      ],
+      "shown": false
+    },
+    {
+      "command": "view.table",
+      "chord": {
+        "ctrl": true,
+        "shift": false,
+        "alt": false,
+        "key": "DIGIT1"
+      },
+      "scopes": [
+        "CARD",
+        "FILTER",
+        "MAIN",
+        "TABLE"
+      ],
+      "shown": true
+    },
+    {
+      "command": "view.table",
+      "chord": {
+        "ctrl": false,
+        "shift": true,
+        "alt": true,
+        "key": "DIGIT1"
+      },
+      "scopes": [
+        "CARD",
+        "FILTER",
+        "MAIN",
+        "TABLE"
+      ],
+      "shown": false
+    },
+    {
+      "command": "view.chart",
+      "chord": {
+        "ctrl": true,
+        "shift": false,
+        "alt": false,
+        "key": "DIGIT2"
+      },
+      "scopes": [
+        "CARD",
+        "FILTER",
+        "MAIN",
+        "TABLE"
+      ],
+      "shown": true
+    },
+    {
+      "command": "view.chart",
+      "chord": {
+        "ctrl": false,
+        "shift": true,
+        "alt": true,
+        "key": "DIGIT2"
+      },
+      "scopes": [
+        "CARD",
+        "FILTER",
+        "MAIN",
+        "TABLE"
+      ],
+      "shown": false
+    },
+    {
+      "command": "view.focusFilter",
+      "chord": {
+        "ctrl": true,
+        "shift": false,
+        "alt": false,
+        "key": "F"
+      },
+      "scopes": [
+        "CARD",
+        "FILTER",
+        "MAIN",
+        "POPUP",
+        "TABLE",
+        "TEXT_INPUT"
+      ],
+      "shown": true
+    },
+    {
+      "command": "filter.clear",
+      "chord": {
+        "ctrl": false,
+        "shift": false,
+        "alt": false,
+        "key": "ESCAPE"
+      },
+      "scopes": [
+        "FILTER"
+      ],
+      "shown": false
+    },
+    {
+      "command": "tools.goal",
+      "chord": {
+        "ctrl": true,
+        "shift": false,
+        "alt": false,
+        "key": "G"
+      },
+      "scopes": [
+        "CARD",
+        "FILTER",
+        "MAIN",
+        "TABLE"
+      ],
+      "shown": true
+    },
+    {
+      "command": "help.about",
+      "chord": {
+        "ctrl": false,
+        "shift": false,
+        "alt": false,
+        "key": "F1"
+      },
+      "scopes": [
+        "CARD",
+        "FILTER",
+        "MAIN",
+        "POPUP",
+        "TABLE",
+        "TEXT_INPUT"
+      ],
+      "shown": true
+    },
+    {
+      "command": "ui.menuBar",
+      "chord": {
+        "ctrl": false,
+        "shift": false,
+        "alt": false,
+        "key": "F10"
+      },
+      "scopes": [
+        "CARD",
+        "MAIN",
+        "TABLE"
+      ],
+      "shown": false
+    },
+    {
+      "command": "ui.menuBar",
+      "chord": {
+        "ctrl": false,
+        "shift": false,
+        "alt": false,
+        "key": "ALT"
+      },
+      "scopes": [
+        "CARD",
+        "MAIN",
+        "TABLE"
+      ],
+      "shown": false
+    },
+    {
+      "command": "ui.contextMenu",
+      "chord": {
+        "ctrl": false,
+        "shift": true,
+        "alt": false,
+        "key": "F10"
+      },
+      "scopes": [
+        "CARD",
+        "TABLE"
+      ],
+      "shown": false
+    },
+    {
+      "command": "ui.contextMenu",
+      "chord": {
+        "ctrl": false,
+        "shift": false,
+        "alt": false,
+        "key": "CONTEXT_MENU"
+      },
+      "scopes": [
+        "CARD",
+        "TABLE"
+      ],
+      "shown": false
+    },
+    {
+      "command": "past.toggle",
+      "chord": {
+        "ctrl": false,
+        "shift": false,
+        "alt": false,
+        "key": "SPACE"
+      },
+      "scopes": [
+        "TABLE"
+      ],
+      "shown": false
+    },
+    {
+      "command": "filter.focusTable",
+      "chord": {
+        "ctrl": false,
+        "shift": false,
+        "alt": false,
+        "key": "ENTER"
+      },
+      "scopes": [
+        "FILTER"
+      ],
+      "shown": false
+    }
+  ],
+  "windows": [
+    {
+      "type": "form.open",
+      "window": {
+        "id": "w1",
+        "ownerId": "main",
+        "modal": true,
+        "placement": {
+          "ownerId": "main",
+          "bounds": null,
+          "anchor": null
+        },
+        "spec": {
+          "formId": "rename",
+          "windowType": "TEXT_INPUT",
+          "purpose": "rename",
+          "presentation": "TEXT_INPUT",
+          "windowTitle": "Новое имя плана «Пример»",
+          "glyph": "",
+          "width": 460,
+          "modal": true,
+          "resizable": false,
+          "restorable": true,
+          "pages": [
+            {
+              "id": "main",
+              "rows": [
+                {
+                  "kind": "Field",
+                  "field": {
+                    "id": "value",
+                    "kind": "TEXT",
+                    "label": "Имя",
+                    "prompt": "",
+                    "tooltip": "",
+                    "options": [],
+                    "min": 0,
+                    "max": 0,
+                    "step": 0,
+                    "columns": 0,
+                    "textRows": 0,
+                    "wide": false,
+                    "suffix": "",
+                    "orientation": "HORIZONTAL",
+                    "focusFirst": true
+                  }
+                }
+              ]
+            }
+          ],
+          "buttons": [
+            {
+              "id": "rename",
+              "text": "Переименовать",
+              "role": "OK",
+              "tooltip": ""
+            },
+            {
+              "id": "cancel",
+              "text": "Отмена",
+              "role": "CANCEL",
+              "tooltip": ""
+            }
+          ],
+          "defaultButtonId": "rename"
+        },
+        "view": {
+          "revision": 0,
+          "page": 0,
+          "header": "",
+          "fields": {
+            "value": {
+              "value": "Пример",
+              "visible": true,
+              "enabled": true,
+              "readOnly": false,
+              "label": null,
+              "options": null,
+              "tooltip": null,
+              "min": null,
+              "max": null
+            }
+          },
+          "problem": {
+            "severity": "NONE",
+            "text": ""
+          },
+          "buttons": {
+            "rename": {
+              "enabled": true,
+              "visible": true,
+              "text": null,
+              "tooltip": null
+            }
+          },
+          "results": [],
+          "preview": [],
+          "details": "",
+          "detailsExpanded": false
+        }
+      }
+    },
+    {
+      "type": "alert.open",
+      "alertId": "a1",
+      "spec": {
+        "kind": "CONFIRMATION",
+        "purpose": "unsavedChanges",
+        "targetId": "",
+        "windowTitle": "Несохранённые изменения",
+        "glyph": "",
+        "header": "Сохранить изменения в плане «Plan»?",
+        "content": "Если не сохранить, изменения будут потеряны.",
+        "details": "",
+        "detailsExpanded": false,
+        "minWidth": 460,
+        "buttons": [
+          {
+            "id": "save",
+            "text": "Сохранить",
+            "role": "OK",
+            "enabled": true,
+            "tooltip": ""
+          },
+          {
+            "id": "dontSave",
+            "text": "Не сохранять",
+            "role": "OTHER",
+            "enabled": true,
+            "tooltip": ""
+          },
+          {
+            "id": "cancel",
+            "text": "Отмена",
+            "role": "CANCEL",
+            "enabled": true,
+            "tooltip": ""
+          }
+        ],
+        "defaultButtonId": "save",
+        "restorable": false
+      }
+    }
+  ],
+  "overlay": null,
+  "texts": {
+    "calendar.button.tip": "Выбрать дату в календаре",
+    "details.hide": "Скрыть подробности ▾",
+    "details.show": "Подробности ▸"
+  }
+}

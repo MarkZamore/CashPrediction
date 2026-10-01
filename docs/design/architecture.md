@@ -525,6 +525,9 @@ resources ship in the core jar. The catalogue rejects missing and unused keys, i
 status-message calls. Independent reviews produced regression tests for startup file conflicts,
 fresh/restored rename, plain reconciliation, equal-plan what-if reset, preview date direction,
 orphan-adjustment warnings, failed window opening, quick-edit dismissal and malformed registry metadata.
+The comparison normalizer replaces the JVM version only in the generated client line of the about
+alert with `<java>`, so local and CI patch releases compare equally. Other alert content and user
+text retain exact versions; a dedicated test guards this scope.
 
 `mvn -B install` and the `ui-tests` infrastructure profile pass. The real-client parity test remains
 explicitly skipped at this checkpoint: S2 model goldens and fake-driver tests do not establish

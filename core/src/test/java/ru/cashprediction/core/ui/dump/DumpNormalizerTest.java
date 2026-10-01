@@ -68,4 +68,18 @@ class DumpNormalizerTest {
                 null, List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), List.of(),
                 Map.of(), Map.of("SAVE", 5));
     }
+
+    @Test void onlyAboutRuntimeVersionIsPortableAndOtherTextRemainsExact() {
+        var a = new UiDump.Alert("a", "about", "INFORMATION", "title", "", 460,
+                "header", "Client: JavaFX 25, Java 25.0.3.\nJava 25.0.3 is user text", "", "", false, List.of());
+        var b = new UiDump.Alert("b", "other", "INFORMATION", "title", "", 460,
+                "header", a.content(), "", "", false, List.of());
+        var original = new UiDump(1, "model", "s", "step", null, List.of(), null, null, null, null,
+                List.of(), List.of(), List.of(), List.of(a, b), List.of(), List.of(), List.of(), Map.of(), Map.of());
+        var normalized = DumpNormalizer.normalize(original, HOME, NODE);
+        assertEquals("Client: JavaFX 25, Java <java>.\nJava 25.0.3 is user text",
+                normalized.alerts().getFirst().content());
+        assertEquals(a.content(), normalized.alerts().getLast().content());
+        assertEquals(normalized, DumpNormalizer.normalize(normalized, HOME, NODE));
+    }
 }
