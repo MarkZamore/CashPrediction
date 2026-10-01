@@ -65,6 +65,21 @@ public interface FormLogic {
     FormOutcome onButton(String buttonId, FormState state, FormContext context);
 
     /**
+     * Поле изменилось: позволяет ядру обновить связанные поля без логики в клиенте (например, диск и путь).
+     * Состояние уже содержит каноническое новое значение; обычная форма просто продолжает evaluate.
+     *
+     * @param fieldId идентификатор изменённого поля
+     * @param committed завершён ли ввод или выбор
+     * @param state введённые значения после изменения
+     * @param context окружение формы
+     * @return действие над связанными полями либо пусто для обычного пересчёта
+     */
+    default Optional<FormOutcome> onFieldChanged(String fieldId, boolean committed, FormState state,
+            FormContext context) {
+        return Optional.empty();
+    }
+
+    /**
      * Выбран элемент предпросмотра (одиночный выбор) или активирован (двойной щелчок, пункт контекстного меню).
      * Выбранный индекс уже записан в {@code state.previewIndex()}.
      *

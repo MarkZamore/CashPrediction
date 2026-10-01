@@ -5,6 +5,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import ru.cashprediction.core.ui.view.status.StatusLevel;
+import ru.cashprediction.core.ui.token.DesignTokens;
 
 /**
  * Сообщения сегмента «Сообщение» строки состояния (спецификация v2, §5.4 п. 5, §8.2) — состояние контроллера.
@@ -54,7 +55,9 @@ public record StatusMessages(Message message, String hoverTip, Map<String, Messa
      * @return новое состояние
      */
     public StatusMessages show(String text, StatusLevel level, Instant now) {
-        throw new UnsupportedOperationException("S2: core-app-file - StatusMessages.show");
+        Objects.requireNonNull(now, "now");
+        return new StatusMessages(new Message(text, Objects.requireNonNull(level, "level"),
+                now.plusMillis(DesignTokens.STATUS_MESSAGE_MS)), hoverTip, persistent);
     }
 
     /**
@@ -64,7 +67,7 @@ public record StatusMessages(Message message, String hoverTip, Map<String, Messa
      * @return новое состояние
      */
     public StatusMessages hover(String tip) {
-        throw new UnsupportedOperationException("S2: core-app-file - StatusMessages.hover");
+        return new StatusMessages(message, tip, persistent);
     }
 
     /**
@@ -76,7 +79,10 @@ public record StatusMessages(Message message, String hoverTip, Map<String, Messa
      * @return новое состояние
      */
     public StatusMessages withPersistent(String causeId, String text, StatusLevel level) {
-        throw new UnsupportedOperationException("S2: core-app-file - StatusMessages.withPersistent");
+        Objects.requireNonNull(causeId, "causeId");
+        java.util.LinkedHashMap<String, Message> updated = new java.util.LinkedHashMap<>(persistent);
+        updated.put(causeId, new Message(text, Objects.requireNonNull(level, "level"), null));
+        return new StatusMessages(message, hoverTip, updated);
     }
 
     /**
@@ -86,7 +92,12 @@ public record StatusMessages(Message message, String hoverTip, Map<String, Messa
      * @return новое состояние
      */
     public StatusMessages withoutPersistent(String causeId) {
-        throw new UnsupportedOperationException("S2: core-app-file - StatusMessages.withoutPersistent");
+        if (causeId == null || !persistent.containsKey(causeId)) {
+            return this;
+        }
+        java.util.LinkedHashMap<String, Message> updated = new java.util.LinkedHashMap<>(persistent);
+        updated.remove(causeId);
+        return new StatusMessages(message, hoverTip, updated);
     }
 
     /**
@@ -96,6 +107,13 @@ public record StatusMessages(Message message, String hoverTip, Map<String, Messa
      * @return сообщение или пусто; подсказка меню возвращается как сообщение уровня INFO без срока
      */
     public Optional<Message> visible(Instant now) {
-        throw new UnsupportedOperationException("S2: core-app-file - StatusMessages.visible");
+        Objects.requireNonNull(now, "now");
+        if (!hoverTip.isBlank()) {
+            return Optional.of(new Message(hoverTip, StatusLevel.INFO, null));
+        }
+        if (message != null && (message.expiresAt() == null || now.isBefore(message.expiresAt()))) {
+            return Optional.of(message);
+        }
+        return persistent.entrySet().stream().sorted(Map.Entry.comparingByKey()).map(Map.Entry::getValue).findFirst();
     }
 }

@@ -1,8 +1,16 @@
 package ru.cashprediction.core.ui.selftest;
 
 import java.nio.file.Path;
+import java.nio.file.Files;
+import java.nio.charset.StandardCharsets;
+import java.io.IOException;
+import java.time.Duration;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
+import ru.cashprediction.core.ui.dump.DumpNormalizer;
+import ru.cashprediction.core.ui.json.UiJson;
+import ru.cashprediction.core.ui.text.UiText;
 
 /**
  * Выполнение сценария самотеста драйвером клиента (архитектура §6.2).
@@ -83,6 +91,72 @@ public final class SelfTestRunner {
      * @return отчёт
      */
     public Report run(SelfTestScript script) {
-        throw new UnsupportedOperationException("S2: core-protocol-dump - SelfTestRunner.run");
+        Objects.requireNonNull(script, "script");
+        Path root = outDir.toAbsolutePath().normalize();
+        Path scenario = child(root, script.name());
+        List<StepResult> results = new ArrayList<>();
+        StringBuilder log = new StringBuilder();
+        try {
+            Files.createDirectories(scenario);
+            for (SelfTestScript.Line line : script.lines()) {
+                try {
+                    SelfTestCommand command = line.command();
+                    if (command instanceof SelfTestCommand.Wait wait) {
+                        if (wait.millis() < 0) throw new IllegalArgumentException("wait");
+                        if (driver instanceof ModelUiDriver model) model.advance(Duration.ofMillis(wait.millis()));
+                        else Thread.sleep(wait.millis());
+                    } else if (command instanceof SelfTestCommand.Signal signal) {
+                        Path path = child(root, signal.path());
+                        Files.createDirectories(path.getParent());
+                        Files.createFile(path);
+                        long deadline = System.nanoTime() + Duration.ofSeconds(60).toNanos();
+                        while (Files.exists(path)) {
+                            if (System.nanoTime() >= deadline) throw new IOException("signal timeout");
+                            Thread.sleep(20);
+                        }
+                    } else if (command instanceof SelfTestCommand.Dump dump) {
+                        driver.awaitIdle(Duration.ofSeconds(5));
+                        var value = driver.dump(dump.step());
+                        var environment = driver instanceof ModelUiDriver model ? model.environment()
+                                : ru.cashprediction.core.app.AppEnvironment.from(ru.cashprediction.core.app.LaunchOptions.parse(List.of(), System.getProperties()));
+                        value = DumpNormalizer.normalize(value, environment.cashMemory(), environment.registryNodePath(driver.client().snapshotClient()));
+                        value = ModelDump.label(value, script.name(), dump.step());
+                        Files.writeString(child(scenario, dump.step() + ".json"), UiJson.write(value), StandardCharsets.UTF_8);
+                    } else if (command instanceof SelfTestCommand.Shot shot) {
+                        driver.awaitIdle(Duration.ofSeconds(5));
+                        Files.write(child(scenario, shot.step() + ".png"), driver.screenshot(shot.step()));
+                    } else if (command instanceof SelfTestCommand.Menus menus) {
+                        driver.awaitIdle(Duration.ofSeconds(5));
+                        Files.writeString(child(scenario, menus.path()), UiJson.write(driver.dump("menus").menuBar()), StandardCharsets.UTF_8);
+                    } else {
+                        driver.execute(command);
+                    }
+                    driver.awaitIdle(Duration.ofSeconds(5));
+                    results.add(new StepResult(line.number(), line.text(), true, ""));
+                    log.append("SELFTEST ").append(line.number()).append(" OK ").append(line.text()).append('\n');
+                } catch (Exception e) {
+                    String message = Objects.toString(e.getMessage(), e.getClass().getSimpleName());
+                    results.add(new StepResult(line.number(), line.text(), false, message));
+                    log.append("SELFTEST ").append(line.number()).append(" FAIL ").append(line.text())
+                            .append(": ").append(message.replace('\n', ' ').replace('\r', ' ')).append('\n');
+                    if (e instanceof InterruptedException) { Thread.currentThread().interrupt(); break; }
+                }
+                Files.writeString(root.resolve("selftest.log"), log, StandardCharsets.UTF_8);
+            }
+            log.append("SELFTEST DONE\n");
+            Files.writeString(root.resolve("selftest.log"), log, StandardCharsets.UTF_8);
+        } catch (IOException e) {
+            throw new IllegalStateException(UiText.get("s2.selftest.output", outDir), e);
+        }
+        return new Report(script.name(), results);
+    }
+
+    /** Разрешает только имена внутри папки вывода, исключая перезапись чужих файлов. */
+    private static Path child(Path parent, String name) {
+        Path relative = Path.of(name);
+        Path result = parent.resolve(relative).normalize();
+        if (relative.isAbsolute() || relative.getNameCount() != 1 || name.equals(".") || name.equals("..")
+                || !result.startsWith(parent) || result.equals(parent)) throw new IllegalArgumentException("output path");
+        return result;
     }
 }

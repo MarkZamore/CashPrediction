@@ -52,7 +52,7 @@ import ru.cashprediction.core.ui.token.ColorToken;
  * <p><b>Оформление</b> ({@link TableRowView}): фон без учёта выделения - баланс &lt; 0 → {@code negative.bg}, ниже
  * подушки → {@code cushion.bg}, иначе {@code total.bg} у итога, {@code bg.alt} у группы; текст прошедшей строки -
  * {@code text.past} без цветов сумм; «Доход» {@code income}, «Расход» {@code expense}, «Баланс» {@code expense} при
- * минусе; у пропущенного события зачёркнуты название и сумма («-»); START, WHAT_IF и группа - курсив, итог - жирный.
+ * минусе; у пропущенного события зачёркнуты название и сумма («пропущено»); START, WHAT_IF и группа - курсив, итог - жирный.
  * Итоговое оформление ячейки: цвет {@code cellStyle.text}, иначе {@code rowStyle.text}; жирность и курсив - из
  * {@code cellStyle}, если он есть, иначе из строки; жирность дополнительно включает {@link ColumnSpec#bold()}.
  * Отметки через пробел в порядке ✎ → ⇄ ≡ ✕ Δ.</p>

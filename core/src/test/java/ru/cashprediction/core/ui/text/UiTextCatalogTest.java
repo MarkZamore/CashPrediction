@@ -166,6 +166,14 @@ class UiTextCatalogTest {
     }
 
     @Test
+    void missingValuesAreWordsNotStandaloneHyphens() {
+        List<String> bad = UiText.keys().stream()
+                .filter(key -> UiText.template(key).orElseThrow().strip().equals("-"))
+                .toList();
+        assertEquals(List.of(), bad, "Отсутствующее значение описывается словами по смыслу");
+    }
+
+    @Test
     void noIsoDatesAndNoLatinOk() {
         List<String> bad = new ArrayList<>();
         for (String key : UiText.keys()) {

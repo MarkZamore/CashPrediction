@@ -258,7 +258,17 @@ public interface UiIntents {               // implemented by AppController; ever
   2. `FormSession.applyState`.
   3. `port.openForm` with `Placement(ownerId, bounds)`.
   4. `onShown` fires when the renderer calls `shown()`.
+     S2 uses `FormSession.whenShown(callback)`: a late subscriber is called immediately if the client has
+     already reported `shown()`. Creating a window handle is not evidence that the window was shown.
   Menus use the same `FormRequest` path, so restored windows behave exactly like fresh ones.
+- **S2 additive flow contract:** `FlowContext.showMain(MainWindowState)` is the shared entry for startup
+  and restore. `AppController` builds the screen, delegates to `UiPort.showMain` once and enables subsequent
+  partial rendering. `refresh()` before this entry must not render a hidden main window.
+  `FlowContext.showRestoredAlert(spec, restored, onShown, onButton)` preserves the original alert id and owner.
+  `AlertSession.whenShown` provides the same real-show handshake as forms; the restore factory must not replace
+  an alert with a form or exclude alerts from compatibility verification.
+  `FormLogic.onFieldChanged(fieldId, committed, state, context)` is an additive default hook for dependent
+  fields. It handles the server chooser's disk/path transition in core, without browser-only decision logic.
 - **`SessionBridge.captureMain`** records bounds from the port, view, period, flags, filter text, selection, the extra `filters` keys and `whatIfExtra`. `applyMain` restores them all.
 - **`WindowType.title()`:** ADJUSTMENT_EDITOR becomes «Корректировка события». This is a text-only change; titles are not persisted, and a codec test proves it.
 
@@ -361,6 +371,7 @@ POST /api/test/result, /api/test/dump                 (only with --test-api)
 **Intent types:**
 - main-window intents: `command{command,args,source}`, `key{chord,scope}`, `selectRow{rowId}`, `activateRow{rowId,columnId,how}`, `filterText{text}`, `sliderCommit{itemId,value}`, `spinnerCommit{itemId,value}`, `mainGeometry{bounds,maximized}`, `menuHover{itemId}`, `closeMain`;
 - form intents: `formField{windowId,fieldId,raw,committed,clientRev}`, `formButton{windowId,buttonId}`, `formPreview{windowId,index,activated}`, `formBounds{windowId,bounds}`, `formShown{windowId}`, `formClose{windowId}`;
+- alert display acknowledgement: `alertShown{windowId}`; only actual DOM visibility acknowledges `AlertSession.whenShown`, not effect publication or handle creation. Closed and unknown ids are ignored; duplicate acknowledgements are idempotent.
 - other: `alertButton{alertId,buttonId}`, `clientError{message,stack}`.
 
 **Query types:** `contextMenu{target}`, `tooltip{rev,index,columnId}`, `rows{rev,from,count<=300}`, `chartScene{rev,w,h}`, `dayCard{date}`, `sparkline{cardId}`, `calendar{month,selected}`.
@@ -505,3 +516,17 @@ POST /api/test/result, /api/test/dump                 (only with --test-api)
 - **Web async races:** `seq`/`rev`/echo rules, tested in `UiApiTest`.
 - **Large plans:** lazy table, paging, sampling, performance budgets.
 - **Modality semantics change:** covered by the s17 and e2e scenarios.
+
+### S2 integration checkpoint (2026-10-02)
+
+The core controller, file/edit/view/tools/startup/recovery flows, live form and alert sessions,
+strict web JSON protocol, comparison trees and 18 model scenarios are implemented. Scenario
+resources ship in the core jar. The catalogue rejects missing and unused keys, including concrete
+status-message calls. Independent reviews produced regression tests for startup file conflicts,
+fresh/restored rename, plain reconciliation, equal-plan what-if reset, preview date direction,
+orphan-adjustment warnings, failed window opening, quick-edit dismissal and malformed registry metadata.
+
+`mvn -B install` and the `ui-tests` infrastructure profile pass. The real-client parity test remains
+explicitly skipped at this checkpoint: S2 model goldens and fake-driver tests do not establish
+visual or behavioural parity of JavaFX, Swing and Web. Those blocking checks belong to S3-S4;
+portable recovery, performance and release sign-off remain S5-S6. S7 must not begin before S6.

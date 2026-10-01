@@ -55,7 +55,7 @@ class SummaryModelTest {
             assertEquals(date, card.date());
         }
 
-        assertEquals(new CardModel("m12", "Через 12 месяцев", "-", ColorToken.TEXT_MUTED, "за горизонтом плана",
+        assertEquals(new CardModel("m12", "Через 12 месяцев", "за горизонтом", ColorToken.TEXT_MUTED, "за горизонтом плана",
                 ColorToken.TEXT_MUTED, null, "Через 12 месяцев: за горизонтом",
                 "Дата 13.09.2027 за пределами горизонта: увеличьте горизонт в меню «Вид»"), card(model, "m12"));
         assertEquals(new CardModel("min", "Минимум", "147 654 ₽", ColorToken.TEXT_PRIMARY, "03.10.2026",
@@ -131,7 +131,7 @@ class SummaryModelTest {
         assertEquals("223 654 ₽", card(model, "m1").value(), "13.10.2026 внутри горизонта до 31.10.2026");
         for (String id : List.of("m3", "m6", "m12")) {
             CardModel card = card(model, id);
-            assertEquals("-", card.value());
+            assertEquals("за горизонтом", card.value());
             assertEquals(ColorToken.TEXT_MUTED, card.valueColor());
             assertEquals("за горизонтом плана", card.caption());
             assertEquals(null, card.date());

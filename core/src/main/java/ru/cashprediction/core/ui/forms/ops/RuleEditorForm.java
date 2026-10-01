@@ -66,6 +66,11 @@ public final class RuleEditorForm implements FormLogic {
     public RuleEditorForm() {
     }
 
+    /** Предпросмотр корректировок обновляется после правки дочернего окна, сохраняя введённые поля родителя. */
+    @Override public boolean reevaluateOnDocumentChange() {
+        return true;
+    }
+
     @Override
     public FormSpec spec(FormContext context) {
         return new FormSpec("ruleEditor", WindowType.RULE_EDITOR, "", Presentation.DIALOG, UiText.get("rule.window"), "↻",
@@ -206,6 +211,17 @@ public final class RuleEditorForm implements FormLogic {
         } catch (RuntimeException ignored) {
             return "";
         }
+        if (existing(context) != null) {
+            // Сверяем исходные даты с предложенным повтором, независимо от горизонта и сдвига выходных.
+            long lost = context.app().document().plan().adjustmentsOf(rule.id()).stream()
+                    .filter(adjustment -> !OccurrenceGenerator.isNominalDate(rule, start,
+                            adjustment.key().originalDate()))
+                    .count();
+            if (lost > 0) {
+                return UiFormats.count(lost, UiText.get("rule.warning.orphan.one"),
+                        UiText.get("rule.warning.orphan.few"), UiText.get("rule.warning.orphan.many"));
+            }
+        }
         return "";
     }
 
@@ -215,9 +231,10 @@ public final class RuleEditorForm implements FormLogic {
         if (occurrences.isEmpty()) return List.of(new PreviewItem(UiText.get("rule.preview.none"), false));
         List<PreviewItem> result = new ArrayList<>();
         for (Occurrence occurrence : occurrences) {
-            String text = UiFormats.weekdayDate(occurrence.nominal());
-            if (occurrence.shifted()) text += UiText.get("rule.preview.shift", UiFormats.weekdayDate(occurrence.actual()));
-            if (context.app().document().plan().findAdjustment(new ru.cashprediction.core.model.OccurrenceKey(rule.id(), occurrence.nominal())).isPresent()) text += UiText.get("rule.preview.adjusted");
+            String text = UiFormats.weekdayDate(occurrence.actual());
+            // Properties убирает начальные пробелы шаблона; разделение частей задаём явно по §6.3.
+            if (occurrence.shifted()) text += "  " + UiText.get("rule.preview.shift", UiFormats.weekdayDate(occurrence.nominal())).stripLeading();
+            if (context.app().document().plan().findAdjustment(new ru.cashprediction.core.model.OccurrenceKey(rule.id(), occurrence.nominal())).isPresent()) text += "  " + UiText.get("rule.preview.adjusted").stripLeading();
             result.add(new PreviewItem(text, true));
         }
         return List.copyOf(result);

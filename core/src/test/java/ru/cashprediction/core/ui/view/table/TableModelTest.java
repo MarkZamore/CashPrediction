@@ -188,7 +188,7 @@ class TableModelTest {
 
         // Пропущенное событие: сумма «-», название и сумма зачёркнуты, быстрой правки нет.
         TableRowView skipped = row(model, "r4@2026-09-19");
-        assertEquals(List.of("19.09.2026", "сб", "Продукты", "", "", "-", balance(state, "r4@2026-09-19"), "✕"),
+        assertEquals(List.of("19.09.2026", "сб", "Продукты", "", "", "пропущено", balance(state, "r4@2026-09-19"), "✕"),
                 skipped.cells());
         assertEquals(Map.of("title", new CellStyle(null, false, false, true),
                 "expense", new CellStyle(ColorToken.EXPENSE, false, false, true)), skipped.cellStyles());

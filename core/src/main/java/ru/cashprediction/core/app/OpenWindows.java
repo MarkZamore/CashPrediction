@@ -1,6 +1,8 @@
 package ru.cashprediction.core.app;
 
 import java.util.List;
+import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.Objects;
 import java.util.Optional;
 import ru.cashprediction.core.session.WindowState;
@@ -50,12 +52,18 @@ public record OpenWindows(List<OpenWindow> windows) {
 
     /** @return открыто ли хоть одно модальное окно */
     public boolean modalOpen() {
-        throw new UnsupportedOperationException("S2: core-app-file - OpenWindows.modalOpen");
+        return windows.stream().anyMatch(OpenWindow::modal);
     }
 
     /** @return последнее открытое модальное окно (владелец следующего модального окна) или пусто */
     public Optional<OpenWindow> topModal() {
-        throw new UnsupportedOperationException("S2: core-app-file - OpenWindows.topModal");
+        for (int index = windows.size() - 1; index >= 0; index--) {
+            OpenWindow window = windows.get(index);
+            if (window.modal()) {
+                return Optional.of(window);
+            }
+        }
+        return Optional.empty();
     }
 
     /**
@@ -65,7 +73,10 @@ public record OpenWindows(List<OpenWindow> windows) {
      * @return окно или пусто
      */
     public Optional<OpenWindow> findSingleInstance(String singleInstanceKey) {
-        throw new UnsupportedOperationException("S2: core-app-file - OpenWindows.findSingleInstance");
+        if (singleInstanceKey == null || singleInstanceKey.isBlank()) {
+            return Optional.empty();
+        }
+        return windows.stream().filter(window -> singleInstanceKey.equals(window.singleInstanceKey())).findFirst();
     }
 
     /**
@@ -75,7 +86,10 @@ public record OpenWindows(List<OpenWindow> windows) {
      * @return новый список
      */
     public OpenWindows with(OpenWindow window) {
-        throw new UnsupportedOperationException("S2: core-app-file - OpenWindows.with");
+        Objects.requireNonNull(window, "window");
+        List<OpenWindow> result = new ArrayList<>(windows);
+        result.add(window);
+        return new OpenWindows(result);
     }
 
     /**
@@ -85,6 +99,20 @@ public record OpenWindows(List<OpenWindow> windows) {
      * @return новый список
      */
     public OpenWindows without(String windowId) {
-        throw new UnsupportedOperationException("S2: core-app-file - OpenWindows.without");
+        if (windowId == null || windowId.isBlank() || windows.stream().noneMatch(window -> windowId.equals(window.windowId()))) {
+            return this;
+        }
+        LinkedHashSet<String> removed = new LinkedHashSet<>();
+        removed.add(windowId);
+        boolean changed;
+        do {
+            changed = false;
+            for (OpenWindow window : windows) {
+                if (removed.contains(window.ownerId()) && removed.add(window.windowId())) {
+                    changed = true;
+                }
+            }
+        } while (changed);
+        return new OpenWindows(windows.stream().filter(window -> !removed.contains(window.windowId())).toList());
     }
 }

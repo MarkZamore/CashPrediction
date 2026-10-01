@@ -1,0 +1,317 @@
+{
+  "schema": 1,
+  "nonMaskingRows": [
+    {
+      "number": 12,
+      "specSection": "§10 №12",
+      "reason": "ChooserRequest is compared in full; native chooser appearance is not dumped."
+    },
+    {
+      "number": 16,
+      "specSection": "§10 №16",
+      "reason": "OS decoration, scrollbars, dropdown internals, font smoothing and text field system menus are outside UiDump."
+    }
+  ],
+  "entries": [
+    {
+      "number": 1,
+      "pointer": "/menuBar/recovery/children/recovery.store.registry",
+      "clients": [
+        "web"
+      ],
+      "specSection": "§10 №1",
+      "description": "Only storage radio presence differs."
+    },
+    {
+      "number": 1,
+      "pointer": "/menuBar/recovery/children/recovery.store.xml",
+      "clients": [
+        "web"
+      ],
+      "specSection": "§10 №1",
+      "description": "Only storage radio presence differs."
+    },
+    {
+      "number": 1,
+      "pointer": "/menuBar/recovery/children/recovery.store.server",
+      "clients": [
+        "web"
+      ],
+      "specSection": "§10 №1",
+      "description": "Only storage radio presence differs."
+    },
+    {
+      "number": 2,
+      "pointer": "/menuBar/file/children/file.new/accel",
+      "clients": [
+        "web"
+      ],
+      "specSection": "§10 №2",
+      "description": "Only the Desktop/Web accelerator pair from HotkeyTable."
+    },
+    {
+      "number": 2,
+      "pointer": "/menuBar/file/children/file.open/accel",
+      "clients": [
+        "web"
+      ],
+      "specSection": "§10 №2",
+      "description": "Only the Desktop/Web accelerator pair from HotkeyTable."
+    },
+    {
+      "number": 2,
+      "pointer": "/menuBar/file/children/file.exportCsv/accel",
+      "clients": [
+        "web"
+      ],
+      "specSection": "§10 №2",
+      "description": "Only the Desktop/Web accelerator pair from HotkeyTable."
+    },
+    {
+      "number": 2,
+      "pointer": "/menuBar/file/children/file.exit/accel",
+      "clients": [
+        "web"
+      ],
+      "specSection": "§10 №2",
+      "description": "Only the Desktop/Web accelerator pair from HotkeyTable."
+    },
+    {
+      "number": 2,
+      "pointer": "/menuBar/edit/children/edit.addOneTime/accel",
+      "clients": [
+        "web"
+      ],
+      "specSection": "§10 №2",
+      "description": "Only the Desktop/Web accelerator pair from HotkeyTable."
+    },
+    {
+      "number": 3,
+      "pointer": "/menuBar/file/children/file.exit/tooltip",
+      "clients": [
+        "web"
+      ],
+      "specSection": "§10 №3",
+      "description": "Exact web exit tooltip."
+    },
+    {
+      "number": 4,
+      "pointer": "/alerts/simulateHalt/header",
+      "clients": [
+        "web"
+      ],
+      "specSection": "§10 №4",
+      "description": "Exact web halt question; screens covered by row 14."
+    },
+    {
+      "number": 5,
+      "pointer": "/status/session/text",
+      "clients": [
+        "web"
+      ],
+      "specSection": "§10 №5",
+      "description": "Storage names and one server storage."
+    },
+    {
+      "number": 5,
+      "pointer": "/status/session/tooltip",
+      "clients": [
+        "web"
+      ],
+      "specSection": "§10 №5",
+      "description": "Storage names and one server storage."
+    },
+    {
+      "number": 6,
+      "pointer": "/alerts/about/content",
+      "clients": [
+        "fx",
+        "swing",
+        "web"
+      ],
+      "specSection": "§10 №6",
+      "description": "Only client value in the client line; Java and other content stay equal."
+    },
+    {
+      "number": 7,
+      "pointer": "/alerts/crashRecovery/buttons/registry",
+      "clients": [
+        "web"
+      ],
+      "specSection": "§10 №7",
+      "description": "Only presence of storage buttons; common buttons remain checked."
+    },
+    {
+      "number": 7,
+      "pointer": "/alerts/crashRecovery/buttons/xml",
+      "clients": [
+        "web"
+      ],
+      "specSection": "§10 №7",
+      "description": "Only presence of storage buttons; common buttons remain checked."
+    },
+    {
+      "number": 7,
+      "pointer": "/alerts/crashRecovery/buttons/server",
+      "clients": [
+        "web"
+      ],
+      "specSection": "§10 №7",
+      "description": "Only presence of storage buttons; common buttons remain checked."
+    },
+    {
+      "number": 7,
+      "pointer": "/alerts/crashRecovery/content",
+      "clients": [
+        "web"
+      ],
+      "specSection": "§10 №7",
+      "description": "Storage content of recovery (current producer represents it as Alert)."
+    },
+    {
+      "number": 8,
+      "pointer": "/alerts/lastSnapshot/content",
+      "clients": [
+        "web"
+      ],
+      "specSection": "§10 №8",
+      "description": "Server storage summary replaces desktop storage summary."
+    },
+    {
+      "number": 8,
+      "pointer": "/alerts/lastSnapshot/details",
+      "clients": [
+        "fx",
+        "swing"
+      ],
+      "specSection": "§10 №8",
+      "description": "Only fx/swing suffix of the normalized registry node; snapshot payload stays equal."
+    },
+    {
+      "number": 8,
+      "pointer": "/alerts/lastSnapshot/details",
+      "clients": [
+        "web"
+      ],
+      "specSection": "§10 №8",
+      "description": "Web server block replaces desktop storage blocks."
+    },
+    {
+      "number": 9,
+      "pointer": "/alerts/alreadyRunning/buttons/openWithoutRestore",
+      "clients": [
+        "web"
+      ],
+      "specSection": "§10 №9",
+      "description": "Only the specified button presence."
+    },
+    {
+      "number": 9,
+      "pointer": "/alerts/alreadyRunning/buttons/exit",
+      "clients": [
+        "web"
+      ],
+      "specSection": "§10 №9",
+      "description": "Only the specified button presence."
+    },
+    {
+      "number": 9,
+      "pointer": "/alerts/alreadyRunning/buttons/continue",
+      "clients": [
+        "web"
+      ],
+      "specSection": "§10 №9",
+      "description": "Only the specified button presence."
+    },
+    {
+      "number": 10,
+      "pointer": "/alerts/uncaught/buttons/closeProgram",
+      "clients": [
+        "web"
+      ],
+      "specSection": "§10 №10",
+      "description": "Only JS error button presence; error content remains checked."
+    },
+    {
+      "number": 10,
+      "pointer": "/alerts/uncaught/buttons/reloadPage",
+      "clients": [
+        "web"
+      ],
+      "specSection": "§10 №10",
+      "description": "Only JS error button presence; error content remains checked."
+    },
+    {
+      "number": 10,
+      "pointer": "/alerts/uncaught/buttons/continueWork",
+      "clients": [
+        "web"
+      ],
+      "specSection": "§10 №10",
+      "description": "Only JS error button presence; error content remains checked."
+    },
+    {
+      "number": 11,
+      "pointer": "/frame/minSize",
+      "clients": [
+        "web"
+      ],
+      "specSection": "§10 №11",
+      "description": "Browser has no minimum size and uses a tab."
+    },
+    {
+      "number": 11,
+      "pointer": "/frame/titleBar",
+      "clients": [
+        "web"
+      ],
+      "specSection": "§10 №11",
+      "description": "Browser has no minimum size and uses a tab."
+    },
+    {
+      "number": 13,
+      "pointer": "/alerts/replaceFile",
+      "clients": [
+        "fx"
+      ],
+      "specSection": "§10 №13",
+      "description": "Native FX chooser confirmation suppresses this alert (producer purpose is replaceFile)."
+    },
+    {
+      "number": 14,
+      "pointer": "/screens/offline",
+      "clients": [
+        "web"
+      ],
+      "specSection": "§10 №14",
+      "description": "Only specified web screen kind."
+    },
+    {
+      "number": 14,
+      "pointer": "/screens/stopped",
+      "clients": [
+        "web"
+      ],
+      "specSection": "§10 №14",
+      "description": "Only specified web screen kind."
+    },
+    {
+      "number": 14,
+      "pointer": "/screens/crashed",
+      "clients": [
+        "web"
+      ],
+      "specSection": "§10 №14",
+      "description": "Only specified web screen kind."
+    },
+    {
+      "number": 15,
+      "pointer": "/toolbar/wrap",
+      "clients": [
+        "web"
+      ],
+      "specSection": "§10 №15",
+      "description": "Web toolbar may wrap below width 1200."
+    }
+  ]
+}

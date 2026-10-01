@@ -38,8 +38,6 @@ final class TableRows {
     static final String MARK_SKIPPED = "✕";
     /** Отметка «что-если». */
     static final String MARK_WHAT_IF = "Δ";
-    /** Сумма пропущенного события в колонке «Доход»/«Расход». */
-    static final String SKIPPED_AMOUNT = "-";
 
     /** Число колонок таблицы. */
     static final int COLUMN_COUNT = 8;
@@ -109,7 +107,7 @@ final class TableRows {
         RowKind kind = kindOf(row.origin());
         boolean italic = kind == RowKind.START || kind == RowKind.WHAT_IF;
 
-        String amount = flags.skipped() ? SKIPPED_AMOUNT : row.amount().abs().format();
+        String amount = flags.skipped() ? UiText.get("table.skippedAmount") : row.amount().abs().format();
         String income = row.isIncome() ? amount : "";
         String expense = row.isExpense() ? amount : "";
         List<String> cells = List.of(

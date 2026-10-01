@@ -22,7 +22,7 @@ import ru.cashprediction.core.ui.token.ColorToken;
  * <p>Опорные даты: anchor = max(начало плана, сегодня) ({@code Forecast.anchor()}), end = конец прогноза. Цвет
  * значения денежной карточки («Сейчас», «Через N месяцев», «Минимум»): сумма &lt; 0 → {@code expense}; подушка &gt; 0
  * и сумма ниже подушки → {@code warn}; иначе {@code text.primary}. Карточки m1-m12 за горизонтом (anchor + N позже
- * end) показывают «-» ({@code text.muted}) и «за горизонтом плана» без даты. «Первый минус»: дата ({@code expense})
+ * end) показывают «за горизонтом» ({@code text.muted}) и «за горизонтом плана» без даты. «Первый минус»: дата ({@code expense})
  * или «нет»; подпись «ниже подушки с …» ({@code warn}) или «подушка не нарушается»; дата карточки - первый минус,
  * иначе первый день ниже подушки. «Средний итог/мес»: целые со знаком и валютой ({@code expense} при минусе), подпись -
  * доходы и расходы горизонта сокращённо. «Цель»: без цели «не задана» ({@code text.muted}); с целью - дата
@@ -46,7 +46,6 @@ public final class SummaryBuilder {
     public static final List<Integer> MONTH_CARDS = List.of(1, 3, 6, 12);
 
     /** Значение карточки за горизонтом плана. */
-    static final String NO_VALUE = "-";
 
     private SummaryBuilder() {
     }
@@ -127,7 +126,7 @@ public final class SummaryBuilder {
         String title = UiText.get("summary.months.title", Plurals.count(Plurals.MONTH, months));
         LocalDate date = forecast.anchor().plusMonths(months);
         if (date.isAfter(forecast.endDate())) {
-            return new CardModel(id, title, NO_VALUE, ColorToken.TEXT_MUTED, UiText.get("summary.beyond.caption"),
+            return new CardModel(id, title, UiText.get("summary.beyond.value"), ColorToken.TEXT_MUTED, UiText.get("summary.beyond.caption"),
                     ColorToken.TEXT_MUTED, null, UiText.get("summary.popup.beyond", title),
                     UiText.get("summary.beyond.explain", UiFormats.date(date)));
         }

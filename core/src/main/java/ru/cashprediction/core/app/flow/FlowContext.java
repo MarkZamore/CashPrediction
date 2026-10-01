@@ -14,6 +14,9 @@ import ru.cashprediction.core.document.AppSettings;
 import ru.cashprediction.core.document.PlanDocument;
 import ru.cashprediction.core.document.ViewState;
 import ru.cashprediction.core.session.SessionRecorder;
+import ru.cashprediction.core.session.MainWindowState;
+import ru.cashprediction.core.session.WindowState;
+import ru.cashprediction.core.session.StatefulWindow;
 import ru.cashprediction.core.ui.alert.AlertSpec;
 import ru.cashprediction.core.ui.form.FormSession;
 import ru.cashprediction.core.ui.view.status.StatusLevel;
@@ -188,8 +191,31 @@ public interface FlowContext {
      */
     WindowHandle showAlert(AlertSpec spec, Consumer<String> onButton);
 
+    /**
+     * Восстанавливает подтверждение с исходными id и владельцем. Координатор продолжается только после
+     * настоящего события shown клиента; восстановление не открывает повторное подтверждение.
+     *
+     * @param spec описание, пересчитанное из текущего плана
+     * @param restored сохранённый сеанс сообщения
+     * @param onShown подтверждение показа для координатора
+     * @param onButton обработчик принятого решения
+     * @return ручка восстановленного окна
+     */
+    default WindowHandle showRestoredAlert(AlertSpec spec, WindowState restored,
+            Consumer<StatefulWindow> onShown, Consumer<String> onButton) {
+        throw new UnsupportedOperationException("Restorable alerts require a session-aware host");
+    }
+
     /** Перестраивает модель экрана и вызывает {@code port.render} с изменившимися частями. */
     void refresh();
+
+    /**
+     * Показывает главное окно текущей моделью и запоминает, что последующие изменения можно отрисовывать.
+     * Единая точка для обычного запуска и восстановления; до неё refresh только строит состояние.
+     *
+     * @param restored геометрия восстановленного окна или null при обычном запуске
+     */
+    void showMain(MainWindowState restored);
 
     /** @return поток «Файл» */
     FileFlow files();

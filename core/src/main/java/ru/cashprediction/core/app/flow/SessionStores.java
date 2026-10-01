@@ -32,6 +32,12 @@ public final class SessionStores {
      * @return хранилища
      */
     public static List<SessionStore> forClient(ClientProfile profile, AppEnvironment environment) {
-        throw new UnsupportedOperationException("S2: core-app-session - SessionStores.forClient");
+        java.util.Objects.requireNonNull(profile, "profile");
+        java.util.Objects.requireNonNull(environment, "environment");
+        return switch (profile.kind()) {
+            case FX, SWING -> List.of(environment.registryStore(profile.snapshotClient()),
+                    environment.xmlStore(profile.snapshotClient()));
+            case WEB -> List.of(environment.webStore());
+        };
     }
 }

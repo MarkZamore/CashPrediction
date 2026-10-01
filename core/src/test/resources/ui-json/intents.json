@@ -1,0 +1,23 @@
+[
+  {"type":"command","command":"file.save","args":{"rowId":"","date":null,"cardId":"","key":"","value":""},"source":"TOOLBAR"},
+  {"type":"key","chord":{"ctrl":true,"shift":false,"alt":false,"key":"S"},"scope":"TABLE","focusId":""},
+  {"type":"selectRow","rowId":""},
+  {"type":"activateRow","rowId":"r1@2026-10-05","columnId":"income","how":"DOUBLE_CLICK"},
+  {"type":"filterText","text":"filter"},
+  {"type":"sliderCommit","itemId":"view.horizonSlider","value":24},
+  {"type":"spinnerCommit","itemId":"whatIf.extra","value":9007199254740993},
+  {"type":"mainGeometry","bounds":null,"maximized":false},
+  {"type":"menuHover","itemId":null},
+  {"type":"closeMain"},
+  {"type":"formField","windowId":"w1","fieldId":"amount","raw":"80 000,5","committed":false,"clientRev":12},
+  {"type":"formButton","windowId":"w1","buttonId":"ok"},
+  {"type":"formPreview","windowId":"w1","index":2,"activated":true},
+  {"type":"formActivate","windowId":"w3","fieldId":"plans","index":0},
+  {"type":"formSubmit","windowId":"w4","fieldId":"path"},
+  {"type":"formBounds","windowId":"w1","bounds":{"x":340,"y":120,"width":880,"height":610}},
+  {"type":"formShown","windowId":"w1"},
+  {"type":"formClose","windowId":"w1"},
+  {"type":"alertShown","windowId":"a3"},
+  {"type":"alertButton","alertId":"a3","buttonId":"dontSave"},
+  {"type":"clientError","message":"TypeError: x is undefined","stack":"render-table.js:120"}
+]

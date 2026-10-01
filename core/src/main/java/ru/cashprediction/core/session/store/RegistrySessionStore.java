@@ -474,22 +474,37 @@ public final class RegistrySessionStore implements SessionStore {
         if (crc == null) {
             throw corrupted(Texts.get("session.registry.corrupt.noKey", KEY_SNAPSHOT_CRC));
         }
-        int expectedCount = (length + CHUNK_SIZE - 1) / CHUNK_SIZE;
+        // Длина уже ограничена диапазоном int; сложение выполняем без переполнения.
+        long expectedCount = ((long) length + CHUNK_SIZE - 1) / CHUNK_SIZE;
         if (count != expectedCount) {
             throw corrupted(Texts.get("session.registry.corrupt.chunkCount", count, length));
         }
-        StringBuilder sb = new StringBuilder(length);
+        // Метаданные реестра недоверенные: ни буфер, ни список не резервируем по заявленному размеру.
+        List<String> chunks = new ArrayList<>();
+        long actualLength = 0;
         for (int i = 0; i < count; i++) {
             String chunk = backend.get("snapshot." + i);
             if (chunk == null) {
                 throw corrupted(Texts.get("session.registry.corrupt.noChunk", "snapshot." + i));
             }
+            if (chunk.isEmpty() || chunk.length() > CHUNK_SIZE) {
+                throw corrupted(Texts.get("session.registry.corrupt.badValue", "snapshot." + i, chunk.length()));
+            }
+            actualLength += chunk.length();
+            if (actualLength > length) {
+                throw corrupted(Texts.get("session.registry.corrupt.length", actualLength, length));
+            }
+            chunks.add(chunk);
+        }
+        if (actualLength != length) {
+            throw corrupted(Texts.get("session.registry.corrupt.length", actualLength, length));
+        }
+        // Большой буфер допустим только после проверки всех реально прочитанных кусков.
+        StringBuilder sb = new StringBuilder(length);
+        for (String chunk : chunks) {
             sb.append(chunk);
         }
         String json = sb.toString();
-        if (json.length() != length) {
-            throw corrupted(Texts.get("session.registry.corrupt.length", json.length(), length));
-        }
         if (!crc32(json).equalsIgnoreCase(crc.strip())) {
             throw corrupted(Texts.get("session.registry.corrupt.crc"));
         }

@@ -41,8 +41,27 @@
     <plugins>
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-compiler-plugin</artifactId>
+        <executions>
+          <execution>
+            <id>default-testCompile</id>
+            <configuration>
+              <!-- Разбор исходников в тестовом сканере локализации использует публичный API компилятора JDK.
+                   Доступ нужен только тестам: runtime и основной module-info остаются неизменными. -->
+              <compilerArgs>
+                <arg>--add-modules</arg><arg>jdk.compiler</arg>
+                <arg>--add-reads</arg><arg>ru.cashprediction.core=java.compiler</arg>
+                <arg>--add-reads</arg><arg>ru.cashprediction.core=jdk.compiler</arg>
+              </compilerArgs>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-surefire-plugin</artifactId>
         <configuration>
+          <argLine>-Dfile.encoding=UTF-8 -Duser.language=ru -Duser.country=RU -XX:-UsePerfData --add-modules=jdk.compiler</argLine>
           <!-- Стандартные шаблоны surefire плюс *IT: интеграционный тест реестра Windows
                (RegistrySessionStoreIT) должен выполняться при каждой сборке. На не-Windows он пропускает себя сам. -->
           <includes>
@@ -56,6 +75,8 @@
             <!-- Строгий режим каталога текстов (решение L13): отсутствующий ключ или аргумент в тестах ядра — исключение,
                  у пользователя вместо текста показывается !ключ!. -->
             <cashprediction.ui.strictText>true</cashprediction.ui.strictText>
+            <!-- S2: каждый ключ общего каталога имеет доказанного потребителя, проверка больше не отложена. -->
+            <cashprediction.catalog.requireAllUsed>true</cashprediction.catalog.requireAllUsed>
             <!-- Папка модуля для тестов, читающих исходники (CoreModuleDir): не зависят от рабочей папки IDE. -->
             <core.basedir>${project.basedir}</core.basedir>
           </systemPropertyVariables>

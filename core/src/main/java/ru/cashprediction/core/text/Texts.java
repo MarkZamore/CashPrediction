@@ -37,7 +37,8 @@ public final class Texts {
 
     /** Области текстов интерфейса (спецификация v2, §8; владельцы — задачи этапа S1). */
     public static final List<String> UI_AREAS = List.of("menu", "toolbar", "status", "hotkeys", "summary", "table",
-            "popup", "chart", "forms-misc", "alerts", "buttons", "restore", "forms-plan", "forms-ops", "app");
+            "popup", "chart", "forms-misc", "alerts", "buttons", "restore", "forms-plan", "forms-ops", "app",
+            "s2-edit", "s2-file", "s2-selftest", "s2-session-capture", "s2-startup-recovery", "s2-view-help");
 
     /**
      * Все области каталога в порядке загрузки: {@link #UI_AREAS} и области слоёв ядра без интерфейса, созданные на

@@ -7,6 +7,9 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.TreeMap;
+import java.util.List;
+import java.util.ArrayList;
+import java.util.function.Consumer;
 import ru.cashprediction.core.app.WindowHandle;
 import ru.cashprediction.core.session.StatefulWindow;
 import ru.cashprediction.core.session.WindowBounds;
@@ -160,6 +163,8 @@ public final class FormSession implements StatefulWindow {
     private boolean unregistered;
     private boolean closing;
     private boolean finished;
+    private boolean shown;
+    private final List<Consumer<FormSession>> shownCallbacks = new ArrayList<>();
 
     /**
      * Создаёт сеанс. Логика формы не вызывается до {@link #spec()} / {@link #view()}.
@@ -288,6 +293,12 @@ public final class FormSession implements StatefulWindow {
         state = new FormState(state.page(), values, state.previewIndex());
         stayProblem = Problem.NONE;
         lastClientRev = clientRev;
+        Optional<FormOutcome> related = logic.onFieldChanged(fieldId, committed, state, context);
+        if (related.isPresent()) {
+            apply(related.get());
+            touch();
+            return view;
+        }
         recompute(committed ? null : fieldId);
         push();
         touch();
@@ -398,11 +409,38 @@ public final class FormSession implements StatefulWindow {
     /** Клиент показал окно. */
     public void shown() {
         ensureStarted();
-        if (finished || registered || !spec.restorable()) {
+        if (finished || shown) {
             return;
         }
-        registered = true;
-        host.registered(this);
+        shown = true;
+        if (spec.restorable()) {
+            registered = true;
+            host.registered(this);
+        }
+        List<Consumer<FormSession>> callbacks = List.copyOf(shownCallbacks);
+        shownCallbacks.clear();
+        for (Consumer<FormSession> callback : callbacks) callback.accept(this);
+    }
+
+    /**
+     * Продолжает восстановление после настоящего показа окна, а не после создания ручки клиента.
+     * Поддерживает и синхронный показ до attach, и отложенное открытие web-окна.
+     *
+     * @param callback вызывается один раз после shown; для уже показанного окна сразу
+     */
+    public void whenShown(Consumer<FormSession> callback) {
+        Objects.requireNonNull(callback, "callback");
+        if (finished) return;
+        if (shown) callback.accept(this);
+        else shownCallbacks.add(callback);
+    }
+
+    /**
+     * Прерывает неудачное открытие без вызова обработчика результата.
+     * Снимает регистрацию даже если клиент успел сообщить shown перед исключением.
+     */
+    public void abortOpening() {
+        if (!finished) finish();
     }
 
     /** Клиент закрыл окно (после {@code WindowHandle.close()} или системного закрытия). */
@@ -418,6 +456,7 @@ public final class FormSession implements StatefulWindow {
             // Окна уже нет на экране: снимаем регистрацию, но handle.close() не зовём.
             closing = false;
             finished = true;
+            shownCallbacks.clear();
             unregisterOnce();
         }
     }
@@ -707,6 +746,7 @@ public final class FormSession implements StatefulWindow {
     private void finish() {
         closing = false;
         finished = true;
+        shownCallbacks.clear();
         unregisterOnce();
         if (handle != null) {
             handle.close();

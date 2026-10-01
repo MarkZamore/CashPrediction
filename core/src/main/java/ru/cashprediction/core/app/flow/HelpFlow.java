@@ -1,6 +1,10 @@
 package ru.cashprediction.core.app.flow;
 
 import java.util.Objects;
+import ru.cashprediction.core.io.AppInfo;
+import ru.cashprediction.core.markdown.MarkdownFormat;
+import ru.cashprediction.core.ui.alert.AlertCatalog;
+import ru.cashprediction.core.ui.command.HotkeyTable;
 
 /**
  * Меню «Справка» (спецификация v2, §3.6, §6.18–§6.20).
@@ -27,16 +31,20 @@ public final class HelpFlow {
 
     /** {@code help.about}: §6.18 ({@code AlertCatalog.about}). */
     public void about() {
-        throw new UnsupportedOperationException("S2: core-app-edit - HelpFlow.about");
+        // JavaFX: Alert → Swing: JOptionPane → Web: dialog
+        context.showAlert(AlertCatalog.about(AppInfo.displayVersion(), context.port().profile(),
+                System.getProperty("java.version", ""), context.environment().cashMemory()), button -> { });
     }
 
     /** {@code help.hotkeys}: §6.19 ({@code HotkeyTable.text()}). */
     public void hotkeys() {
-        throw new UnsupportedOperationException("S2: core-app-edit - HelpFlow.hotkeys");
+        // JavaFX: Alert → Swing: JOptionPane → Web: dialog
+        context.showAlert(AlertCatalog.hotkeys(HotkeyTable.text()), button -> { });
     }
 
     /** {@code help.format}: §6.20 ({@code MarkdownFormat.userGuide()}). */
     public void format() {
-        throw new UnsupportedOperationException("S2: core-app-edit - HelpFlow.format");
+        // JavaFX: Alert → Swing: JOptionPane → Web: dialog
+        context.showAlert(AlertCatalog.fileFormat(MarkdownFormat.userGuide()), button -> { });
     }
 }

@@ -75,7 +75,8 @@ class UiTextTest {
     void everyAreaIsALocaleSuffixedUtf8File() {
         assertEquals(List.of(), UiText.loadProblems());
         assertEquals(List.of("menu", "toolbar", "status", "hotkeys", "summary", "table", "popup", "chart", "forms-misc",
-                "alerts", "buttons", "restore", "forms-plan", "forms-ops", "app"), Texts.UI_AREAS);
+                "alerts", "buttons", "restore", "forms-plan", "forms-ops", "app", "s2-edit", "s2-file",
+                "s2-selftest", "s2-session-capture", "s2-startup-recovery", "s2-view-help"), Texts.UI_AREAS);
         assertTrue(UiText.AREAS.containsAll(Texts.UI_AREAS));
         for (String area : UiText.AREAS) {
             assertTrue(UiText.class.getResource(UiText.RESOURCE_DIR + area + "_ru.properties") != null, area);

@@ -2,6 +2,11 @@ package ru.cashprediction.core.ui.alert;
 
 import java.util.Objects;
 import java.util.Map;
+import java.util.List;
+import java.util.ArrayList;
+import java.util.function.Consumer;
+import ru.cashprediction.core.app.WindowHandle;
+import ru.cashprediction.core.session.WindowBounds;
 import ru.cashprediction.core.session.StatefulWindow;
 import ru.cashprediction.core.session.WindowState;
 import ru.cashprediction.core.session.WindowType;
@@ -14,8 +19,9 @@ import ru.cashprediction.core.session.WindowType;
  * <p><b>Поведение (этап S1):</b> {@link #shown()} — {@code SessionRecorder.register} ровно один раз;
  * {@link #closed()} — {@code unregister} ровно один раз; {@link #captureState()} —
  * {@code WindowState(windowId, ALERT, modal, ownerId, bounds, {purpose, targetId}, {})};
- * {@link #applyState(WindowState)} ничего не меняет (сообщение пересоздаётся {@code CoreWindowFactory} по
- * назначению и цели; если цели уже нет — {@code restore.warn.targetGone}).</p>
+ * {@link #applyState(WindowState)} запоминает границы; содержимое пересоздаётся {@code CoreWindowFactory} по
+ * назначению и цели (если цели уже нет — {@code restore.warn.targetGone}). Ручка {@link #attach(WindowHandle)}
+ * возвращает актуальные границы, а до её появления сохраняются границы исходного снимка.</p>
  *
  * <p>Не потокобезопасен: только поток контроллера.</p>
  */
@@ -45,6 +51,11 @@ public final class AlertSession implements StatefulWindow {
     private final Host host;
     private boolean registered;
     private boolean unregistered;
+    private boolean shown;
+    private boolean closed;
+    private WindowHandle handle;
+    private WindowBounds bounds;
+    private final List<Consumer<AlertSession>> shownCallbacks = new ArrayList<>();
 
     /**
      * Создаёт сеанс.
@@ -91,16 +102,44 @@ public final class AlertSession implements StatefulWindow {
         return host;
     }
 
+    /**
+     * Привязывает ручку реального окна для захвата его границ при следующем снимке.
+     *
+     * @param handle открытое сообщение клиента
+     */
+    public void attach(WindowHandle handle) {
+        this.handle = Objects.requireNonNull(handle, "handle");
+    }
+
     /** Клиент показал сообщение. */
     public void shown() {
+        if (shown || closed) return;
+        shown = true;
         if (!registered && spec.restorable()) {
             registered = true;
             host.registered(this);
         }
+        List<Consumer<AlertSession>> callbacks = List.copyOf(shownCallbacks);
+        shownCallbacks.clear();
+        for (Consumer<AlertSession> callback : callbacks) callback.accept(this);
+    }
+
+    /**
+     * Сообщает о реальном показе, даже если подписчик присоединился после синхронного shown.
+     *
+     * @param callback продолжение, вызываемое один раз
+     */
+    public void whenShown(Consumer<AlertSession> callback) {
+        Objects.requireNonNull(callback, "callback");
+        if (closed) return;
+        if (shown) callback.accept(this);
+        else shownCallbacks.add(callback);
     }
 
     /** Сообщение закрыто (любой кнопкой или крестиком). */
     public void closed() {
+        closed = true;
+        shownCallbacks.clear();
         if (registered && !unregistered) {
             unregistered = true;
             host.unregistered(this);
@@ -109,7 +148,8 @@ public final class AlertSession implements StatefulWindow {
 
     @Override
     public WindowState captureState() {
-        return new WindowState(windowId, WindowType.ALERT, true, ownerId, null,
+        WindowBounds current = handle == null || handle.bounds() == null ? bounds : handle.bounds();
+        return new WindowState(windowId, WindowType.ALERT, true, ownerId, current,
                 Map.of(WindowType.CONTEXT_PURPOSE, spec.purpose(), WindowType.CONTEXT_TARGET_ID, spec.targetId()), Map.of());
     }
 
@@ -119,5 +159,6 @@ public final class AlertSession implements StatefulWindow {
         if (state.type() != null && state.type() != WindowType.ALERT) {
             throw new IllegalArgumentException("state.type");
         }
+        bounds = state.bounds();
     }
 }

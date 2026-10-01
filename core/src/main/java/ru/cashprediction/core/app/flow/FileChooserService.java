@@ -1,57 +1,103 @@
 package ru.cashprediction.core.app.flow;
 
+import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Locale;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
+import ru.cashprediction.core.app.ChooserKind;
 import ru.cashprediction.core.app.DirectoryChooserSpec;
 import ru.cashprediction.core.app.FileChooserSpec;
+import ru.cashprediction.core.io.FolderListing;
+import ru.cashprediction.core.session.WindowType;
+import ru.cashprediction.core.ui.alert.AlertCatalog;
+import ru.cashprediction.core.ui.forms.simple.FileBrowserForm;
 
-/**
- * Выбор файлов и папок одним путём для всех клиентов (архитектура §3.6 «File choosers»; спецификация v2, §6.21).
- *
- * <p>Клиенты {@code NATIVE}/{@code SWING} — {@code port.chooseFile}/{@code chooseDirectory}; клиент
- * {@code SERVER_BROWSER} — форма ядра {@code FileBrowserForm}. В обоих случаях при сохранении ядро дописывает
- * расширение (если его нет) и, если файл существует, спрашивает {@code confirm.replaceFile} (§6.13), кроме
- * {@code profile.nativeReplacePrompt()}. Отмена на вопросе о замене — повторный выбор не открывается, результат пуст.</p>
- *
- * <p>Не потокобезопасен: только поток контроллера.</p>
- */
+/** Общий выбор файлов и папок: нативное окно либо серверная форма, расширение и подтверждение замены. */
 public final class FileChooserService {
-
     private final FlowContext context;
 
-    /**
-     * Создаёт службу.
-     *
-     * @param context контекст контроллера
-     */
+    /** @param context контекст контроллера, доступный только в его потоке */
     public FileChooserService(FlowContext context) {
         this.context = Objects.requireNonNull(context, "context");
     }
 
     /** @return контекст контроллера */
-    public FlowContext context() {
-        return context;
-    }
+    public FlowContext context() { return context; }
 
     /**
-     * Выбор файла.
-     *
-     * @param spec     запрос
-     * @param onResult итоговый путь (с расширением, подтверждённая замена) или пусто, ровно один раз
+     * Выбирает файл и возвращает результат ровно один раз, после расширения и подтверждения замены.
+     * @param spec запрос выбора
+     * @param onResult подтверждённый путь либо пустой результат при отмене
      */
     public void chooseFile(FileChooserSpec spec, Consumer<Optional<Path>> onResult) {
-        throw new UnsupportedOperationException("S2: core-app-file - FileChooserService.chooseFile");
+        Objects.requireNonNull(spec, "spec");
+        Consumer<Optional<Path>> finish = once(onResult);
+        Consumer<Optional<Path>> selected = once(value -> {
+            if (value.isEmpty()) {
+                finish.accept(Optional.empty());
+                return;
+            }
+            Path original = value.get().toAbsolutePath().normalize();
+            Path path = original;
+            if (spec.mode() == FileChooserSpec.Mode.SAVE && !spec.extensions().isEmpty()) {
+                String name = path.getFileName().toString();
+                boolean recognized = spec.extensions().stream().anyMatch(extension ->
+                        name.toLowerCase(Locale.ROOT).endsWith("." + extension.toLowerCase(Locale.ROOT)));
+                if (!recognized) path = path.resolveSibling(name + "." + spec.extensions().getFirst());
+            }
+            Path result = path;
+            // Нативное подтверждение относится к выбранному имени, а не к дописанному расширению.
+            boolean nativeConfirmed = context.port().profile().nativeReplacePrompt() && original.equals(result);
+            if (spec.mode() == FileChooserSpec.Mode.SAVE && Files.exists(result) && !nativeConfirmed) {
+                // JavaFX: Alert → Swing: SwingAlert → Web: dialog.
+                context.showAlert(AlertCatalog.replaceFile(result.getFileName().toString()),
+                        once(button -> finish.accept("replace".equals(button) ? Optional.of(result) : Optional.empty())));
+            } else {
+                finish.accept(Optional.of(result));
+            }
+        });
+        if (context.port().profile().chooser() == ChooserKind.SERVER_BROWSER) {
+            // JavaFX: FileChooser → Swing: JFileChooser → Web: FileBrowserForm.
+            context.openForm(FormRequest.fresh(new FileBrowserForm(spec,
+                    new FolderListing(context.environment().cashMemory())), WindowType.CHOICE, true,
+                    Map.of("purpose", "fileBrowser")), null,
+                    result -> selected.accept(result instanceof Path path ? Optional.of(path) : Optional.empty()));
+        } else {
+            // JavaFX: FileChooser → Swing: JFileChooser → Web: FileBrowserForm.
+            context.port().chooseFile(spec, selected);
+        }
     }
 
     /**
-     * Выбор папки.
-     *
-     * @param spec     запрос
-     * @param onResult папка или пусто, ровно один раз
+     * Выбирает папку нативным окном либо серверной формой.
+     * @param spec запрос выбора папки
+     * @param onResult папка либо пустой результат; вызывается ровно один раз
      */
     public void chooseDirectory(DirectoryChooserSpec spec, Consumer<Optional<Path>> onResult) {
-        throw new UnsupportedOperationException("S2: core-app-file - FileChooserService.chooseDirectory");
+        Objects.requireNonNull(spec, "spec");
+        Consumer<Optional<Path>> finish = once(onResult);
+        if (context.port().profile().chooser() == ChooserKind.SERVER_BROWSER) {
+            // JavaFX: DirectoryChooser → Swing: JFileChooser → Web: FileBrowserForm.
+            context.openForm(FormRequest.fresh(new FileBrowserForm(spec,
+                    new FolderListing(context.environment().cashMemory())), WindowType.CHOICE, true,
+                    Map.of("purpose", "fileBrowser")), null,
+                    result -> finish.accept(result instanceof Path path ? Optional.of(path.toAbsolutePath().normalize())
+                            : Optional.empty()));
+        } else {
+            // JavaFX: DirectoryChooser → Swing: JFileChooser → Web: FileBrowserForm.
+            context.port().chooseDirectory(spec, once(result ->
+                    finish.accept(result.map(path -> path.toAbsolutePath().normalize()))));
+        }
+    }
+
+    /** Защищает продолжение даже от ошибочного двойного ответа клиента. */
+    private static <T> Consumer<T> once(Consumer<T> action) {
+        Objects.requireNonNull(action, "onResult");
+        AtomicBoolean completed = new AtomicBoolean();
+        return value -> { if (completed.compareAndSet(false, true)) action.accept(value); };
     }
 }

@@ -40,7 +40,7 @@ public sealed interface SelfTestCommand {
         /** Проверяет поля и копирует карту. */
         public Open {
             Objects.requireNonNull(type, "type");
-            context = context == null ? Map.of() : Map.copyOf(context);
+            context = context == null ? Map.of() : java.util.Collections.unmodifiableMap(new java.util.LinkedHashMap<>(context));
         }
     }
 
@@ -54,7 +54,7 @@ public sealed interface SelfTestCommand {
         /** Проверяет поля и копирует карту. */
         public Fill {
             Objects.requireNonNull(window, "window");
-            values = values == null ? Map.of() : Map.copyOf(values);
+            values = values == null ? Map.of() : java.util.Collections.unmodifiableMap(new java.util.LinkedHashMap<>(values));
         }
     }
 

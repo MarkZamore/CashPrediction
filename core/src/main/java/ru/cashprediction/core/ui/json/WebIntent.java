@@ -18,7 +18,7 @@ public sealed interface WebIntent permits WebIntent.Command, WebIntent.Key, WebI
         WebIntent.FilterText, WebIntent.SliderCommit, WebIntent.SpinnerCommit, WebIntent.MainGeometry,
         WebIntent.MenuHover, WebIntent.CloseMain, WebIntent.FormField, WebIntent.FormButton, WebIntent.FormPreview,
         WebIntent.FormActivate, WebIntent.FormSubmit, WebIntent.FormBounds, WebIntent.FormShown, WebIntent.FormClose,
-        WebIntent.AlertAnswer, WebIntent.ClientError {
+        WebIntent.AlertShown, WebIntent.AlertAnswer, WebIntent.ClientError {
 
     /** @return значение поля {@code type} в JSON */
     String type();
@@ -270,6 +270,21 @@ public sealed interface WebIntent permits WebIntent.Command, WebIntent.Key, WebI
         @Override
         public String type() {
             return "formClose";
+        }
+    }
+
+    /**
+     * {@code alertShown{windowId}} - подтверждение реального показа сообщения клиентом.
+     * Сервер передаёт его в {@code AlertSession.shown()}, чтобы завершить {@code whenShown} восстановленного окна.
+     * Публикация {@code alert.open} и создание ручки окна не подтверждают показ.
+     *
+     * @param windowId id окна сообщения, совпадающий с {@code alert.open.alertId}
+     */
+    record AlertShown(String windowId) implements WebIntent {
+        /** {@inheritDoc} */
+        @Override
+        public String type() {
+            return "alertShown";
         }
     }
 
