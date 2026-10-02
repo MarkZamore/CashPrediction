@@ -1,4 +1,5 @@
-# Изолированная проверка S2 без Maven и без записи в target других модулей.
+# Изолированная проверка без Maven и без записи в target других модулей.
+param([string]$CoreClasses = '')
 $ErrorActionPreference = 'Stop'
 $taskRoot = Split-Path $PSScriptRoot -Parent
 $taskOutput = Join-Path $PSScriptRoot ('target/parity/compile-' + [guid]::NewGuid().ToString())
@@ -6,10 +7,15 @@ $taskMain = Join-Path $taskOutput 'core'
 $taskTests = Join-Path $taskOutput 'tests'
 $taskJunit = 'C:/Users/Oscar/.m2/repository/org/junit/platform/junit-platform-console-standalone/1.14.4/junit-platform-console-standalone-1.14.4.jar'
 New-Item -ItemType Directory -Path $taskMain, $taskTests -Force | Out-Null
+if ($CoreClasses) {
+    # При параллельной работе используем зафиксированную сборку S2, не читаем недописанные исходники другого владельца.
+    Copy-Item (Join-Path $CoreClasses '*') $taskMain -Recurse -Force
+} else {
 $taskCoreSources = @(Get-ChildItem (Join-Path $taskRoot 'core/src/main/java') -Recurse -Filter '*.java' | ForEach-Object FullName)
 # Дескриптор нужен фиктивному клиенту, который проверяет настоящий модульный запуск S0.
 & javac -encoding UTF-8 --release 25 -Xlint:all,-serial -d $taskMain $taskCoreSources
 if ($LASTEXITCODE -ne 0) { throw 'Isolated core compilation failed' }
+}
 Copy-Item (Join-Path $taskRoot 'core/src/main/resources/*') $taskMain -Recurse -Force
 if (Test-Path (Join-Path $taskRoot 'core/src/main/resources-filtered')) {
     Copy-Item (Join-Path $taskRoot 'core/src/main/resources-filtered/*') $taskMain -Recurse -Force

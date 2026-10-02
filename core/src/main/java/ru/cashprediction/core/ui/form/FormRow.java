@@ -90,11 +90,18 @@ public sealed interface FormRow
      * Место для строк результата ({@code FormView.results}).
      *
      * @param id id блока
+     * @param minLines минимальное число строк, резервируемое даже при ошибке ввода
      */
-    record Results(String id) implements FormRow {
+    record Results(String id, int minLines) implements FormRow {
+        /** Создаёт блок без минимального резерва для существующих форм. */
+        public Results(String id) {
+            this(id, 0);
+        }
+
         /** Проверяет id. */
         public Results {
             Objects.requireNonNull(id, "id");
+            if (minLines < 0) throw new IllegalArgumentException("minLines must be non-negative");
         }
     }
 

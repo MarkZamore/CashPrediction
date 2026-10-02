@@ -60,6 +60,11 @@ public final class FxMain extends Application {
         // Диалог восстановления показывается до главного окна: его закрытие не должно завершать JavaFX.
         Platform.setImplicitExit(false);
         try {
+            var options = ru.cashprediction.core.app.LaunchOptions.parse(getParameters().getRaw(), System.getProperties());
+            if (options.ui() == ru.cashprediction.core.app.LaunchOptions.UiMode.CORE) {
+                ru.cashprediction.fx.ui.FxApp.start(stage, options);
+                return;
+            }
             controller = new AppController(stage, FxSelfTest.fromSystemProperties());
             controller.start();
         } catch (Exception | LinkageError e) {

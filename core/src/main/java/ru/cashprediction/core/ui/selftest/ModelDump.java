@@ -36,7 +36,7 @@ final class ModelDump {
         var summary = m == null ? null : new UiDump.Summary(m.summary().visible(), m.summary().cards().stream().map(c ->
                 new UiDump.Card(c.id(), c.title(), c.value(), color(c.valueColor()), c.caption(), color(c.captionColor()),
                         c.explanation(), null)).toList(), m.summary().unavailableText());
-        var frame = new UiDump.Frame(m == null ? "" : m.windowTitle(), p.profile.kind() == ru.cashprediction.core.app.ClientKind.WEB ? "tab" : "os",
+        var frame = m == null ? null : new UiDump.Frame(m.windowTitle(), p.profile.kind() == ru.cashprediction.core.app.ClientKind.WEB ? "tab" : "os",
                 p.profile.kind() == ru.cashprediction.core.app.ClientKind.WEB ? null : new UiDump.Size(900, 600), bounds.width(), bounds.height(), Map.of());
         var status = m == null ? List.<UiDump.Segment>of() : m.status().segments().stream()
                 .map(s -> new UiDump.Segment(s.id(), s.text(), s.tooltip(), color(s.color()), s.visible())).toList();
@@ -74,7 +74,9 @@ final class ModelDump {
     private static UiDump.ToolbarItem toolbar(Map<String, Object> n) {
         return new UiDump.ToolbarItem(text(n, "id"), text(n, "kind"), n.containsKey("glyphOrText") ? text(n, "glyphOrText") : text(n, "text"),
                 text(n, "prompt"), text(n, "tooltip"), flag(n, "enabled", true), flag(n, "selected", false),
-                text(n, "emphasis").equals("ACCENT") ? "accent" : text(n, "emphasis").equals("WHATIF") ? "whatif" : "text.primary",
+                List.of("Separator", "Spacer").contains(text(n, "kind")) ? ""
+                        : text(n, "emphasis").equals("ACCENT") ? color(ColorToken.ACCENT)
+                        : text(n, "emphasis").equals("WHATIF") ? color(ColorToken.WHATIF) : color(ColorToken.TEXT_PRIMARY),
                 !text(n, "emphasis").isEmpty() && !text(n, "emphasis").equals("NONE"), 0, null, maps(n.get("items")).stream().map(ModelDump::menu).toList());
     }
 
@@ -93,16 +95,20 @@ final class ModelDump {
                     var cell = r.cellStyles().get(column.id());
                     var rowStyle = r.rowStyle();
                     styles.put(column.id(), new UiDump.CellLook(color(cell == null ? rowStyle.text() : cell.text()),
-                            rowStyle.bold() || cell != null && cell.bold(), rowStyle.italic() || cell != null && cell.italic(), cell != null && cell.strike()));
+                            column.bold() || rowStyle.bold() || cell != null && cell.bold(), rowStyle.italic() || cell != null && cell.italic(), cell != null && cell.strike()));
                 }
-                rows.add(new UiDump.Row(i, r.rowId(), r.kind().name(), r.cells(), color(r.rowStyle().background()), styles));
+                // Прозрачная обычная строка показывает белую поверхность таблицы (§5.2).
+                rows.add(new UiDump.Row(i, r.rowId(), r.kind().name(), r.cells(),
+                        color(r.rowId().equals(model.selectedRowId()) ? ColorToken.ACCENT_WEAK
+                                : r.rowStyle().background() == null ? ColorToken.BG_SURFACE : r.rowStyle().background()), styles));
             }
         }
         var placeholder = model.placeholder();
         return new UiDump.Table(model.columns().stream().map(ColumnSpec::title).toList(), model.rowCount(), rows,
                 HexFormat.of().formatHex(digest.digest()), placeholder == null ? "" : placeholder.text(),
                 placeholder == null ? List.of() : placeholder.buttons().stream().map(b -> new UiDump.Button(b.id(), b.text(), "", true, false, 0)).toList(),
-                model.selectedRowId());
+                // Логический выбор хранится отдельно; скрытая строка не выделена в виджете.
+                model.indexOf(model.selectedRowId()) < 0 ? "" : model.selectedRowId());
     }
     private static UiDump.Chart chart(ChartScene scene) {
         List<String> x = new ArrayList<>(), y = new ArrayList<>(), labels = new ArrayList<>(); int markers = 0, bars = 0;
@@ -141,16 +147,25 @@ final class ModelDump {
         for (FieldSpec f : ModelUiDriver.fields(h)) {
             var v = h.view.fields().get(f.id()); if (v == null || !v.visible()) continue;
             var options = v.options() == null ? f.options() : v.options();
+            String value = v.value() == null ? FieldCodec.display(f.kind(), h.form.state().value(f.id())) : v.value();
+            // Список показывает подпись, а не сохраняемый код выбора; RADIO хранит код группы в схеме дампа.
+            if (f.kind() == FieldKind.CHOICE || f.kind() == FieldKind.LIST) {
+                String selected = value;
+                value = options.stream().filter(o -> o.value().equals(selected)).map(Option::text).findFirst().orElse(value);
+            }
+            List<String> optionTexts = f.kind() == FieldKind.PREVIEW
+                    ? h.view.preview().stream().map(PreviewItem::text).toList()
+                    : options.stream().map(Option::text).toList();
             fields.add(new UiDump.Field(f.id(), f.kind().name(), v.label() == null ? f.label() : v.label(),
-                    v.value() == null ? FieldCodec.display(f.kind(), h.form.state().value(f.id())) : v.value(),
+                    value,
                     f.prompt(), v.tooltip() == null ? f.tooltip() : v.tooltip(), f.suffix(), v.enabled(), v.visible(), v.readOnly(),
-                    options.stream().map(Option::text).toList()));
+                    optionTexts));
         }
-        var b = h.bounds();
+        // RAW-границы ручки нужны снимку восстановления, но модель не измеряет содержимое виджетов.
         return new UiDump.Window(h.id, h.spec.windowType().name(), h.spec.purpose(), h.spec.windowTitle(), h.view.header(), h.spec.glyph(),
-                h.spec.modal(), h.placement.ownerId(), h.view.page(), b == null ? null : new UiDump.Box(b.x(), b.y(), b.width(), b.height()),
+                h.spec.modal(), h.placement.ownerId(), h.view.page(), null,
                 sections, hints, fields, h.view.preview().stream().map(PreviewItem::text).toList(), h.form.state().previewIndex(),
-                h.view.results().stream().map(r -> new UiDump.ResultText(r.text(), color(r.color()))).toList(), h.view.problem().text(),
+                h.view.results().stream().map(r -> new UiDump.ResultText(r.text(), color(r.color()))).toList(), h.view.problem().display(),
                 buttons(h), h.view.details(), detailsLink(h.view.details(), h.view.detailsExpanded()), h.view.detailsExpanded());
     }
     private static String detailsLink(String text, boolean expanded) {

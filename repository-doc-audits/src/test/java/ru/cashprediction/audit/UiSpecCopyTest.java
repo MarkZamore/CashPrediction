@@ -1,4 +1,4 @@
-package ru.cashprediction.core.ui.text;
+package ru.cashprediction.audit;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -7,7 +7,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Arrays;
 import org.junit.jupiter.api.Test;
-import ru.cashprediction.core.text.CoreModuleDir;
 
 /**
  * Две копии спецификации интерфейса v2 не расходятся.
@@ -20,8 +19,8 @@ class UiSpecCopyTest {
 
     @Test
     void workingCopyIsByteIdenticalToDesignSpec() throws IOException {
-        Path design = CoreModuleDir.resolve("../docs/design/ui-spec-v2.md");
-        Path copy = CoreModuleDir.resolve("../docs/ui-spec.md");
+        Path design = RepositoryDocuments.root().resolve("docs/design/ui-spec-v2.md");
+        Path copy = RepositoryDocuments.root().resolve("docs/ui-spec.md");
         assertTrue(Files.isRegularFile(design), design.toString());
         assertTrue(Files.isRegularFile(copy), copy.toString());
 

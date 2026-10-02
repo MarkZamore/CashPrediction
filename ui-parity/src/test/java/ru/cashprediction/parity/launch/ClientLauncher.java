@@ -57,9 +57,12 @@ public final class ClientLauncher {
     /**
      * Общие опции JVM стенда: масштаб 1 для JavaFX и Java2D (иначе размеры в дампах зависят от настроек экрана),
      * русская локаль (§6.3) и отказ от файлов hsperfdata во временной папке.
+     * Вывод перенаправляется в UTF-8: иначе сообщение о занятом порте в Windows-1251
+     * делает журнал нечитаемым для UTF-8 handshake даже при правильной ASCII-ссылке.
      */
     public static final List<String> STANDARD_JVM_OPTIONS = List.of(
-            "-Dglass.win.uiScale=1", "-Dsun.java2d.uiScale=1", "-Duser.language=ru", "-XX:-UsePerfData");
+            "-Dglass.win.uiScale=1", "-Dsun.java2d.uiScale=1", "-Duser.language=ru", "-XX:-UsePerfData",
+            "-Dstdout.encoding=UTF-8", "-Dstderr.encoding=UTF-8");
 
     /** Системное свойство папки приложения, которое читают и прежние клиенты ({@code AppPaths}). */
     public static final String PROP_HOME = LaunchOptions.PROP_HOME;

@@ -34,7 +34,12 @@ jobs:
       - name: Build and test
         shell: pwsh
         run: |
-          # Тесты ядра (включая реестр Windows) и web-сервера.
+          # Аудит документов обязателен в исходном reactor, независимо от наличия docs или .git.
+          [xml]$repositoryReactor = Get-Content -LiteralPath pom.xml -Raw
+          if (@($repositoryReactor.project.modules.module) -notcontains 'repository-doc-audits') {
+            throw 'Обязательный модуль repository-doc-audits отсутствует в reactor.'
+          }
+          # Все тесты приложения и документов; потеря любого обязательного документа ломает сборку.
           & mvn -B -ntp install
           if ($LASTEXITCODE -ne 0) { throw "Сборка или тесты не прошли." }
 

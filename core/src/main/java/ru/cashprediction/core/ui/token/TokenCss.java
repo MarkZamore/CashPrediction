@@ -58,6 +58,14 @@ public final class TokenCss {
         variable(sb, "--cp-button-min-width", px(DesignTokens.BUTTON_MIN_WIDTH));
         variable(sb, "--cp-radius", px(DesignTokens.RADIUS));
         variable(sb, "--cp-card-min-width", px(DesignTokens.CARD_MIN_WIDTH));
+        variable(sb, "--cp-card-title-line-height", px(DesignTokens.CARD_TITLE_LINE_HEIGHT));
+        variable(sb, "--cp-card-value-line-height", px(DesignTokens.CARD_VALUE_LINE_HEIGHT));
+        variable(sb, "--cp-card-caption-line-height", px(DesignTokens.CARD_CAPTION_LINE_HEIGHT));
+        variable(sb, "--cp-card-content-gap", px(DesignTokens.CARD_CONTENT_GAP));
+        variable(sb, "--cp-spark-header-line-height", px(DesignTokens.SPARK_HEADER_LINE_HEIGHT));
+        variable(sb, "--cp-spark-body-line-height", px(DesignTokens.SPARK_BODY_LINE_HEIGHT));
+        variable(sb, "--cp-spark-footer-line-height", px(DesignTokens.SPARK_FOOTER_LINE_HEIGHT));
+        variable(sb, "--cp-spark-content-gap", px(DesignTokens.SPARK_CONTENT_GAP));
         variable(sb, "--cp-filter-width", px(DesignTokens.FILTER_WIDTH));
         variable(sb, "--cp-tooltip-max-width", px(DesignTokens.TOOLTIP_MAX_WIDTH));
         variable(sb, "--cp-shadow-blur", px(DesignTokens.SHADOW_BLUR));

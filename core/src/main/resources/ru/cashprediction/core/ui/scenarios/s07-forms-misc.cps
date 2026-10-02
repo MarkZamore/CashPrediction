@@ -1,6 +1,8 @@
 today 2026-09-13
 key Esc
 sample
+# Сценарий форм не зависит от скорости рендерера: сообщение открытия примера уже истекло.
+wait 10001
 menu file.rename
 fill last value=""
 dump rename-invalid

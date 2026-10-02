@@ -2,11 +2,12 @@
 <!--
   Родительский POM проекта CashPrediction.
 
-  Проект состоит из четырёх обязательных модулей и одного профильного:
+  Репозиторий содержит четыре модуля приложения и обязательный аудит документации:
     core      - доменная модель, движок прогноза, Markdown-хранилище, снимки сессии (без UI);
     ui-fx     - настольный клиент на JavaFX;
     ui-swing  - настольный клиент на Swing;
     web       - тонкий web-клиент (встроенный HTTP-сервер JDK + HTML/JS);
+    repository-doc-audits - обязательные тесты документов репозитория, не входит в доставку исходников;
     dist      - (профиль -Pdist) сборка портативной папки через jlink + jpackage.
 
   Единственные внешние зависимости: OpenJFX (только для ui-fx) и JUnit 5 (только тесты).
@@ -29,6 +30,7 @@
     <module>ui-fx</module>
     <module>ui-swing</module>
     <module>web</module>
+    <module>repository-doc-audits</module>
   </modules>
 
   <properties>

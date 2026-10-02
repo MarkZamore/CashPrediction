@@ -49,6 +49,25 @@ class DumpDiffTest {
     }
 
     @Test
+    void placeholderButtonsUseTheSamePixelToleranceWithoutHidingContent() {
+        var expected = Map.of("table", Map.of("placeholderButtons", Map.of("empty.addIncome",
+                Map.of("x", 404, "text", "income", "enabled", true))));
+        var inside = Map.of("table", Map.of("placeholderButtons", Map.of("empty.addIncome",
+                Map.of("x", 400, "text", "income", "enabled", true))));
+        assertEquals(List.of(), DumpDiff.diff(expected, inside, 4));
+        assertEquals(List.of("/table/placeholderButtons/empty.addIncome/x"),
+                DumpDiff.diff(expected, inside, 0).stream().map(DumpDiff.Difference::pointer).toList());
+        var outside = Map.of("table", Map.of("placeholderButtons", Map.of("empty.addIncome",
+                Map.of("x", 399, "text", "different", "enabled", false))));
+        assertEquals(List.of("/table/placeholderButtons/empty.addIncome/enabled",
+                "/table/placeholderButtons/empty.addIncome/text",
+                "/table/placeholderButtons/empty.addIncome/x"),
+                DumpDiff.diff(expected, outside, 4).stream().map(DumpDiff.Difference::pointer).toList());
+        assertEquals(1, DumpDiff.diff(Map.of("data", Map.of("placeholderButtons", Map.of("id", Map.of("x", 1)))),
+                Map.of("data", Map.of("placeholderButtons", Map.of("id", Map.of("x", 2)))), 4).size());
+    }
+
+    @Test
     void geometryToleranceHasAnExactBoundary() {
         assertEquals(List.of(), DumpDiff.diff(Map.of("bounds", Map.of("x", new BigDecimal("0.1"))),
                 Map.of("bounds", Map.of("x", new BigDecimal("0.3"))), 0.2));

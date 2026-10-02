@@ -1,6 +1,7 @@
 package ru.cashprediction.parity.browser;
 
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.nio.file.Path;
 import java.time.Duration;
 import ru.cashprediction.parity.io.Dirs;
@@ -126,8 +127,8 @@ public final class BrowserSession implements AutoCloseable {
     @Override
     public void close() {
         ProcessTree.KillReport report = kill();
-        deleteProfileWithRetries();
         report.requireClean();
+        deleteProfileWithRetries();
     }
 
     /** Закрывает сеанс, не выбрасывая исключений (путь ошибки при запуске). */
@@ -140,19 +141,10 @@ public final class BrowserSession implements AutoCloseable {
     }
 
     private void deleteProfileWithRetries() {
-        // Файлы профиля освобождаются с небольшой задержкой после завершения процессов.
-        for (int attempt = 0; attempt < 20; attempt++) {
-            try {
-                Dirs.deleteRecursively(userDataDir);
-                return;
-            } catch (IOException e) {
-                try {
-                    Thread.sleep(250);
-                } catch (InterruptedException interrupted) {
-                    Thread.currentThread().interrupt();
-                    return;
-                }
-            }
+        try { ProfileCleanup.delete(userDataDir); }
+        catch (IOException failure) {
+            // Оставшийся профиль не выдаётся за успешную очистку стенда.
+            throw new UncheckedIOException("Cannot clean browser profile " + userDataDir, failure);
         }
     }
 

@@ -104,8 +104,7 @@ class UiGoldenTest {
                     // Порядок ключей Map не является изменением интерфейса: не создаём ложный diff между JVM.
                     if (!Files.isRegularFile(golden) || !DumpDiff.diff(
                             JsonParser.parse(Files.readString(golden)), JsonParser.parse(json), 0).isEmpty()) {
-                        Files.createDirectories(golden.getParent());
-                        Files.writeString(golden, json);
+                        GoldenWriter.write(golden, json);
                     }
                 } else {
                     assertTrue(Files.isRegularFile(golden), "missing reviewed golden: " + golden);
@@ -193,6 +192,8 @@ class UiGoldenTest {
                 var counters = Json.object(dump(output, "redo-settings"), "counters");
                 assertTrue(Json.longValue(counters, "edit.undo", 0) >= 3); assertTrue(Json.longValue(counters, "edit.redo", 0) >= 2);
                 assertEquals(Json.object(dump(output, "skipped"), "table").get("rowsDigest"), Json.object(dump(output, "redo-skip"), "table").get("rowsDigest"));
+                assertEquals(Json.object(dump(output, "undo-skip"), "table").get("rowsDigest"), Json.object(dump(output, "reset-event"), "table").get("rowsDigest"));
+                assertEquals(Json.object(dump(output, "redo-skip"), "table").get("rowsDigest"), Json.object(dump(output, "undo-reset"), "table").get("rowsDigest"));
             }
             case "s14-save-conflicts" -> {
                 assertFalse(Json.list(dump(output, "overwrite"), "alerts").isEmpty());
@@ -207,11 +208,12 @@ class UiGoldenTest {
             }
             case "s16-exit-dirty" -> { assertEquals(3, Json.list(first(dump(output, "discard-question"), "alerts"), "buttons").size()); assertTrue(Json.list(dump(output, "exit-cancelled"), "alerts").isEmpty()); }
             case "s17-recovery-dialog" -> {
-                var before = dump(output, "recovery-before-main"); assertNull(before.get("table")); assertEquals("crashRecovery", first(before, "alerts").get("purpose"));
+                var before = dump(output, "recovery-before-main"); assertNull(before.get("frame")); assertNull(before.get("table")); assertEquals("crashRecovery", first(before, "alerts").get("purpose"));
                 assertTrue(rows(output, "restored") > 0); invalid(output, "restored");
                 assertEquals("PLAN_SETTINGS", first(dump(output, "restored"), "windows").get("type"));
             }
             case "s18-already-running" -> {
+                assertNull(dump(output, "already-running").get("frame"));
                 assertEquals("alreadyRunning", first(dump(output, "already-running"), "alerts").get("purpose"));
                 assertTrue(Json.list(dump(output, "recording-off"), "alerts").isEmpty());
                 assertEquals("info.recordingOff", first(dump(output, "recording-off-info"), "alerts").get("purpose"));

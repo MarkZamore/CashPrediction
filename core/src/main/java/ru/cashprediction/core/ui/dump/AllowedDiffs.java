@@ -11,6 +11,7 @@ import ru.cashprediction.core.app.ClientKind;
 import ru.cashprediction.core.ui.command.CommandId;
 import ru.cashprediction.core.ui.command.HotkeyTable;
 import ru.cashprediction.core.ui.text.UiText;
+import ru.cashprediction.core.text.Texts;
 
 /**
  * Закрытый список допустимых различий (спецификация v2, §10; архитектура §6.1), файл
@@ -164,6 +165,11 @@ public final class AllowedDiffs {
         Object left = difference.expected();
         Object right = difference.actual();
         if (Objects.equals(left, right)) return false;
+        if (entry.number() == 7 && difference.pointer().equals("/alerts/crashRecovery/header")) {
+            if (!(left instanceof String a) || !(right instanceof String b)) return false;
+            return recoveryHeader(a).equals(recoveryHeader(b))
+                    && !recoveryHeader(a).equals(a) && !recoveryHeader(b).equals(b);
+        }
         if (Set.of(1, 7, 9, 10, 14).contains(entry.number())
                 && !difference.pointer().endsWith("/content")) {
             if ((left == null) == (right == null)) return false;
@@ -217,8 +223,7 @@ public final class AllowedDiffs {
         }
         if (entry.number() == 8 && !entry.clients().contains("web")) {
             return left instanceof String a && right instanceof String b
-                    && a.replaceAll("(<node>[/\\\\])(?:fx|swing)(?=[/\\\\\\s)]|$)", "$1<client>")
-                    .equals(b.replaceAll("(<node>[/\\\\])(?:fx|swing)(?=[/\\\\\\s)]|$)", "$1<client>"));
+                    && desktopSnapshotLocations(a).equals(desktopSnapshotLocations(b));
         }
         if (entry.number() == 11 && difference.pointer().equals("/frame/titleBar")) return pair(left, right, "os", "tab");
         if (entry.number() == 11) return left == null && minimumSize(right) || right == null && minimumSize(left);
@@ -230,6 +235,34 @@ public final class AllowedDiffs {
         }
         if (entry.number() == 15) return pair(left, right, false, true);
         return true;
+    }
+
+    /** Убирает только известные адреса хранилищ; строки JSON/XML и прочие имена файлов остаются точными. */
+    private static String desktopSnapshotLocations(String text) {
+        String result = text;
+        String registryTitle = Texts.get("session.store.title.registry");
+        String registryCanonical = UiText.get("s2.recovery.registryBlock", registryTitle,
+                "<node>\\<client>", "").split("\n", -1)[0];
+        for (String separator : List.of("/", "\\")) {
+            for (String client : List.of("fx", "swing")) {
+                String header = UiText.get("s2.recovery.registryBlock", registryTitle,
+                        "<node>" + separator + client, "").split("\n", -1)[0];
+                result = result.replaceAll("(?m)^" + java.util.regex.Pattern.quote(header) + "$",
+                        java.util.regex.Matcher.quoteReplacement(registryCanonical));
+            }
+        }
+        String title = Texts.get("session.store.title.xml");
+        String canonical = UiText.get("s2.recovery.fileBlock", title,
+                "<CashMemory>/session-<client>.xml", "").split("\n", -1)[0];
+        for (String separator : List.of("/", "\\")) {
+            for (String client : List.of("fx", "swing")) {
+                String header = UiText.get("s2.recovery.fileBlock", title,
+                        "<CashMemory>" + separator + "session-" + client + ".xml", "").split("\n", -1)[0];
+                result = result.replaceAll("(?m)^" + java.util.regex.Pattern.quote(header) + "$",
+                        java.util.regex.Matcher.quoteReplacement(canonical));
+            }
+        }
+        return result;
     }
 
     /** Проверяет обе ориентации попарного сравнения. */
@@ -251,6 +284,22 @@ public final class AllowedDiffs {
         String fx = UiText.get("client.fx", "").strip();
         return value.equals(UiText.get("client.swing")) || value.equals(UiText.get("client.web"))
                 || value.equals(fx) || value.startsWith(fx + " ") && value.substring(fx.length() + 1).matches("[0-9][0-9A-Za-z.+-]*");
+    }
+
+    /** Убирает только известное имя клиента в конце строки маркера, сохраняя дату и весь остальной заголовок. */
+    private static String recoveryHeader(String header) {
+        String marker = UiText.get("s2.startup.marker", "<date>", "<client>");
+        String prefix = marker.substring(0, marker.indexOf("<date>"));
+        String between = marker.substring(marker.indexOf("<date>") + 6, marker.indexOf("<client>"));
+        String suffix = marker.substring(marker.indexOf("<client>") + 8);
+        int start = header.lastIndexOf('\n') + 1;
+        String line = header.substring(start);
+        if (!line.startsWith(prefix)) return header;
+        for (String client : List.of(UiText.get("s2.startup.clientFx"), UiText.get("client.swing"), UiText.get("client.web"))) {
+            String ending = between + client + suffix;
+            if (line.endsWith(ending)) return header.substring(0, header.length() - ending.length()) + between + "<client>" + suffix;
+        }
+        return header;
     }
 
     /** Контекст геометрии берётся из дампа, а не из предположения о размере запуска. */

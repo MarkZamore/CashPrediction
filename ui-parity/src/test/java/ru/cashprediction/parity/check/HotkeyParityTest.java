@@ -1,21 +1,32 @@
 package ru.cashprediction.parity.check;
 
 import java.util.Map;
-import org.junit.jupiter.api.Test;
-import static org.junit.jupiter.api.Assertions.*;
+import java.util.stream.Stream;
+import org.junit.jupiter.api.TestFactory;
+import org.junit.jupiter.api.DynamicTest;
+import org.junit.jupiter.api.Assumptions;
+import ru.cashprediction.parity.check.hotkey.HotkeyCases;
+import ru.cashprediction.parity.check.hotkey.HotkeyRun;
+import ru.cashprediction.parity.check.hotkey.HotkeyAssertions;
+import ru.cashprediction.parity.launch.ReactorLayout;
+import ru.cashprediction.parity.pipeline.ParityPipeline;
 
-/** Каркас проверки счётчиков до и после настоящего нажатия клавиши S3. */
+/** Проверяет горячие клавиши выбранных настоящих клиентов; запуск явно включается parity.realClients. */
 public final class HotkeyParityTest {
     /** Проверяет, что изменился только нужный счётчик ровно на единицу. */
     public static void exactlyOnce(String command, Map<String, Integer> before, Map<String, Integer> after) {
-        var keys = new java.util.HashSet<>(before.keySet()); keys.addAll(after.keySet()); keys.add(command);
-        for (String key : keys) assertEquals(key.equals(command) ? 1 : 0,
-                after.getOrDefault(key, 0) - before.getOrDefault(key, 0), key);
+        HotkeyAssertions.exactlyOnce(command, before, after);
     }
-    /** Проверяет защиту от двойного выполнения команды. */
-    @Test void counterProbeRejectsDoubleDispatch() {
-        exactlyOnce("save", Map.of(), Map.of("save", 1));
-        assertThrows(AssertionError.class, () -> exactlyOnce("save", Map.of(), Map.of("save", 2)));
-        assertThrows(AssertionError.class, () -> exactlyOnce("save", Map.of(), Map.of("save", 1, "other", 1)));
+    /** Создаёт независимый запуск каждой привязки, включая отключённые команды и русские DOM-события web. */
+    @TestFactory Stream<DynamicTest> realWidgetHotkeys() {
+        Assumptions.assumeTrue(Boolean.getBoolean("parity.realClients"),
+                "Enable -Dparity.realClients=true for real-widget hotkeys");
+        var layout = ReactorLayout.fromSystemProperties();
+        return ParityPipeline.clients(System.getProperty("parity.clients", "fx,swing,web")).stream()
+                .flatMap(client -> HotkeyCases.select(Boolean.getBoolean("parity.hotkey.residual")
+                        ? HotkeyCases.residual(HotkeyCases.forClient(client), client) : HotkeyCases.forClient(client),
+                        System.getProperty("parity.hotkeys", "")).stream().map(probe ->
+                        DynamicTest.dynamicTest(client + ": " + probe.name(), () ->
+                                HotkeyRun.verify(layout, client, probe))));
     }
 }

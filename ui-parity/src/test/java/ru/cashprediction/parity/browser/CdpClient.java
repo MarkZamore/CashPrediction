@@ -169,11 +169,17 @@ public final class CdpClient implements AutoCloseable {
      * @throws CdpException если выражение выбросило исключение
      */
     public Object evaluate(String expression) {
+        return evaluate(expression, CALL_TIMEOUT);
+    }
+
+    /** Выполняет выражение с отдельным предельным сроком ожидания ответа CDP. */
+    public Object evaluate(String expression, Duration timeout) {
+        if (timeout.isZero() || timeout.isNegative()) throw new IllegalArgumentException("timeout");
         Map<String, Object> params = new LinkedHashMap<>();
         params.put("expression", expression);
         params.put("returnByValue", true);
         params.put("awaitPromise", true);
-        Map<String, Object> result = call(Method.RUNTIME_EVALUATE, params);
+        Map<String, Object> result = call(Method.RUNTIME_EVALUATE, params, timeout);
         if (result.containsKey("exceptionDetails")) {
             throw new CdpException("Runtime.evaluate failed for '" + expression + "': "
                     + JsonWriter.write(result.get("exceptionDetails")), null);
@@ -192,7 +198,8 @@ public final class CdpClient implements AutoCloseable {
     public void waitFor(String expression, Duration timeout) {
         long deadline = System.nanoTime() + timeout.toNanos();
         while (true) {
-            if (Boolean.TRUE.equals(evaluate(expression))) {
+            Duration remaining = Duration.ofNanos(Math.max(1, deadline - System.nanoTime()));
+            if (Boolean.TRUE.equals(evaluate(expression, remaining))) {
                 return;
             }
             if (System.nanoTime() > deadline) {
@@ -230,6 +237,12 @@ public final class CdpClient implements AutoCloseable {
      * @throws CdpException при ошибке протокола, разрыве соединения или истечении времени
      */
     private Map<String, Object> call(Method method, Map<String, ?> params) {
+        return call(method, params, CALL_TIMEOUT);
+    }
+
+    /** Ограничивает отправку и ответ общим сроком, чтобы зависший Promise не продлевал ожидание. */
+    private Map<String, Object> call(Method method, Map<String, ?> params, Duration timeout) {
+        long deadline = System.nanoTime() + timeout.toNanos();
         long id = ids.incrementAndGet();
         CompletableFuture<Map<String, Object>> future = new CompletableFuture<>();
         pending.put(id, future);
@@ -240,9 +253,9 @@ public final class CdpClient implements AutoCloseable {
         try {
             // WebSocket JDK запрещает начинать новую отправку, пока не завершилась предыдущая.
             synchronized (sendLock) {
-                socket.sendText(JsonWriter.write(message), true).get(CALL_TIMEOUT.toMillis(), TimeUnit.MILLISECONDS);
+                socket.sendText(JsonWriter.write(message), true).get(Math.max(1, deadline - System.nanoTime()), TimeUnit.NANOSECONDS);
             }
-            Map<String, Object> response = future.get(CALL_TIMEOUT.toMillis(), TimeUnit.MILLISECONDS);
+            Map<String, Object> response = future.get(Math.max(1, deadline - System.nanoTime()), TimeUnit.NANOSECONDS);
             if (response.containsKey("error")) {
                 throw new CdpException(method.wireName() + " failed: " + JsonWriter.write(response.get("error")), null);
             }

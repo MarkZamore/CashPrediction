@@ -18,6 +18,7 @@ import ru.cashprediction.core.model.RuleId;
 import ru.cashprediction.core.session.WindowType;
 import ru.cashprediction.core.text.Texts;
 import ru.cashprediction.core.ui.alert.AlertCatalog;
+import ru.cashprediction.core.ui.command.RowRef;
 import ru.cashprediction.core.ui.form.FormLogic;
 import ru.cashprediction.core.ui.form.FormSession;
 import ru.cashprediction.core.ui.form.FieldCodec;
@@ -207,11 +208,14 @@ public final class EditFlow {
      * @param rowId id строки RULE
      */
     public void reset(String rowId) {
-        ForecastRow row = ruleRow(rowId);
-        if (row == null) return;
-        OccurrenceKey key = row.occurrenceKey().orElseThrow();
+        // Пропуск скрывает строку из прогноза, но корректировка и логический выбор остаются в плане.
+        // Используем тот же источник принадлежности событию, что и доступность команды, а не видимую таблицу.
+        RowRef reference = RowRef.resolve(context.state(), rowId);
+        if (reference.isEmpty() || reference.kind() == null) { hint("status.hint.noRow"); return; }
+        if (!reference.is(RowKind.RULE)) { hint("status.hint.noRuleEvent"); return; }
+        OccurrenceKey key = OccurrenceKey.parseRowId(reference.rowId());
         if (context.document().plan().findAdjustment(key).isEmpty()) { hint("status.hint.noAdjustment"); return; }
-        edit(UiText.get("undo.reset", UiFormats.date(row.originalDate())), "status.msg.adjustReset",
+        edit(UiText.get("undo.reset", UiFormats.date(key.originalDate())), "status.msg.adjustReset",
                 p -> p.withAdjustmentRemoved(key));
     }
 

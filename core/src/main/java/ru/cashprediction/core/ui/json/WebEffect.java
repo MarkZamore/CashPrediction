@@ -59,9 +59,15 @@ public sealed interface WebEffect permits WebEffect.Screen, WebEffect.FormOpen, 
      * @param placement положение
      * @param spec      раскладка
      * @param view      начальная модель
+     * @param chooserRequest исходный запрос серверного выбора либо null для обычной формы
      */
-    record FormOpen(String windowId, String ownerId, boolean modal, Placement placement, FormSpec spec, FormView view)
+    record FormOpen(String windowId, String ownerId, boolean modal, Placement placement, FormSpec spec, FormView view,
+                    ru.cashprediction.core.ui.dump.UiDump.ChooserRequest chooserRequest)
             implements WebEffect {
+        /** Сохраняет прежний контракт обычных форм. */
+        public FormOpen(String windowId, String ownerId, boolean modal, Placement placement, FormSpec spec, FormView view) {
+            this(windowId, ownerId, modal, placement, spec, view, null);
+        }
         @Override
         public String type() {
             return "form.open";
@@ -108,12 +114,15 @@ public sealed interface WebEffect permits WebEffect.Screen, WebEffect.FormOpen, 
     }
 
     /**
-     * {@code alert.open{alertId, spec}}.
+     * {@code alert.open{alertId, spec, placement}}. Положение содержит владельца и восстановленные границы.
      *
      * @param alertId id сообщения
      * @param spec    описание
+     * @param placement положение окна; {@code null} означает прежнее центрирование
      */
-    record AlertOpen(String alertId, AlertSpec spec) implements WebEffect {
+    record AlertOpen(String alertId, AlertSpec spec, Placement placement) implements WebEffect {
+        /** Сохраняет прежний контракт для сообщений без заданного положения. */
+        public AlertOpen(String alertId, AlertSpec spec) { this(alertId, spec, null); }
         @Override
         public String type() {
             return "alert.open";

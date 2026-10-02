@@ -26,12 +26,11 @@ import ru.cashprediction.core.ui.token.DesignTokens;
  * символьный литерал и текстовый блок основного кода ядра ({@link JavaSourceScanner}): комментарии и Javadoc не
  * интерфейс и не проверяются. Исключений нет.</p>
  *
- * <p><b>Тесты и документы репозитория.</b> Обратной совместимости нет, поэтому образцы файлов в тестах тоже с
+ * <p><b>Тесты приложения.</b> Обратной совместимости нет, поэтому образцы файлов в тестах тоже с
  * дефисом: проверяются литералы и текстовые блоки тестового кода всех модулей ({@code core}, {@code ui-fx},
  * {@code ui-swing}, {@code web}, {@code ui-parity}), кроме самих проверок {@code NoDashesIn*Test.java}, которые
- * записывают формы тире нарочно. Целиком проверяются спецификация ({@code docs/ui-spec.md} и её копия
- * {@code docs/design/ui-spec-v2.md}), {@code docs/FORMAT.md}, {@code docs/ui-protocol.md}, {@code README.md} и
- * ресурсы тестов {@code ui-parity}.</p>
+ * записывают формы тире нарочно. Ресурсы тестов {@code ui-parity} проверяются целиком.
+ * Документные проверки перенесены в обязательный модуль {@code repository-doc-audits}.</p>
  *
  * <p><b>Какие формы тире ищутся.</b> Сам символ, escape-последовательность {@code \}{@code u2014} (в том числе с
  * несколькими {@code u}, как в properties и Java) и HTML-сущности {@code &}{@code mdash;}, {@code &}{@code ndash;},
@@ -84,14 +83,6 @@ class NoDashesInUiTextTest {
 
     /** Проверки тире в модулях: записывают формы тире нарочно, чтобы проверить поиск. */
     private static final Pattern DASH_GUARD_FILE = Pattern.compile("NoDashesIn\\w*Test\\.java");
-
-    /** Документы репозитория без тире: спецификация, её копия, формат файлов, web-протокол, README. */
-    private static final List<Path> DOCUMENTS = List.of(
-            CoreModuleDir.resolve("../docs/ui-spec.md"),
-            CoreModuleDir.resolve("../docs/design/ui-spec-v2.md"),
-            CoreModuleDir.resolve("../docs/FORMAT.md"),
-            CoreModuleDir.resolve("../docs/ui-protocol.md"),
-            CoreModuleDir.resolve("../README.md"));
 
     /** Ресурсы тестов ui-parity (страницы и образцы стенда). */
     private static final Path PARITY_TEST_RESOURCES = CoreModuleDir.resolve("../ui-parity/src/test/resources");
@@ -157,12 +148,11 @@ class NoDashesInUiTextTest {
         assertEquals(List.of(), found, RULE);
     }
 
-    /** Спецификация, её копия, описание формата, web-протокол, README и ресурсы тестов ui-parity без тире. */
+    /** Ресурсы тестов ui-parity без тире; документный аудит выполняется отдельным обязательным модулем. */
     @Test
     void repositoryDocumentsAndParityResourcesHaveNoDashes() {
         List<String> found = new ArrayList<>();
-        List<Path> checked = new ArrayList<>(DOCUMENTS);
-        checked.addAll(files(PARITY_TEST_RESOURCES));
+        List<Path> checked = files(PARITY_TEST_RESOURCES);
         for (Path file : checked) {
             assertTrue(Files.isRegularFile(file), file.toString());
             inText(file, read(file)).forEach(finding -> found.add(finding.toString()));
@@ -170,7 +160,7 @@ class NoDashesInUiTextTest {
         assertEquals(List.of(), found, RULE);
     }
 
-    /** В спецификации и общих текстовых ресурсах знак U+2212 не маскирует обычный дефис-минус. */
+    /** В общих текстовых ресурсах знак U+2212 не маскирует обычный дефис-минус. */
     @Test
     void sharedUiTextsAndSpecificationHaveNoTypographicMinus() {
         List<String> found = new ArrayList<>();
@@ -178,10 +168,6 @@ class NoDashesInUiTextTest {
             for (Path file : files(root)) {
                 inSign(file, read(file), MINUS_SIGN).forEach(finding -> found.add(finding.toString()));
             }
-        }
-        for (Path file : List.of(CoreModuleDir.resolve("../docs/ui-spec.md"),
-                CoreModuleDir.resolve("../docs/design/ui-spec-v2.md"))) {
-            inSign(file, read(file), MINUS_SIGN).forEach(finding -> found.add(finding.toString()));
         }
         assertEquals(List.of(), found, "в общих текстах и спецификации знак U+2212 заменяется дефисом-минусом");
     }

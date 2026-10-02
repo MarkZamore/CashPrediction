@@ -17,6 +17,14 @@ public final class ParityPipeline {
      * @param node тестовый узел
      */
     public record Collection(Path dumps, Path cashMemory, String node) { }
+    /** Дополнительные реальные наблюдения, собираемые до финального unused-аудита. */
+    @FunctionalInterface public interface Evidence {
+        /** Возвращает ограниченные сравнения; отсутствие reference должно завершиться ошибкой. */
+        List<EvidencePair> collect() throws Exception;
+    }
+    /** Ограниченное сравнение наблюдений; provenance содержит пути и SHA исходных файлов. */
+    public record EvidencePair(String label, String client, String second, Object expected,
+                               Object actual, String provenance) { }
     /** Итог сравнения.
      * @param failures непоглощённые расхождения и ошибки
      * @param report HTML отчёт
@@ -51,6 +59,12 @@ public final class ParityPipeline {
     /** Выполняет сравнение и всегда пишет отчёт; полная матрица проверяет также неиспользованные допуски. */
     public static Result run(Path goldens, Path output, List<String> clients, List<String> scenarios,
                              AllowedDiffs allowed, boolean fullMatrix, Collector collector) throws Exception {
+        return run(goldens, output, clients, scenarios, allowed, fullMatrix, collector, List::of);
+    }
+
+    /** Использует один AllowedDiffs для основной матрицы и дополнительных реальных наблюдений. */
+    public static Result run(Path goldens, Path output, List<String> clients, List<String> scenarios,
+                             AllowedDiffs allowed, boolean fullMatrix, Collector collector, Evidence evidence) throws Exception {
         if (clients.isEmpty() || scenarios.isEmpty()) throw new IllegalArgumentException("Empty parity matrix");
         clients(String.join(",", clients));
         Files.createDirectories(output);
@@ -79,6 +93,14 @@ public final class ParityPipeline {
                         a, b, 4, allowed, failures, html);
             }
         }
+        try {
+            for (EvidencePair pair : evidence.collect()) {
+                html.append("<p>Bounded evidence: ").append(escape(pair.provenance())).append("</p>");
+                compare("evidence / " + pair.label(), Map.of("observation", pair.expected()),
+                        Map.of("observation", pair.actual()), pair.client(), pair.second(), 0,
+                        allowed, failures, html);
+            }
+        } catch (Exception e) { fail(failures, html, "Evidence collection: " + e); }
         if (fullMatrix) for (AllowedDiffs.Entry entry : allowed.unused())
             fail(failures, html, "Unused allowance: " + entry.specSection() + " " + entry.pointer());
         else {
@@ -99,7 +121,9 @@ public final class ParityPipeline {
             throws Exception {
         Map<String, Object> steps = new TreeMap<>();
         try (var paths = Files.list(directory)) {
-            for (Path path : paths.filter(p -> p.getFileName().toString().endsWith(".json")).sorted().toList()) {
+            // Точные измерения Shot не являются дополнительной контрольной точкой эталонного паритета.
+            for (Path path : paths.filter(p -> p.getFileName().toString().endsWith(".json")
+                    && !p.getFileName().toString().endsWith(".raw.json")).sorted().toList()) {
                 String step = path.getFileName().toString().replaceFirst("\\.json$", "");
                 UiDump dump = DumpTrees.read(Files.readString(path));
                 if (!dump.client().equals(client) || !dump.scenario().equals(scenario) || !dump.step().equals(step))
@@ -121,8 +145,13 @@ public final class ParityPipeline {
             if (!expected.containsKey(step) || !actual.containsKey(step)) {
                 fail(failures, html, label + " / " + step + ": missing or extra dump"); continue;
             }
+            // Только эталон модели не содержит измеренных границ. Попарная проверка
+            // использует полные исходные деревья, включая все координаты и размеры.
+            GoldenMeasurements.Pair trees = second == null
+                    ? GoldenMeasurements.project(expected.get(step), actual.get(step))
+                    : new GoldenMeasurements.Pair(expected.get(step), actual.get(step));
             List<DumpDiff.Difference> diffs = allowed.filter(client,
-                    DumpDiff.diff(expected.get(step), actual.get(step), tolerance), expected.get(step), actual.get(step));
+                    DumpDiff.diff(trees.expected(), trees.actual(), tolerance), expected.get(step), actual.get(step));
             if (second != null) diffs = allowed.filter(second, diffs, actual.get(step), expected.get(step));
             for (DumpDiff.Difference diff : diffs) fail(failures, html, label + " / " + step + " "
                     + diff.pointer() + " expected=" + diff.expected() + " actual=" + diff.actual());

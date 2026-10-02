@@ -134,7 +134,7 @@
     },
     {
       "number": 7,
-      "pointer": "/alerts/crashRecovery/buttons/registry",
+      "pointer": "/alerts/crashRecovery/buttons/restoreRegistry",
       "clients": [
         "web"
       ],
@@ -143,7 +143,7 @@
     },
     {
       "number": 7,
-      "pointer": "/alerts/crashRecovery/buttons/xml",
+      "pointer": "/alerts/crashRecovery/buttons/restoreXml",
       "clients": [
         "web"
       ],
@@ -152,12 +152,19 @@
     },
     {
       "number": 7,
-      "pointer": "/alerts/crashRecovery/buttons/server",
+      "pointer": "/alerts/crashRecovery/buttons/restoreServer",
       "clients": [
         "web"
       ],
       "specSection": "§10 №7",
       "description": "Only presence of storage buttons; common buttons remain checked."
+    },
+    {
+      "number": 7,
+      "pointer": "/alerts/crashRecovery/header",
+      "clients": ["swing", "web"],
+      "specSection": "§10 №7",
+      "description": "Only the known previous-client caption in the marker; dates and other header text stay exact."
     },
     {
       "number": 7,
@@ -185,7 +192,7 @@
         "swing"
       ],
       "specSection": "§10 №8",
-      "description": "Only fx/swing suffix of the normalized registry node; snapshot payload stays equal."
+      "description": "Only fx/swing registry suffix and the known session-fx.xml/session-swing.xml filename in the XML storage heading; raw snapshot payload stays equal."
     },
     {
       "number": 8,

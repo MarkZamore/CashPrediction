@@ -61,7 +61,12 @@ jobs:
       - name: Build and test
         shell: pwsh
         run: |
-          # Модули и тесты, затем портативная папка: jlink + jpackage + zip.
+          # Аудит документов обязателен перед сборкой и публикацией портативной папки.
+          [xml]$repositoryReactor = Get-Content -LiteralPath pom.xml -Raw
+          if (@($repositoryReactor.project.modules.module) -notcontains 'repository-doc-audits') {
+            throw 'Обязательный модуль repository-doc-audits отсутствует в reactor.'
+          }
+          # Модули и все тесты, затем портативная папка: jlink + jpackage + zip.
           # Номер релиза и коммит попадают в окно «О программе» и в свойства exe.
           $common = @('-B', '-ntp', "-Dapp.release=$env:RELEASE_NUMBER", "-Dapp.commit=${{ github.sha }}")
           & mvn @common install

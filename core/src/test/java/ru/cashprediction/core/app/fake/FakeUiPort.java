@@ -412,6 +412,12 @@ public final class FakeUiPort implements UiPort {
         clipboard = text;
     }
 
+    /** Записывает Web-перезагрузку; desktop сохраняет неподдерживаемую операцию интерфейса. */
+    @Override public void reloadPage() {
+        if (profile.kind() != ru.cashprediction.core.app.ClientKind.WEB) UiPort.super.reloadPage();
+        record("reloadPage");
+    }
+
     @Override
     public void exit(ExitKind kind, int code) {
         record("exit", kind, code);

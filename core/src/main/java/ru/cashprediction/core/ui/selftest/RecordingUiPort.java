@@ -31,6 +31,7 @@ final class RecordingUiPort implements UiPort {
     Optional<Path> queuedChooser;
     boolean exited;
     int exitCode;
+    java.util.function.Supplier<String> alertIdentity = () -> "alert" + windows.size();
     RecordingUiPort(ClientProfile profile) { this.profile = profile; }
 
     /** Модель открытого окна с ручкой, которую получает сеанс ядра. */
@@ -87,13 +88,21 @@ final class RecordingUiPort implements UiPort {
     @Override public WindowHandle showAlert(AlertSpec spec, AlertSession session, Consumer<String> onButton) {
         // JavaFX: Alert → Swing: SwingAlert → Web: dialog
         Handle h = new Handle(); h.alert = spec; h.alertSession = session; h.answer = onButton;
-        h.id = "alert" + windows.size(); windows.add(h);
+        h.id = session == null ? alertIdentity.get() : session.windowId(); windows.add(h);
         if (session != null) session.shown(); return h;
     }
     /** Записывает контекстное меню. */
     @Override public void showContextMenu(ContextTarget target, List<MenuNode> items) {
         // JavaFX: ContextMenu → Swing: JPopupMenu → Web: menu
-        contextTarget = target.kind(); context = List.copyOf(items);
+        contextTarget = switch (target) {
+            case ContextTarget.Row row -> "row:" + row.rowId();
+            case ContextTarget.Total total -> "total:" + total.rowId();
+            case ContextTarget.PastHeader ignored -> "pastHeader";
+            case ContextTarget.Card card -> "card:" + card.cardId();
+            case ContextTarget.Preview preview -> "preview:" + preview.windowId() + ":" + preview.index();
+            case ContextTarget.Chart ignored -> "chart";
+        };
+        context = List.copyOf(items);
     }
     /** Записывает запрос выбора и принимает заготовленный ответ. */
     @Override public void chooseFile(FileChooserSpec spec, Consumer<Optional<Path>> onResult) {

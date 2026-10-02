@@ -68,10 +68,26 @@ public final class DesignTokens {
     public static final int CARD_PAD_V = 6;
     /** Отступ карточки по горизонтали. */
     public static final int CARD_PAD_H = 10;
+    /** Высота строки заголовка карточки, включая выносные элементы малого шрифта. */
+    public static final int CARD_TITLE_LINE_HEIGHT = 15;
+    /** Высота строки значения карточки. */
+    public static final int CARD_VALUE_LINE_HEIGHT = 22;
+    /** Высота строки пояснения карточки. */
+    public static final int CARD_CAPTION_LINE_HEIGHT = 15;
+    /** Межстрочный зазор карточки сводки. */
+    public static final int CARD_CONTENT_GAP = 3;
     /** Ширина графика во всплывающем окне карточки. */
     public static final int SPARK_WIDTH = 240;
     /** Высота графика во всплывающем окне карточки. */
     public static final int SPARK_HEIGHT = 60;
+    /** Высота строки заголовка спарклайна, включая место для выносных элементов шрифта. */
+    public static final int SPARK_HEADER_LINE_HEIGHT = 20;
+    /** Высота каждой строки пояснения спарклайна при переносе текста. */
+    public static final int SPARK_BODY_LINE_HEIGHT = 15;
+    /** Высота строки минимального и максимального значений спарклайна. */
+    public static final int SPARK_FOOTER_LINE_HEIGHT = 14;
+    /** Межблочный зазор спарклайна: строки следуют непосредственно друг за другом. */
+    public static final int SPARK_CONTENT_GAP = 0;
     /** Зазор между карточкой и её всплывающим окном. */
     public static final int CARD_POPUP_GAP = 4;
 
@@ -106,6 +122,8 @@ public final class DesignTokens {
     public static final int SPINNER_FIELD_WIDTH = 120;
     /** Ширина денежного поля быстрой правки. */
     public static final int QUICK_EDIT_FIELD_WIDTH = 140;
+    /** Общая ширина содержимого всплывающей быстрой правки, включая внутренние отступы. */
+    public static final int QUICK_EDIT_POPUP_WIDTH = 320;
     /** Минимальная ширина карточки дня. */
     public static final int DAY_CARD_MIN_WIDTH = 200;
     /** Максимальная ширина карточки дня. */

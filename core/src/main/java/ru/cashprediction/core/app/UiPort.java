@@ -154,6 +154,15 @@ public interface UiPort {
     void copyToClipboard(String text);
 
     /**
+     * Перезагрузить Web-вкладку, из которой пришла ошибка страницы, после решения ядра (§6.33).
+     * Web-порт сохраняет исходную вкладку вместе с сообщением; ответ из другой вкладки не меняет адресата.
+     * Desktop не поддерживает эту операцию и не должен получать её от общих потоков.
+     *
+     * @throws UnsupportedOperationException для клиентов без страницы браузера
+     */
+    default void reloadPage() { throw new UnsupportedOperationException("reloadPage requires WEB"); }
+
+    /**
      * Завершить процесс или сервер. После вызова ядро больше не обращается к порту.
      *
      * @param kind вид завершения

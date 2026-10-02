@@ -130,6 +130,15 @@ public interface UiIntents {
     void uncaught(Thread thread, Throwable error);
 
     /**
+     * Ошибка JavaScript во вкладке Web (§6.33), не авария серверной JVM.
+     * Ядро сохраняет снимок и предлагает перезагрузить вкладку либо продолжить работу без завершения сервера.
+     *
+     * @param message исходное сообщение JavaScript
+     * @param stack исходный стек JavaScript без преобразования в стек Java
+     */
+    void clientError(String message, String stack);
+
+    /**
      * Запрос: пункты контекстного меню объекта. Правая кнопка по строке сначала выделяет её ({@link #selectRow}).
      *
      * @param target объект

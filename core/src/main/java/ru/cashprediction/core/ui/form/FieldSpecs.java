@@ -178,7 +178,7 @@ public final class FieldSpecs {
     public static FieldSpec wide(FieldSpec field) {
         return new FieldSpec(field.id(), field.kind(), field.label(), field.prompt(), field.tooltip(), field.options(),
                 field.min(), field.max(), field.step(), field.columns(), field.textRows(), true, field.suffix(),
-                field.orientation(), field.focusFirst());
+                field.orientation(), field.focusFirst(), field.widthPx());
     }
 
     /**
@@ -190,7 +190,7 @@ public final class FieldSpecs {
     public static FieldSpec focused(FieldSpec field) {
         return new FieldSpec(field.id(), field.kind(), field.label(), field.prompt(), field.tooltip(), field.options(),
                 field.min(), field.max(), field.step(), field.columns(), field.textRows(), field.wide(), field.suffix(),
-                field.orientation(), true);
+                field.orientation(), true, field.widthPx());
     }
 
     /**
@@ -203,7 +203,7 @@ public final class FieldSpecs {
     public static FieldSpec withTooltip(FieldSpec field, String tooltip) {
         return new FieldSpec(field.id(), field.kind(), field.label(), field.prompt(), tooltip, field.options(),
                 field.min(), field.max(), field.step(), field.columns(), field.textRows(), field.wide(), field.suffix(),
-                field.orientation(), field.focusFirst());
+                field.orientation(), field.focusFirst(), field.widthPx());
     }
 
     /**
@@ -216,7 +216,7 @@ public final class FieldSpecs {
     public static FieldSpec withPrompt(FieldSpec field, String prompt) {
         return new FieldSpec(field.id(), field.kind(), field.label(), prompt, field.tooltip(), field.options(),
                 field.min(), field.max(), field.step(), field.columns(), field.textRows(), field.wide(), field.suffix(),
-                field.orientation(), field.focusFirst());
+                field.orientation(), field.focusFirst(), field.widthPx());
     }
 
     /**
@@ -229,7 +229,7 @@ public final class FieldSpecs {
     public static FieldSpec withSuffix(FieldSpec field, String suffix) {
         return new FieldSpec(field.id(), field.kind(), field.label(), field.prompt(), field.tooltip(), field.options(),
                 field.min(), field.max(), field.step(), field.columns(), field.textRows(), field.wide(), suffix,
-                field.orientation(), field.focusFirst());
+                field.orientation(), field.focusFirst(), field.widthPx());
     }
 
     /**
@@ -242,7 +242,19 @@ public final class FieldSpecs {
     public static FieldSpec withColumns(FieldSpec field, int columns) {
         return new FieldSpec(field.id(), field.kind(), field.label(), field.prompt(), field.tooltip(), field.options(),
                 field.min(), field.max(), field.step(), columns, field.textRows(), field.wide(), field.suffix(),
-                field.orientation(), field.focusFirst());
+                field.orientation(), field.focusFirst(), field.widthPx());
+    }
+
+    /**
+     * Копия с шириной контрола в логических пикселях, независимо от ширины в символах.
+     * @param field поле
+     * @param widthPx ширина; 0 оставляет её раскладке
+     * @return копия
+     */
+    public static FieldSpec withWidthPx(FieldSpec field, int widthPx) {
+        return new FieldSpec(field.id(), field.kind(), field.label(), field.prompt(), field.tooltip(), field.options(),
+                field.min(), field.max(), field.step(), field.columns(), field.textRows(), field.wide(), field.suffix(),
+                field.orientation(), field.focusFirst(), widthPx);
     }
 
     private static FieldSpec of(String id, FieldKind kind, String label, String prompt, List<Option> options, long min,

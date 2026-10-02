@@ -19,7 +19,8 @@ import ru.cashprediction.core.ui.text.UiText;
  * в журнал {@code <out>/selftest.log} строками {@code SELFTEST <n> OK <команда>} или {@code SELFTEST <n> FAIL
  * <команда>: <причина>}, в конце {@code SELFTEST DONE}; ошибка команды не останавливает сценарий. {@code dump <шаг>}
  * пишет {@code <out>/<сценарий>/<шаг>.json} (нормализованный {@code DumpNormalizer}), {@code shot <шаг>} —
- * {@code <out>/<сценарий>/<шаг>.png}. Ожидания не блокируют поток интерфейса клиента: драйвер выполняет команды в
+ * {@code <out>/<сценарий>/<шаг>.png} и {@code <шаг>.raw.json} с исходными измерениями перед снимком,
+ * без округления координат или подмены времени и путей. Ожидания не блокируют поток интерфейса клиента: драйвер выполняет команды в
  * этом потоке, раннер ждёт в своём.</p>
  *
  * <p>Не потокобезопасен: один прогон на экземпляр.</p>
@@ -62,6 +63,7 @@ public final class SelfTestRunner {
 
     private final UiDriver driver;
     private final Path outDir;
+    private final ru.cashprediction.core.app.AppEnvironment environment;
 
     /**
      * Создаёт раннер.
@@ -70,8 +72,20 @@ public final class SelfTestRunner {
      * @param outDir папка результатов ({@code --selftest-out})
      */
     public SelfTestRunner(UiDriver driver, Path outDir) {
+        this(driver, outDir, driver instanceof ModelUiDriver model ? model.environment()
+                : ru.cashprediction.core.app.AppEnvironment.from(ru.cashprediction.core.app.LaunchOptions.parse(List.of(), System.getProperties())));
+    }
+
+    /**
+     * Создаёт раннер с настоящим окружением запуска, включая параметры командной строки.
+     * @param driver драйвер клиента
+     * @param outDir папка результатов
+     * @param environment окружение приложения
+     */
+    public SelfTestRunner(UiDriver driver, Path outDir, ru.cashprediction.core.app.AppEnvironment environment) {
         this.driver = Objects.requireNonNull(driver, "driver");
         this.outDir = Objects.requireNonNull(outDir, "outDir");
+        this.environment = Objects.requireNonNull(environment, "environment");
     }
 
     /** @return драйвер клиента */
@@ -117,13 +131,18 @@ public final class SelfTestRunner {
                     } else if (command instanceof SelfTestCommand.Dump dump) {
                         driver.awaitIdle(Duration.ofSeconds(5));
                         var value = driver.dump(dump.step());
-                        var environment = driver instanceof ModelUiDriver model ? model.environment()
-                                : ru.cashprediction.core.app.AppEnvironment.from(ru.cashprediction.core.app.LaunchOptions.parse(List.of(), System.getProperties()));
-                        value = DumpNormalizer.normalize(value, environment.cashMemory(), environment.registryNodePath(driver.client().snapshotClient()));
+                        // Случайный префикс скрываем, значимый суффикс клиента fx/swing сохраняем.
+                        String node = environment.options().registryNode();
+                        if (node == null || node.isBlank()) node = environment.registryNodePath(driver.client().snapshotClient());
+                        value = DumpNormalizer.normalize(value, environment.cashMemory(), node);
                         value = ModelDump.label(value, script.name(), dump.step());
                         Files.writeString(child(scenario, dump.step() + ".json"), UiJson.write(value), StandardCharsets.UTF_8);
                     } else if (command instanceof SelfTestCommand.Shot shot) {
                         driver.awaitIdle(Duration.ofSeconds(5));
+                        // Снимок проверяют по исходным пикселям: округление x и ширины по отдельности
+                        // может вынести правую границу за viewport, хотя настоящий виджет помещается.
+                        var measured = ModelDump.label(driver.dump(shot.step()), script.name(), shot.step());
+                        Files.writeString(child(scenario, shot.step() + ".raw.json"), UiJson.write(measured), StandardCharsets.UTF_8);
                         Files.write(child(scenario, shot.step() + ".png"), driver.screenshot(shot.step()));
                     } else if (command instanceof SelfTestCommand.Menus menus) {
                         driver.awaitIdle(Duration.ofSeconds(5));

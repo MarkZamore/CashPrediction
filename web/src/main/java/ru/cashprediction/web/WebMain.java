@@ -11,6 +11,9 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 import javax.swing.JOptionPane;
 import ru.cashprediction.core.io.CashMemoryLayout;
+import ru.cashprediction.core.app.AppEnvironment;
+import ru.cashprediction.core.app.LaunchOptions;
+import ru.cashprediction.core.ui.text.UiText;
 
 /**
  * Точка входа web-клиента CashPrediction: открывает серверный сеанс над {@code CashMemory}, запускает HTTP-сервер,
@@ -40,6 +43,11 @@ public final class WebMain {
      * @param args аргументы командной строки
      */
     public static void main(String[] args) {
+        LaunchOptions launch = LaunchOptions.parse(List.of(args), System.getProperties());
+        if (launch.ui() == LaunchOptions.UiMode.CORE) {
+            startCore(launch);
+            return;
+        }
         // Реестр ядра загружает java.util.prefs, который пишет в журнал предупреждения о HKLM — они не нужны.
         Logger.getLogger("java.util.prefs").setLevel(Level.SEVERE);
         List<String> options = List.of(args);
@@ -91,6 +99,30 @@ public final class WebMain {
         if (!noBrowser) {
             openBrowser(server, log);
         }
+    }
+
+    /** Запускает контроллер нового интерфейса только по явному выбору --ui core. */
+    private static void startCore(LaunchOptions options) {
+        ServerLog log = new ServerLog(true);
+        boolean noWindow = options.noWindow() || GraphicsEnvironment.isHeadless();
+        try {
+            int configured = PortFinder.configuredPort();
+            WebServer server = WebServer.startCore(AppEnvironment.from(options), log,
+                    configured >= 0 ? configured : PortFinder.DEFAULT_PORT, configured >= 0);
+            server.addStopListener(() -> {
+                var port = server.coreRuntime().port();
+                if (port.exitKind() == ru.cashprediction.core.app.ExitKind.HALT || port.exitKind() == ru.cashprediction.core.app.ExitKind.WEB_CRASHED)
+                    Runtime.getRuntime().halt(port.exitCode());
+                System.exit(port.exitCode());
+            });
+            Thread.setDefaultUncaughtExceptionHandler((thread, error) -> server.coreRuntime().thread().execute(
+                    () -> server.coreRuntime().controller().uncaught(thread, error)));
+            Runtime.getRuntime().addShutdownHook(new Thread(server.coreRuntime()::saveSnapshot, "cashprediction-core-shutdown"));
+            System.out.println("CashPrediction Web: " + server.browserUri());
+            if (options.testApi()) System.out.println("PARITY_URL " + server.browserUri());
+            if (!noWindow) ServerStatusWindow.show(server, log);
+            if (!options.noBrowser()) openBrowser(server, log);
+        } catch (Exception error) { fail(noWindow, UiText.get("err.startup") + ": " + error.getMessage()); }
     }
 
     /**

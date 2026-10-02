@@ -83,7 +83,7 @@ public final class GoalCalculatorForm implements FormLogic {
                 new FormRow.Field(FieldSpecs.focused(FieldSpecs.withPrompt(FieldSpecs.money("target", UiText.get("form.goal.target")), UiText.get("form.goal.target.prompt")))),
                 new FormRow.Inline(UiText.get("form.goal.deadline"), List.of(FieldSpecs.check("byDateEnabled", UiText.get("form.goal.byDate")), FieldSpecs.date("byDate", ""))),
                 new FormRow.Field(FieldSpecs.money("extraSaving", UiText.get("form.goal.extra"))),
-                new FormRow.Section(UiText.get("form.goal.result")), new FormRow.Results("results")))),
+                new FormRow.Section(UiText.get("form.goal.result")), new FormRow.Results("results", 3)))),
                 List.of(ButtonSpecs.of("saveGoal", UiText.get("button.saveGoal"), ButtonRole.LEFT),
                         ButtonSpecs.of("showExtra", UiText.get("button.showWithExtra"), ButtonRole.LEFT), ButtonSpecs.close()), "");
     }

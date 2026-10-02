@@ -2,6 +2,7 @@ package ru.cashprediction.core.ui.text;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
@@ -23,6 +24,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import ru.cashprediction.core.format.FormatWords;
 import ru.cashprediction.core.text.CoreModuleDir;
+import ru.cashprediction.core.text.JavaSourceScanner;
 import ru.cashprediction.core.text.TextKeyUsage;
 import ru.cashprediction.core.ui.command.CommandId;
 import ru.cashprediction.core.ui.token.DesignTokens;
@@ -78,7 +80,9 @@ class UiTextCatalogTest {
             TextKeyUsage.SourceSet.java("ui-fx", CoreModuleDir.resolve("../ui-fx/src/main/java/ru/cashprediction/fx/ui"), false),
             TextKeyUsage.SourceSet.java("ui-swing",
                     CoreModuleDir.resolve("../ui-swing/src/main/java/ru/cashprediction/swing/ui"), false),
-            TextKeyUsage.SourceSet.java("web", CoreModuleDir.resolve("../web/src/main/java/ru/cashprediction/web/ui"), false));
+            TextKeyUsage.SourceSet.java("web", CoreModuleDir.resolve("../web/src/main/java/ru/cashprediction/web/ui"), false),
+            new TextKeyUsage.SourceSet("web-js", CoreModuleDir.resolve("../web/src/main/resources/web/app"),
+                    JavaSourceScanner.Syntax.JAVASCRIPT, Pattern.compile("\\.texts\\s*\\[\\s*$"), false));
 
     /** Ключ: латиница, цифры, дефисы и подчёркивания, части через точку. */
     private static final Pattern KEY = Pattern.compile("[A-Za-z0-9_-]+(\\.[A-Za-z0-9_-]+)*");
@@ -230,6 +234,32 @@ class UiTextCatalogTest {
         Assumptions.assumeTrue(Boolean.getBoolean(REQUIRE_ALL_USED),
                 () -> "S0-S1: неиспользуемые ключи только сообщаются (" + unused.size() + "): " + unused);
         assertEquals(List.of(), unused, "ключи каталога, на которые нет ссылок");
+    }
+
+    /** Прямая ссылка браузера на отсутствующий ключ не скрывается за общим bootstrap-каталогом. */
+    @Test
+    void browserBracketLookupsAreChecked(@TempDir Path dir) throws IOException {
+        Files.writeString(dir.resolve("ui.js"), "const a = app.texts['offline.title']; "
+                + "const b = this.app.texts['offline.missing']; // app.texts['ignored.key']\n",
+                StandardCharsets.UTF_8);
+        var source = new TextKeyUsage.SourceSet("web-js", dir, JavaSourceScanner.Syntax.JAVASCRIPT,
+                Pattern.compile("\\.texts\\s*\\[\\s*$"), true);
+        var refs = TextKeyUsage.collect(List.of(source), UiText.keys(), Set.of(), key -> false);
+        assertEquals(Set.of("offline.title", "offline.missing"), TextKeyUsage.usedKeys(refs));
+        assertEquals(1, TextKeyUsage.missing(refs, UiText::has).size());
+        assertTrue(TextKeyUsage.missing(refs, UiText::has).getFirst().contains("offline.missing"));
+    }
+
+    /** Экраны после выхода и потери связи имеют разные смыслы и непустую русскую локализацию. */
+    @Test
+    void webTerminalAndOfflineScreensAreLocalized() {
+        assertEquals("Нет связи с сервером CashPrediction", UiText.get("offline.title"));
+        assertEquals("CashPrediction остановлен", UiText.get("offline.stopped.title"));
+        assertEquals("Сервер остановлен аварийно", UiText.get("offline.crashed.title"));
+        for (String key : List.of("offline.text", "offline.retry", "offline.stopped.text", "offline.crashed.text"))
+            assertFalse(UiText.get(key).isBlank(), key);
+        assertNotEquals(UiText.get("offline.text"), UiText.get("offline.stopped.text"));
+        assertNotEquals(UiText.get("offline.stopped.text"), UiText.get("offline.crashed.text"));
     }
 
     @Test

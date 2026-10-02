@@ -37,10 +37,19 @@ import java.util.Objects;
  * @param orientation направление группы RADIO
  * @param focusFirst  получает фокус при открытии формы; текст однострочного поля при этом выделяется целиком, чтобы
  *                    ввод заменял его (§5.6.1 быстрая правка, §6.7 сверка, §6.9 переименование)
+ * @param widthPx     заданная ширина контрола в логических пикселях; 0 оставляет ширину раскладке
  */
 public record FieldSpec(String id, FieldKind kind, String label, String prompt, String tooltip, List<Option> options,
                         long min, long max, long step, int columns, int textRows, boolean wide, String suffix,
-                        Orientation orientation, boolean focusFirst) {
+                        Orientation orientation, boolean focusFirst, int widthPx) {
+
+    /** Создаёт поле прежнего контракта без явно заданной пиксельной ширины. */
+    public FieldSpec(String id, FieldKind kind, String label, String prompt, String tooltip, List<Option> options,
+                     long min, long max, long step, int columns, int textRows, boolean wide, String suffix,
+                     Orientation orientation, boolean focusFirst) {
+        this(id, kind, label, prompt, tooltip, options, min, max, step, columns, textRows, wide, suffix,
+                orientation, focusFirst, 0);
+    }
 
     /** Проверяет поля и заменяет {@code null}. */
     public FieldSpec {
@@ -52,5 +61,6 @@ public record FieldSpec(String id, FieldKind kind, String label, String prompt, 
         options = options == null ? List.of() : List.copyOf(options);
         suffix = Objects.requireNonNullElse(suffix, "");
         orientation = orientation == null ? Orientation.HORIZONTAL : orientation;
+        if (widthPx < 0) throw new IllegalArgumentException("widthPx must be non-negative");
     }
 }

@@ -52,9 +52,10 @@ public final class QuickEditForm implements FormLogic {
     @Override
     public FormSpec spec(FormContext context) {
         var amount = FieldSpecs.focused(FieldSpecs.withTooltip(
-                FieldSpecs.withColumns(FieldSpecs.money("amount", ""), DesignTokens.QUICK_EDIT_FIELD_WIDTH), UiText.get("quick.hint")));
-        return new FormSpec("quickEdit", WindowType.QUICK_EDIT_POPUP, "", Presentation.POPUP, "", "", DesignTokens.QUICK_EDIT_FIELD_WIDTH,
-                false, false, true, List.of(new FormPage("main", List.of(new FormRow.Field(amount)))), List.of(), ButtonSpecs.OK);
+                FieldSpecs.withWidthPx(FieldSpecs.money("amount", ""), DesignTokens.QUICK_EDIT_FIELD_WIDTH), UiText.get("quick.hint")));
+        return new FormSpec("quickEdit", WindowType.QUICK_EDIT_POPUP, "", Presentation.POPUP, "", "", DesignTokens.QUICK_EDIT_POPUP_WIDTH,
+                false, false, true, List.of(new FormPage("main", List.of(new FormRow.Field(amount),
+                        new FormRow.Hint("quickHint", UiText.get("quick.hint"))))), List.of(), ButtonSpecs.OK);
     }
 
     @Override

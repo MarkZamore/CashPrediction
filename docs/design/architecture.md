@@ -278,6 +278,10 @@ public interface UiIntents {               // implemented by AppController; ever
 - All port callbacks complete on that thread. Timers re-post through `UiExecutor`.
 - Each callback fires once (an `AtomicBoolean` guard in the hosts and in `WebUiPort`).
 - Tests assert `executor.isUiThread()` at every `UiIntents` entry.
+- S3 terminal lifecycle: `AppController` decorates its supplied `UiPort`, caches the profile/executor/scheduler,
+  and prevents queued timer tasks, late chooser/alert replies and intents from calling the client after exit.
+  Renderer bootstrap and widget drivers retain their originally constructed concrete port; `controller.port()`
+  is a lifecycle boundary, not a concrete renderer to cast. Cancellation of exit leaves delivery active.
 
 ## 4. Renderers
 
@@ -403,6 +407,7 @@ POST /api/test/result, /api/test/dump                 (only with --test-api)
 - **Colours:** read from the widget and mapped back through `ColorToken.byArgb`. An unmapped colour is itself a diff.
 - **`DumpNormalizer`:** replaces `HH:mm:ss` with `<time>`, the CashMemory path with `<CashMemory>`, the registry node with `<node>`; rounds widths to 2 px.
 - **`DumpDiff`:** JSON-pointer diff. `AllowedDiffs` (`core/src/test/resources/ui-golden/allowed-diffs.json`) mirrors spec §10 exactly; each entry cites its spec section, and an entry that no longer matches fails the build.
+- **Model measurements:** `ModelDump` deliberately leaves widget boxes null, frame regions empty and button x positions at zero. Golden comparison projects only these unspecified measurements at their exact schema paths, not any text, colour, order, availability or explicit frame/window dimensions. Pairwise comparison uses the original measured dumps with the 4 px tolerance. A regression runs the entire pipeline and proves that two clients with different card positions fail even when both match the model's content.
 
 ### 6.2 Scenarios and goldens
 
@@ -450,16 +455,27 @@ POST /api/test/result, /api/test/dump                 (only with --test-api)
   - Blocking checks: background ΔE < 6 against the token at region centres, card, column and button x positions ±4 px, toolbar and status baseline ±3 px.
   - `report.html` shows the three images side by side with an onion-skin overlay for manual signoff.
 
+Dialog observations use one coordinate system: `UiDump.Window.bounds` measures the actual dialog content relative to the actual main content origin. Native OS decorations and the web `.window-title` decoration are excluded, not estimated. `DumpGeometry.relativeContent` only subtracts the measured origin; it preserves sizes, relative offsets and out-of-viewport positions. `DumpGeometryTest` proves translation invariance and that incorrect positions and sizes remain differences. `WindowState`, `WindowHandle.bounds` and the persisted recovery geometry retain their original full-window coordinates: dump comparison must never change the state being restored. Actual content sizes and positions still use the strict pairwise tolerance; no new allowance hides layout differences.
+
 ### 6.4 End-to-end tests (profile `e2e`)
 
 - **`CrashRestoreE2ETest`**, for fx and swing × registry, xml and none:
-  1. JVM 1 runs the sample, opens the rule editor, then a nested adjustment, the modeless goal calculator and quick edit; types valid and invalid values; sets chart view, period, filter, selection, `pastExpanded` and what-if; dumps `before`; then `crash` (halt 3).
+  1. JVM 1 runs the sample and configures chart view, period, filter, selection, `pastExpanded` and what-if before opening modal forms. Cover separate legal UI cohorts: modeless goal plus rule editor and nested adjustment; modeless goal plus quick edit; a wizard on a nonzero page. Type distinctive valid and invalid values, dump `before`, poll committed snapshot contents, then forcibly terminate the actual owned process tree. The cohorts preserve all required window/state coverage without attempting blocked main commands behind a modal or keeping quick edit open while opening a modal. Exercise the confirmed menu `crash` (halt 3) separately where that menu is accessible.
   2. JVM 2 runs with `--selftest-recovery` and dumps `restored`.
-  3. Windows, owners, pages, fields, bounds ±4 px, view, selection, flags and what-if must be equal.
+  3. Windows, owners, pages, fields, bounds ±4 px, view, selection, flags and what-if must be equal. Match restored windows by an explicit identity bijection and owner graph, not regenerated ids or incidental array order. Compare persisted screen bounds and actual raw widget bounds separately; normalized content-relative dump boxes are not persisted screen geometry. Preview selection intentionally resets and is asserted separately.
   4. The registry node is corrupted before the XML run, to prove the stores are independent.
-  5. `none` must clear both stores.
+  5. `none` must clear the previous payload in both stores; later startup may create new markers/snapshots. Assert no old sentinel fields, windows, dirty plan or what-if survive, rather than requiring stores to remain absent forever.
 - **Web:** kill the server JVM, restart it on the same CashMemory, the page reconnects, choose restore, compare. A tab reload mid-form must re-render the form with its values.
 - **Also:** `AlreadyRunningE2ETest`, `UnsavedPlanRestoreE2ETest` (`RECORDER_NOT_STARTED` loop), and `PortableExeE2ETest` (`-Pdist,e2e`: the three exes run `--selftest s02-sample-table` against the golden and do one crash/restore each; afterwards the folder contains only CashMemory).
+
+S4 preparation found that Web currently generates a new token after server
+restart while the old page retains its old token. Recovery using a newly opened
+authenticated URL does not prove the preceding original-page reconnect
+requirement. Keep that original-page case explicit; do not inject a fresh token
+through the test harness to make it pass. Preserve first-launch logs before a
+same-home relaunch, validate the exact pre-crash successful journal prefix
+(intentional crash has no DONE), and retain process/registry cleanup guards for
+every cohort and for two actual competing application instances.
 
 ### 6.5 Test layout by profile
 
@@ -533,3 +549,266 @@ text retain exact versions; a dedicated test guards this scope.
 explicitly skipped at this checkpoint: S2 model goldens and fake-driver tests do not establish
 visual or behavioural parity of JavaFX, Swing and Web. Those blocking checks belong to S3-S4;
 portable recovery, performance and release sign-off remain S5-S6. S7 must not begin before S6.
+
+### S4 reconnect implementation constraints (preparation only)
+
+The original Web document retains its previous API token and effect cursor after
+server restart. Both must be replaced through an authenticated reconnect and a
+fresh bootstrap before event polling resumes; changing only the token is not
+sufficient. No test may inject a new token or navigate to a new authenticated
+URL and call that original-page recovery. Keep the ordinary token random per
+startup, retain Host checks, reject foreign Origin and avoid CORS relaxation.
+A possible separate, per-CashMemory reconnect credential needs a documented
+lifetime, atomic/concurrent creation, malformed-file fail-closed behaviour and
+strict header-only authentication before adoption. It must not appear in logs,
+diagnostics or source archives. Do not automatically replay uncertain or queued
+intents across restart. Reconnect must be single-flight, invalidate stale
+responses and resync the existing document, including the recovery overlay.
+The server-restart E2E must retain the same tab on the same port/origin; an
+intentional application stop is not a transient network failure.
+These are pending S4 requirements, not implemented or verified behaviour.
+
+### S3 menu-shortcut regression checkpoint (2026-10-02 21:35)
+
+The 21:33 repeat of the complete matrix failed on Web s15: with the observer
+no longer closing menus, Ctrl+I from the open context menu was ignored by the
+production keyboard bridge. The previous dump cleanup had masked this real
+keyboard defect. `keys.js` now lets declared global shortcuts reach the core
+and closes menus as part of handling the shortcut, not as part of observation;
+navigation keys still pass through `Menus.navigate`. The actual Edge menu
+fixture checks exactly one Ctrl+I intent from the retained menu. The separate
+production-server `WebContextShotIT` executed at 21:35:41 with one test and zero
+failures/errors/skips. It proves raw menu content, retained DOM/focus and PNG
+paint by comparison with a control screenshot hiding that same menu. Logs:
+`ui-parity/target/s3-context-shot-production-regression.log` and
+`web/target/s3-menu-shortcuts-build.log`. The failed full matrix is retained in
+`ui-parity/target/s3-context-shot-full-matrix.log`; fresh keyboard/full gates are
+required before S3 sign-off. Source-archive fixture validation also passed:
+33 extracted files, with `ui-parity/docs` excluded from demonstration delivery.
+At 21:41 the full source-tree packaging validation also passed: 1370 files were
+packed, archive-tested and extracted in an isolated temporary directory, with
+agent files and developer documents excluded except this architecture resource.
+`dist/target/s3-source-pack-validation.log` retains the result. This run did not
+build the extracted sources (`VerifyBuild=False`) and is not the final S6/S7
+source archive or portable application delivery.
+
+### S3 context-shot observation checkpoint (2026-10-02 21:22)
+
+Independent audit found that the Web DOM dump closed menus after recording them,
+so a following screenshot could contradict its raw JSON. The observer no longer
+closes or removes menus. The real Edge menu fixture now checks the same connected
+context-menu node, focus, exact bounds and restored table scroll before PNG and
+after repeated observation. Actual fixture output is
+`cp-context-shot-5d0ea7bd-7bdf-40d1-9f9c-53efa4f264a6` in the developer temporary
+directory; `context-shot.raw.json` and `context-shot.png` retain the open menu.
+This is renderer-fixture evidence, not a substitute for the complete product
+scenario matrix. Full default reactor install passed at 21:22:40, recorded in
+`core/target/s3-context-shot-reactor-install.log`. The full matrix must be repeated
+because this changes observation lifecycle; S3 is not yet signed off.
+
+### S3 verification checkpoint (2026-10-02)
+
+The renderers now use a shared content-centering rule: fresh modal and modeless dialogs
+are centered on the measured content of their owner, including nested dialogs. Native
+window chrome is compensated by each renderer. Saved RAW bounds are restored without
+recentering. Model dumps never claim measured widget geometry; real client dumps do.
+
+`FormRow.Results.minLines` is a shared layout contract. The goal calculator reserves three
+actual BASE-font lines even while input is invalid; additional or wrapped results grow
+the content. Clients must not create placeholder result lines to achieve this reservation.
+
+The real JavaFX/Swing/Web matrix for `s05-forms-plan` and `s06-forms-ops` passed on this
+checkpoint with zero differences and unchanged four-pixel geometry tolerance. The full
+18-scenario matrix remains a separate gate, not implied by the two-scenario result.
+The real headless Chrome hotkey matrix passed all 55 cases; this does not prove the
+desktop hotkey matrix. Computed widget-font tests supplement, but do not replace,
+screenshots or verification of glyph fallback. S3 is not yet signed off.
+
+Source delivery must exclude agent files, portable binaries and developer documents
+other than this architecture document, while preserving all application and test
+resources. Portable-folder exclusions apply only at the repository root: the Java
+package `ru/cashprediction` must never be excluded by name. Packing requires a stable
+source tree and a separate successful build of the extracted archive. The repository's
+default reactor and CI require `repository-doc-audits`. Delivery excludes that
+repository-only module and removes only its module entry from the staged root POM;
+application modules, runtime and test resources, and test profiles remain unchanged.
+Delivery also excludes `.github/workflows`, whose repository audits and release checks
+require excluded developer documents and CHANGELOG. It preserves `.github/scripts`,
+including `Test-Portable.ps1` and `GhRetry.ps1`. The delivered source tree is for local
+builds, not repository CI or release publication; its `mvn -B install` must run the
+full delivered default-profile reactor tests, without suppressing application tests
+because repository documents are absent. Explicitly gated native UI tests still require
+their real-client profiles and are not counted as passed by the default build.
+Extracted-build verification remains a
+delivery gate and does not establish S6/S7 completion.
+
+The next S3 core checkpoint separates character width (`FieldSpec.columns`) from explicit
+logical-pixel width (`FieldSpec.widthPx`). Zero keeps automatic layout and is omitted from
+JSON; the compatible constructor and every copying helper preserve the contract. Quick
+edit declares a 140-pixel control and a shared `quickHint` row, rather than 140 characters.
+The popup itself has a separate shared content width of 320 logical pixels through
+`FormSpec.width`, including padding, so each renderer wraps messages within the same
+container without shrinking the amount control. Logical RADIO-fragment merging retains
+the explicit width as well. The subsequent core installation passed 1,927 tests at 16:58
+(UTC+5); this is a core checkpoint, not proof of final native popup geometry.
+Core installation passed 1,925 tests on 2026-10-02 at 16:50 (UTC+5), including atomic
+context-target selection in all three profiles. The reviewed golden changes were limited
+to twelve expired-status texts in S04/S08 and the newly visible hint in S12. These core
+checks do not constitute a successful full real-client matrix; renderer verification
+and the outstanding allowance-coverage probes are still required.
+
+At the 2026-10-02 17:58 (UTC+5) checkpoint the default reactor installation passed:
+core 1,929 tests, Swing 82, Web 62, repository-document audits 6, and JavaFX 35
+executed tests with 56 explicitly gated native checks. The fresh four-scenario
+real-client matrix (S01/S08/S10/S12) reported only 46 placeholder-button x differences,
+all between two and four pixels. `DumpDiff` had applied the prescribed four-pixel
+button tolerance to ordinary buttons but not to the exact
+`/table/placeholderButtons/<id>/x` schema path. Its correction retains strict model
+comparison, rejects differences over four pixels, and never masks button text,
+availability or similarly named data outside that path; a regression covers these
+boundaries. This checkpoint is not a successful rerun of the complete 18-scenario
+matrix, visual review, desktop hotkeys or mandatory-class census. S3 remains open.
+
+At the 2026-10-02 19:28 (UTC+5) checkpoint, the core-only installation passed
+1,937 tests with no failures or skips. Sparkline captions now have shared layout
+tokens: header line 20 px (14 px bold font), explanation line 15 px (11 px font),
+footer line 14 px (10 px font), and zero inter-block gap. Popup height is derived
+from actual wrapped lines, graph and border, never a fixed sample-specific height.
+The specification copies are identical; six repository-document audits passed.
+Fresh Swing S02/S03 captures completed with all commands OK/DONE and zero content
+differences, including the actual 258 x 142 sparkline. Empty or single-point
+sparklines use the same no-data caption branch as JavaFX and Web, without a
+reserved empty graph. The performance harness now checks production rendering,
+expected row identities/content/visibility and real tooltip registration; its
+latest live timing verification is still pending. These focused checks do not
+replace the complete real-client parity, hotkey, visual or class-census gates.
+
+The subsequent full default installation at 19:32 (UTC+5) passed core 1,937,
+Swing 88, Web 62 and document-audit 6 tests; JavaFX executed 35 with 63 explicitly
+gated checks. Fresh Web keyboard evidence contains all 55 cases, zero skips and
+55 complete actual command journals. Its full browser fixture also passed narrow
+page/toolbar checks. The strengthened virtual-table gate passed 18 cold samples
+(six viewport/scroll combinations repeated three times), 8.0-26.2 ms against the
+strict 50 ms budget. It verifies ordered row identities, cell content/visibility,
+real production tooltip registration, and rejects missing-row, wrong-text, eager
+and slow-render mutations. This is UI virtualization evidence with a synthetic
+paged backend, not domain forecasting or hardware-independent timing proof.
+Fresh supplemental observations passed two desktop and nine Web cases. The
+complete 18-by-three parity run started afterwards; no full-matrix result is
+claimed by this checkpoint.
+
+At 19:48 (UTC+5), the subsequent complete real-widget matrix passed all 18
+scenarios for JavaFX, Swing and Web. Its report contains 108 ordinary comparisons
+and 12 supplemental comparisons, zero rejected differences and zero unused
+allowances. JUnit reports one executed matrix test, zero failures/errors/skips;
+the 54 underlying launches are validated by the collector's complete command
+journals and dump schemas. The report is preserved as
+`ui-parity/target/parity/report-full-green-20261002-194816.html`.
+S3 is still open pending the independent complete class-census, desktop-hotkey,
+visual and legacy-launch checks; this matrix is not a crash E2E or release sign-off.
+
+The independent full JavaFX class-census gate subsequently passed: one executed
+JUnit test, no failures/errors/skips/aborts, 18 complete scenarios plus the
+DirectoryChooser probe, 127 dumps and 19 complete ordered command journals.
+All 23 required classes had positive instance-registration counts. The offline
+audit verified 175 artifact hashes and 130 frozen input hashes; FX/core and all
+three OpenJFX jars were frozen together. Counts are cumulative registrations,
+not unique simultaneously visible objects; the directory probe verifies native
+class creation/request/cancellation, not manual operation of the OS picker.
+This census does not establish glyph rendering or visual equivalence.
+The old Web launch also passed an isolated HTTP startup smoke against its
+original `app.js` page; it is retained only until the S4 legacy removal.
+
+The complete desktop hotkey gates also passed independently: JavaFX 83/83 and
+Swing 83/83 actual tests, each with 522 successful commands and 83 completed
+journals, no skips, aborts or failures. Both isolated legacy startup/exit guards
+passed without changing real session registry nodes. The Web gate passed 55/55.
+The real four-scenario, three-client visual gate remains a separate requirement.
+
+Read-only S7 preparation identified an unresolved recovery-entry-point risk:
+moving root launchers, app configs or runtime into Backup before publishing Ready
+can leave no executable path to Java pre-start recovery after helper termination
+or power loss. A journal alone does not solve that bootstrapping problem.
+LANMinecraft's single-file File.Replace is not proof of atomic replacement of a
+multi-file jpackage image. Before S7 implementation, specify and fault-test an
+independent recovery entry point and a shared install/start admission barrier.
+This is a future protocol finding, not a reproduced current-product defect;
+no updater implementation or distribution-layout decision has been made.
+
+At 20:34 (UTC+5), the real visual gate executed all four required checkpoints
+across all three clients (12 PNG captures, three JUnit tests, no skips). It failed
+with eight Swing checks: toolbar color deltaE 15.485 in every checkpoint and
+save-button measured bounds x=1114, width=88 extending beyond the 1200px viewport.
+The original report is retained at
+`ui-parity/target/parity/visual-b7775e02-43b1-4287-89b9-b42d5c15509a/report.html`.
+Manual inspection also observed a clipped Swing plan-balance field label.
+These findings are under renderer/capture audit; neither tolerances nor goldens
+have been relaxed. S3 remains open pending correction and a fresh actual gate.
+At 20:37, the verifier's 21 synthetic regressions and nine actual-evidence
+regressions all passed without skips. The latter read the new Web settings and
+delete-rule PNG/JSON pairs and reject corrupted measurements in memory. These
+30 tests validate checker guards, not the still-failing Swing visual gate.
+
+The corrected visual collector now requires a separate Shot `<step>.raw.json`:
+desktop SelfTestRunner records the actual driver dump immediately before PNG,
+and the authenticated Web shot upload carries the actual DOM dump with the PNG.
+Raw geometry is never substituted by a normalized parity file; ordinary `.json`
+golden comparison remains unchanged. A regression proves the edge 1113+87=1200
+stays exact while the independently rounded parity numbers are 1114 and 88.
+The next actual capture exposed an additional raw card-height difference
+(FX 67px, Swing 72px), previously hidden by two-pixel rounding. This is being
+corrected in the renderer, not masked by changing tolerances.
+The FX capture composites scene pixels and excludes native OS decoration;
+Swing Robot includes the native dialog frame. That capture asymmetry does not
+prove a missing FX window title, which exists on the actual Dialog and in dumps.
+Focus/field-border/default-button styles and caption punctuation require their
+own token/content audit; the limited region checker does not prove those parts.
+
+At 20:56, the shared card line-height contract was made explicit in §5.1:
+title/value/caption 15/22/15px with 3px gaps. All adapters consume it; card total
+height is derived from actual rows, padding and border. The CSS exports and
+individual Java constants have propagation regressions. FX and Web now display
+the required caption separator, while the existing semantic field-label dump
+contract (without its visual colon) matches Swing. FX field/focus/default-button
+colors now use the shared tokens instead of unmodified Modena defaults.
+The complete reactor passed: core 1942, Swing 93, Web 62, document audits six;
+FX 107 includes 68 opt-in native skips. A separate explicit fx.styleProof run
+executed all nine tests without skips, including five computed CSS/pixel checks
+in hidden Scenes. That proves widget paint, not OS keyboard-focus transfer.
+A fresh four-checkpoint visual matrix is running; no successful visual or S3
+sign-off is claimed by this checkpoint.
+
+At 21:01, the corrected actual visual matrix passed: 12 real PNG/raw-JSON pairs,
+four required scenarios across all three clients, three executed JUnit tests,
+zero failures/errors/skips. The retained report has an empty failure list:
+`ui-parity/target/parity/visual-90b78d82-e8a8-4912-8caa-b2b0827d89b3/report.html`.
+Raw measurements exposed the remaining FX summary padding (8px versus 6px
+vertical) and top-aligned status text; both were corrected in the real renderer.
+This limited visual success is not the all-scenario/DPI S5-S6 sign-off. A final
+reactor install followed by a fresh complete 18-by-three parity run is required
+after these source changes before the S3 commit.
+Manual inspection of the three actual chart PNGs confirmed matching forecast
+curves, event dots, goal/cushion/today lines and readable Cyrillic axis labels.
+It also leaves explicit S5 polish items: the desktop beyond-horizon card value
+ellipsizes while Web fits it, Swing form default-button paint differs from the
+accent treatment, and native radio/field chrome still needs the stipulated
+theme/focus audit. The limited S3 visual checker does not cover these paint or
+text-fit details; they must not disappear from the S5/S6 sign-off checklist.
+
+### S3 local sign-off (2026-10-02 21:49)
+
+After the observer and open-menu shortcut fixes, the complete 18-scenario,
+three-client matrix passed at 21:49:21: 54 actual launches, 120 comparisons
+(108 scenario comparisons and 12 scoped supplemental evidence comparisons),
+zero failures, zero unused allowances and zero collection errors. The report
+audit is `ui-parity/target/s3-final-menu-matrix-audit.json`; HTML SHA-256 is
+`3ba71e57053fb4d10bddbed77d7ff1de7b2f99b3df47882d02e027d72ab583f1`.
+The log is `ui-parity/target/s3-menu-shortcuts-full-matrix.log`. This supersedes
+the failed 21:33 run without deleting that failure evidence. The targeted
+three-client keyboard matrix and production Web context-shot regression also
+passed without skips; the default reactor passed at 21:38:19. Earlier mandatory
+class census, full hotkey and four-checkpoint raw visual evidence is scoped in
+the preceding checkpoints. Source packaging was tested, not delivered.
+S3 is locally verified for its renderer scope; remote CI remains a separate
+commit gate. S4 crash/relaunch, default flip and legacy deletion, S5 UX/DPI and
+portable gates, S6 clean release audit and S7 updater remain unfinished.

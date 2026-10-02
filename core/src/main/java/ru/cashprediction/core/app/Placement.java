@@ -10,8 +10,8 @@ import ru.cashprediction.core.session.WindowState;
  * <p>Правила для клиента: если {@link #bounds()} заданы и окно в них видно на каком-либо экране — поставить окно
  * туда (восстановление после сбоя); иначе, если задан {@link #anchor()}, — под ячейкой таблицы (быстрая правка;
  * если строка не видна, центр главного окна со смещением -150/-50); иначе — по центру над владельцем, по размеру
- * содержимого, не уже ширины формы и в пределах видимой области экрана. Web: немодальное окно — у правого края,
- * y = 96.</p>
+ * содержимого, не уже ширины формы и в пределах видимой области экрана. Все три клиента центрируют содержимое
+ * нового окна относительно содержимого владельца, исключая платформенную рамку и полосу заголовка.</p>
  *
  * @param ownerId id владельца: {@link WindowState#MAIN_OWNER} или id родительского окна
  * @param bounds  границы из снимка или {@code null}
@@ -46,6 +46,27 @@ public record Placement(String ownerId, WindowBounds bounds, Anchor anchor) {
      */
     public static Placement centered(String ownerId) {
         return new Placement(ownerId, null, null);
+    }
+
+    /**
+     * Вычисляет одинаковое положение содержимого нового окна для всех клиентов.
+     * Клиент измеряет реальные области владельца и диалога, затем переносит внешнее окно с учётом рамки.
+     * Сохранённые RAW-границы восстановления этот метод не преобразует; ограничение экраном выполняет клиент.
+     *
+     * @param ownerContent измеренная область содержимого владельца в экранных координатах
+     * @param contentWidth измеренная ширина содержимого нового окна
+     * @param contentHeight измеренная высота содержимого нового окна
+     * @return требуемая экранная область содержимого нового окна
+     */
+    public static WindowBounds centerContent(WindowBounds ownerContent, double contentWidth, double contentHeight) {
+        Objects.requireNonNull(ownerContent, "ownerContent");
+        if (!Double.isFinite(ownerContent.x()) || !Double.isFinite(ownerContent.y())
+                || !Double.isFinite(ownerContent.width()) || !Double.isFinite(ownerContent.height())
+                || ownerContent.width() <= 0 || ownerContent.height() <= 0
+                || !Double.isFinite(contentWidth) || !Double.isFinite(contentHeight)
+                || contentWidth <= 0 || contentHeight <= 0) throw new IllegalArgumentException("content geometry");
+        return new WindowBounds(ownerContent.x() + (ownerContent.width() - contentWidth) / 2,
+                ownerContent.y() + (ownerContent.height() - contentHeight) / 2, contentWidth, contentHeight);
     }
 
     /**

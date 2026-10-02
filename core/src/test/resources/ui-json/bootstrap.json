@@ -2792,6 +2792,13 @@
   "texts": {
     "calendar.button.tip": "Выбрать дату в календаре",
     "details.hide": "Скрыть подробности ▾",
-    "details.show": "Подробности ▸"
+    "details.show": "Подробности ▸",
+    "offline.crashed.text": "При следующем запуске CashPrediction Web предложит восстановить сеанс.",
+    "offline.crashed.title": "Сервер остановлен аварийно",
+    "offline.retry": "Повторить",
+    "offline.stopped.text": "Настройки сохранены, сеанс завершён корректно. Вкладку можно закрыть.",
+    "offline.stopped.title": "CashPrediction остановлен",
+    "offline.text": "Сервер остановлен или перезапускается. Если CashPrediction Web запущен заново, откройте адрес из его окна.",
+    "offline.title": "Нет связи с сервером CashPrediction"
   }
 }

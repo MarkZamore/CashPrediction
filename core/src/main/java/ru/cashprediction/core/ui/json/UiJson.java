@@ -113,6 +113,9 @@ public final class UiJson {
         }
         try {
             for (RecordComponent component : type.getRecordComponents()) {
+                // Необязательная ширина не меняет прежний JSON обычных полей.
+                if (value instanceof ru.cashprediction.core.ui.form.FieldSpec field
+                        && component.getName().equals("widthPx") && field.widthPx() == 0) continue;
                 if (result.containsKey(component.getName())) throw new IllegalArgumentException("discriminator collision");
                 result.put(component.getName(), toTree(component.getAccessor().invoke(value)));
             }
@@ -159,13 +162,19 @@ public final class UiJson {
                 }
                 yield object("revision", screen.model().revision(), "parts", parts);
             }
-            case WebEffect.FormOpen open -> object("window", object("id", open.windowId(), "ownerId", open.ownerId(),
-                    "modal", open.modal(), "placement", open.placement(), "spec", open.spec(), "view", open.view()));
+            case WebEffect.FormOpen open -> {
+                var window = new LinkedHashMap<>(object("id", open.windowId(), "ownerId", open.ownerId(), "modal", open.modal(),
+                        "placement", open.placement(), "spec", open.spec(), "view", open.view()));
+                if (open.chooserRequest() != null) window.put("chooserRequest", toTree(open.chooserRequest()));
+                yield object("window", window);
+            }
             case WebEffect.FormViewUpdate update -> object("windowId", update.windowId(), "view", update.view(),
                     "echoOf", object("tab", update.echoTab(), "clientRev", update.echoClientRev()));
             case WebEffect.FormClose close -> object("windowId", close.windowId());
             case WebEffect.FormFront front -> object("windowId", front.windowId());
-            case WebEffect.AlertOpen open -> object("alertId", open.alertId(), "spec", open.spec());
+            case WebEffect.AlertOpen open -> open.placement() == null
+                    ? object("alertId", open.alertId(), "spec", open.spec())
+                    : object("alertId", open.alertId(), "spec", open.spec(), "placement", open.placement());
             case WebEffect.AlertUpdate update -> object("alertId", update.alertId(), "spec", update.spec());
             case WebEffect.AlertClose close -> object("alertId", close.alertId());
             case WebEffect.ContextMenu menu -> object("tab", menu.tab(), "target", menu.target(), "items", menu.items());

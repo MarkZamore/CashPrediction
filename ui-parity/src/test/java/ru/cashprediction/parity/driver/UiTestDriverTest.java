@@ -42,6 +42,39 @@ class UiTestDriverTest {
         assertThrows(IllegalArgumentException.class, () -> bridge.accept(effect));
         assertEquals(1, messages.size());
     }
+
+    /** Дамп отправляется прежде result, а сбой его доставки исключает успешное подтверждение. */
+    @Test void dumpBeforeResultAndTransportFailure() throws Exception {
+        var api = new UnsupportedApi() {
+            /** Очередь синтетического порта пуста. */
+            @Override public void awaitIdle(Duration timeout) { }
+            /** Возвращает синтетический дамп для проверки транспорта, не для паритета интерфейсов. */
+            @Override public UiDump dump(String step) {
+                return new UiDump(1, "web", "test-api", step, null, List.of(), null, null, null, null,
+                        List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), Map.of(), Map.of());
+            }
+        };
+        List<String> routes = new ArrayList<>();
+        var driver = new UiTestDriver(ClientKind.WEB, api);
+        var bridge = new TestApiBridge(driver, (route, body) -> routes.add(route));
+        bridge.accept(Map.of("type", "test.step", "n", 1, "command", "dump sample"));
+        assertEquals(List.of("/api/test/dump", "/api/test/result"), routes);
+        routes.clear();
+        var broken = new TestApiBridge(driver, (route, body) -> { routes.add(route); throw new IOException("offline"); });
+        assertThrows(IOException.class, () -> broken.accept(Map.of("type", "test.step", "n", 1, "command", "dump sample")));
+        assertEquals(List.of("/api/test/dump"), routes);
+    }
+
+    /** Неверный текст шага подтверждается FAIL; пустая или многострочная команда не считается выполненной. */
+    @Test void rejectsMalformedCommandAsFailure() throws Exception {
+        List<Map<String, Object>> replies = new ArrayList<>();
+        var bridge = new TestApiBridge(new UiTestDriver(ClientKind.WEB, new UnsupportedApi()),
+                (route, body) -> replies.add(body));
+        bridge.accept(Map.of("type", "test.step", "n", 1, "command", "sample\nsample"));
+        bridge.accept(Map.of("type", "test.step", "n", 2, "command", "unknown"));
+        assertEquals(2, replies.size());
+        assertTrue(replies.stream().allMatch(body -> Boolean.FALSE.equals(body.get("ok"))));
+    }
     /** Ошибка транспорта не маскируется подтверждением выполнения. */
     @Test void bridgeTransportFailurePropagates() {
         var bridge = new TestApiBridge(new UiTestDriver(ClientKind.WEB, new UnsupportedApi()),

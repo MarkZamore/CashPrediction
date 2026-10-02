@@ -6,9 +6,21 @@ import javax.imageio.ImageIO;
 import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
 import ru.cashprediction.core.ui.dump.UiDump;
+import org.junit.jupiter.api.Assumptions;
+import ru.cashprediction.parity.check.visual.*;
+import ru.cashprediction.parity.launch.ReactorLayout;
+import ru.cashprediction.parity.pipeline.ParityPipeline;
 
-/** Проверяет геометрию и ΔE на синтетических PNG; настоящие изображения подключаются в S3. */
+/** Проверяет реальные снимки S3 при двух явных флагах и сохраняет синтетические проверки измерений. */
 class VisualParityTest {
+    /** Проверяет выбранные реальные клиенты и контрольные точки с независимым отчётом. */
+    @Test void realScreenshots() throws Exception {
+        Assumptions.assumeTrue(VisualPlan.enabled(System.getProperties()), "Enable parity.visual=true and parity.realClients=true");
+        var clients = ParityPipeline.clients(System.getProperty("parity.clients", "fx,swing,web"));
+        var checkpoints = VisualPlan.checkpoints(System.getProperty("parity.visual.scenarios", ""),
+                System.getProperty("parity.visual.checkpoints", "first"));
+        VisualSuite.run(ReactorLayout.fromSystemProperties(), clients, checkpoints).requireSuccess();
+    }
     /** Проверяет строгий цветовой предел и чтение центра PNG. */
     @Test void syntheticPngColors() throws Exception {
         BufferedImage image = new BufferedImage(8, 8, BufferedImage.TYPE_INT_RGB);

@@ -39,6 +39,7 @@ public final class RecoveryFlow {
 
     private final FlowContext context;
     private boolean fatalAlertOpen;
+    private boolean clientAlertOpen;
 
     /**
      * Создаёт поток.
@@ -170,6 +171,47 @@ public final class RecoveryFlow {
             alertError.printStackTrace(System.err);
             context.port().exit(ExitKind.HALT, 2);
         }
+    }
+
+    /**
+     * Обрабатывает только ошибку JavaScript страницы, сохраняя сервер и запись сеанса (§6.33).
+     * Повторы объединяются до ответа; после continue или reload следующая ошибка снова может открыть сообщение.
+     *
+     * @param message исходное сообщение JavaScript
+     * @param stack исходные подробности JavaScript без добавления стека серверной JVM
+     */
+    public void clientError(String message, String stack) {
+        Objects.requireNonNull(message, "message");
+        Objects.requireNonNull(stack, "stack");
+        if (context.port().profile().kind() != ClientKind.WEB) throw new IllegalStateException("clientError requires WEB");
+        if (clientAlertOpen || fatalAlertOpen) {
+            System.err.println(message);
+            System.err.println(stack);
+            return;
+        }
+        clientAlertOpen = true;
+        try {
+            if (context.recorder() != null) context.recorder().saveNow();
+        } catch (Throwable saveError) {
+            // Ошибка записи не превращает сбой вкладки в завершение серверной JVM.
+            saveError.printStackTrace(System.err);
+        }
+        // JavaFX: Alert → Swing: JOptionPane → Web: dialog.
+        AlertSpec base = AlertCatalog.uncaught(new IllegalStateException(message), true);
+        // JavaFX: Alert → Swing: JOptionPane → Web: dialog.
+        AlertSpec spec = new AlertSpec(base.kind(), base.purpose(), base.targetId(), UiText.get("alert.uncaught.title"), base.glyph(),
+                UiText.get("s2.recovery.uncaughtHeader"), message, stack, false, base.minWidth(), base.buttons(),
+                base.defaultButtonId(), false);
+        boolean[] answered = {false};
+        try {
+            // JavaFX: Alert → Swing: JOptionPane → Web: dialog.
+            context.showAlert(spec, button -> {
+                if (answered[0] || !("reloadPage".equals(button) || "continueWork".equals(button))) return;
+                answered[0] = true;
+                clientAlertOpen = false;
+                if ("reloadPage".equals(button)) context.port().reloadPage();
+            });
+        } catch (RuntimeException error) { clientAlertOpen = false; throw error; }
     }
 
     /** Проверяет, что запись действительно работает, включая ожидание сохранения исходного плана. */

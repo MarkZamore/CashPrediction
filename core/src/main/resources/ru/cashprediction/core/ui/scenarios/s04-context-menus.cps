@@ -1,6 +1,8 @@
 today 2026-09-13
 key Esc
 sample
+# Временное сообщение открытия примера не должно зависеть от скорости нативных меню.
+wait 10001
 context row:r1@2026-10-05
 dump rule-context
 context row:start

@@ -133,7 +133,9 @@ public final class EdgeLauncher {
         for (int attempt = 0; attempt < 2; attempt++) {
             int windowWidth = width + inset[0];
             int windowHeight = height + inset[1];
-            BrowserSession session = start(browser, userDataDir, windowWidth, windowHeight, url, timeout);
+            // Калибровка не должна открывать приложение: первый bootstrap уже запускает самотест,
+            // и перезапуск Edge иначе бросит его вкладку вместе с ожидающим test.step.
+            BrowserSession session = start(browser, userDataDir, windowWidth, windowHeight, "about:blank", timeout);
             long[] viewport;
             try {
                 viewport = measureViewport(session, timeout);
@@ -144,6 +146,12 @@ public final class EdgeLauncher {
             session.sized(windowWidth, windowHeight, (int) viewport[0], (int) viewport[1]);
             if (viewport[0] == width && viewport[1] == height) {
                 FRAME_INSETS.put(browser.toAbsolutePath().normalize(), inset);
+                try (CdpClient cdp = CdpClient.connectToFirstPage(session.port(), timeout)) {
+                    cdp.navigate(url);
+                } catch (RuntimeException error) {
+                    session.closeQuietly();
+                    throw error;
+                }
                 return session;
             }
             // Рамка = окно − окно просмотра; следующий запуск добавит её к нужному размеру.
@@ -189,7 +197,9 @@ public final class EdgeLauncher {
                                        Duration timeout) {
         Path profile = userDataDir.toAbsolutePath().normalize();
         try {
-            Dirs.deleteRecursively(profile);
+            // Повторный запуск для поправки viewport происходит сразу после закрытия
+            // Edge: Windows и антивирус могут ещё держать файлы отдельного профиля.
+            ProfileCleanup.delete(profile);
             Files.createDirectories(profile);
         } catch (IOException e) {
             throw new UncheckedIOException("Cannot prepare browser profile " + profile + ": " + e.getMessage(), e);

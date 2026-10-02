@@ -13,6 +13,9 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import ru.cashprediction.core.app.AppEnvironment;
+import ru.cashprediction.web.ui.CoreWebRuntime;
+import ru.cashprediction.web.ui.UiApi;
 
 /**
  * Встроенный HTTP-сервер web-клиента: статика из ресурсов jar ({@link StaticHandler}) и JSON API ({@link ApiHandler}).
@@ -29,9 +32,10 @@ public final class WebServer {
     public static final String HOST = "127.0.0.1";
 
     private final ServerState state;
+    private CoreWebRuntime core;
     private final ServerLog log;
     private final HttpServer http;
-    private final ExecutorService executor;
+    private ExecutorService executor;
     private final String token;
     private final AtomicBoolean stopped = new AtomicBoolean();
     private final List<Runnable> stopListeners = new CopyOnWriteArrayList<>();
@@ -69,6 +73,44 @@ public final class WebServer {
         return server;
     }
 
+    /** Запускает новый интерфейс отдельно от прежнего состояния и его рекордера. */
+    public static WebServer startCore(AppEnvironment environment, ServerLog log, int preferred, boolean strict) throws Exception {
+        HttpServer http = PortFinder.bind(InetAddress.getByName(HOST), preferred, strict, log);
+        WebServer server = new WebServer(null, log, http, newToken());
+        // Long-poll каждой вкладки не занимает один из четырёх рабочих потоков прежнего API.
+        try {
+            server.core = new CoreWebRuntime(environment);
+            server.core.port().onExit((kind, code) -> {
+                // Короткое ограниченное ожидание позволяет отправить ответ intent и последний long-poll.
+                Thread shutdown = new Thread(() -> {
+                    try {
+                        if (server.core.tests() != null && server.core.tests().hasScript())
+                            server.core.tests().completion().get(5, java.util.concurrent.TimeUnit.SECONDS);
+                    } catch (InterruptedException error) { Thread.currentThread().interrupt(); }
+                    catch (java.util.concurrent.ExecutionException | java.util.concurrent.TimeoutException error) { /* Остановка ограничена по времени. */ }
+                    // completion завершается внутри последнего POST: ответу нужен тот же короткий запас,
+                    // что и обычному intent выхода, иначе stop(0) может оборвать подтверждение результата.
+                    try { Thread.sleep(500); }
+                    catch (InterruptedException error) { Thread.currentThread().interrupt(); }
+                    server.stop();
+                }, "cashprediction-web-exit");
+                shutdown.setDaemon(true); shutdown.start();
+            });
+            UiApi api = new UiApi(server.core.thread(), server.core.controller(), server.core.port(), server.core.effects(),
+                    server.token, server::port, server.core.tests());
+            http.createContext("/api/", api);
+            http.createContext("/", new StaticHandler(log));
+            server.executor.shutdownNow();
+            server.executor = Executors.newVirtualThreadPerTaskExecutor();
+            http.setExecutor(server.executor);
+            server.core.start(); http.start();
+            return server;
+        } catch (Exception error) { server.stop(); throw error; }
+    }
+
+    /** Возвращает инфраструктуру core-интерфейса либо null в прежнем режиме. */
+    public CoreWebRuntime coreRuntime() { return core; }
+
     /** Регистрирует маршруты и контексты. */
     private void configure() {
         PlanFileCommands files = new PlanFileCommands(state);
@@ -100,7 +142,7 @@ public final class WebServer {
 
     /** @return адрес страницы с токеном для открытия в браузере */
     public URI browserUri() {
-        return URI.create("http://" + HOST + ":" + port() + "/?t=" + token);
+        return URI.create("http://" + HOST + ":" + port() + (core == null ? "/?t=" : "/app.html?t=") + token);
     }
 
     /**
@@ -119,7 +161,7 @@ public final class WebServer {
         if (!stopped.compareAndSet(false, true)) {
             return;
         }
-        state.shutdownClean();
+        if (core != null) core.close(); else if (state != null) state.shutdownClean();
         http.stop(0);
         executor.shutdownNow();
         for (Runnable listener : stopListeners) {
@@ -141,13 +183,20 @@ public final class WebServer {
         if (!stopped.compareAndSet(false, true)) {
             return;
         }
-        state.abandon();
+        if (core != null) {
+            core.thread().submit(() -> { core.port().exit(ru.cashprediction.core.app.ExitKind.WEB_CRASHED, 3); return null; }).join();
+            core.close();
+        } else state.abandon();
         http.stop(0);
         executor.shutdownNow();
     }
 
     /** Корректная остановка и завершение процесса (команда «Выход» из браузера или окна статуса). */
     public void shutdownAndExit() {
+        if (core != null) {
+            core.thread().execute(core.controller()::closeMainRequested);
+            return;
+        }
         stop();
         System.exit(0);
     }

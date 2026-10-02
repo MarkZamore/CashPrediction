@@ -1,6 +1,8 @@
 today 2026-09-13
 key Esc
 sample
+# Длинная цепочка диалогов начинается после штатного истечения сообщения открытия примера.
+wait 10001
 select r1@2026-10-05
 menu edit.delete
 dump delete-rule

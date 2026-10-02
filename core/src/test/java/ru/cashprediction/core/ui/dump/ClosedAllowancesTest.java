@@ -16,6 +16,36 @@ import ru.cashprediction.core.ui.text.UiText;
 
 /** Доказывает узкую область исключений §10 и отсутствие масок для строк вне данных дампа. */
 class ClosedAllowancesTest {
+    /** Исключение имени клиента не скрывает дату маркера, основной текст и неизвестное имя. */
+    @Test void recoveryHeaderOnlyAllowsKnownClientCaption() throws IOException {
+        var allowed = AllowedDiffs.parse(resource());
+        String prefix = UiText.get("s2.startup.crashed") + "\n";
+        String fx = prefix + UiText.get("s2.startup.marker", "13.09.2026 12:00", UiText.get("s2.startup.clientFx"));
+        String web = prefix + UiText.get("s2.startup.marker", "13.09.2026 12:00", UiText.get("client.web"));
+        String pointer = "/alerts/crashRecovery/header";
+        assertTrue(allowed.filter("web", List.of(new DumpDiff.Difference(pointer, fx, web))).isEmpty());
+        for (String invalid : List.of(
+                prefix + UiText.get("s2.startup.marker", "14.09.2026 12:00", UiText.get("client.web")),
+                "different\n" + UiText.get("s2.startup.marker", "13.09.2026 12:00", UiText.get("client.web")),
+                prefix + UiText.get("s2.startup.marker", "13.09.2026 12:00", "unknown"))) {
+            var difference = new DumpDiff.Difference(pointer, fx, invalid);
+            assertEquals(List.of(difference), allowed.filter("web", List.of(difference)));
+        }
+    }
+    /** Исключения хранилищ ссылаются на настоящие id кнопок, а общие решения остаются проверяемыми. */
+    @Test void recoveryStorageRulesUseActualButtonIds() throws IOException {
+        var allowed = AllowedDiffs.parse(resource());
+        for (String id : List.of("restoreRegistry", "restoreXml", "restoreServer")) {
+            String pointer = "/alerts/crashRecovery/buttons/" + id;
+            assertTrue(allowed.entries().stream().anyMatch(e -> e.number() == 7 && e.pointer().equals(pointer)));
+            assertTrue(allowed.filter("web", List.of(new DumpDiff.Difference(pointer,
+                    Map.of("id", id, "text", "button", "tooltip", "", "enabled", true,
+                            "isDefault", false, "x", 0), null))).isEmpty());
+        }
+        var shared = new DumpDiff.Difference("/alerts/crashRecovery/buttons/noRestore/enabled", true, false);
+        assertEquals(List.of(shared), allowed.filter("web", List.of(shared)));
+    }
+
     @Test
     void resourceAccountsForExactlySixteenSpecRowsWithoutFakeMasks() throws IOException {
         var root = (Map<?, ?>) JsonParser.parse(resource());
@@ -121,6 +151,31 @@ class ClosedAllowancesTest {
     }
 
     @Test
+    void snapshotLocationAllowanceNeverChangesRawPayloadOrUnknownXmlPaths() throws IOException {
+        var allowed = AllowedDiffs.parse(resource());
+        String title = ru.cashprediction.core.text.Texts.get("session.store.title.xml");
+        String payload = "{\"savedAt\":1,\"pid\":2,\"y\":310,\"path\":\"session-fx.xml\",\"node\":\"<node>/fx\"}";
+        String registryTitle = ru.cashprediction.core.text.Texts.get("session.store.title.registry");
+        String fx = UiText.get("s2.recovery.registryBlock", registryTitle, "<node>\\fx", payload)
+                + "\n" + UiText.get("s2.recovery.fileBlock", title,
+                "<CashMemory>\\session-fx.xml", payload);
+        String swing = UiText.get("s2.recovery.registryBlock", registryTitle, "<node>\\swing", payload)
+                + "\n" + UiText.get("s2.recovery.fileBlock", title,
+                "<CashMemory>\\session-swing.xml", payload);
+        String pointer = "/alerts/lastSnapshot/details";
+        assertTrue(allowed.filter("swing", List.of(new DumpDiff.Difference(pointer, fx, swing))).isEmpty());
+        for (String invalid : List.of(swing.replace("\"savedAt\":1", "\"savedAt\":3"),
+                swing.replace("\"pid\":2", "\"pid\":3"), swing.replace("\"y\":310", "\"y\":465"),
+                swing.replace("\"<node>/fx\"", "\"<node>/swing\""),
+                swing.replace("\"session-fx.xml\"", "\"session-swing.xml\""),
+                swing.replace("<CashMemory>\\session-swing.xml", "<CashMemory>\\other\\session-swing.xml"),
+                swing.replace("<CashMemory>\\session-swing.xml", "<CashMemory>\\session-swing.xml.bak"))) {
+            var difference = new DumpDiff.Difference(pointer, fx, invalid);
+            assertEquals(List.of(difference), allowed.filter("swing", List.of(difference)));
+        }
+    }
+
+    @Test
     void allSeededPointersResolveInTheComparisonSchema() throws IOException {
         for (var entry : AllowedDiffs.parse(resource()).entries()) {
             Type type = UiDump.class;
@@ -162,14 +217,21 @@ class ClosedAllowancesTest {
                 right = UiText.get("alert.about.content", "v1", "Swing", "25", "<CashMemory>");
             }
             case 7, 9, 10 -> {
-                if (!pointer.endsWith("/content")) {
+                if (pointer.equals("/alerts/crashRecovery/header")) {
+                    left = UiText.get("s2.startup.crashed") + "\n" + UiText.get("s2.startup.marker", "13.09.2026 12:00", UiText.get("s2.startup.clientFx"));
+                    right = UiText.get("s2.startup.crashed") + "\n" + UiText.get("s2.startup.marker", "13.09.2026 12:00", UiText.get("client.web"));
+                } else if (!pointer.endsWith("/content")) {
                     left = Map.of("id", pointer.substring(pointer.lastIndexOf('/') + 1), "text", "button", "tooltip", "",
                             "enabled", true, "isDefault", false, "x", 0);
                     right = null;
                 }
             }
             case 8 -> {
-                if (!entry.clients().contains("web")) { left = "node <node>/fx (JSON) payload"; right = "node <node>/swing (JSON) payload"; }
+                if (!entry.clients().contains("web")) {
+                    String title = ru.cashprediction.core.text.Texts.get("session.store.title.registry");
+                    left = UiText.get("s2.recovery.registryBlock", title, "<node>\\fx", "payload");
+                    right = UiText.get("s2.recovery.registryBlock", title, "<node>\\swing", "payload");
+                }
             }
             case 11 -> {
                 if (pointer.endsWith("titleBar")) { left = "os"; right = "tab"; }

@@ -121,7 +121,8 @@ public final class DumpDiff {
         boolean coordinate = field.equals("x") || field.equals("y") || field.equals("width") || field.equals("height");
         String parent = slash < 0 ? "" : pointer.substring(0, slash);
         return coordinate && (parent.endsWith("/bounds") || parent.matches("/frame/regions/[^/]+"))
-                || field.equals("x") && parent.matches(".*/buttons/[^/]+");
+                || field.equals("x") && (parent.matches(".*/buttons/[^/]+")
+                        || parent.matches("/table/placeholderButtons/[^/]+"));
     }
 
     /** Экранирует сегмент JSON Pointer. */

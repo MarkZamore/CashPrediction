@@ -36,6 +36,11 @@ public final class SwingMain {
      */
     public static void main(String[] args) {
         PREFS_LOGGER.setLevel(Level.SEVERE);
+        var options = ru.cashprediction.core.app.LaunchOptions.parse(args);
+        if (options.ui() == ru.cashprediction.core.app.LaunchOptions.UiMode.CORE) {
+            ru.cashprediction.swing.ui.SwingCoreMain.launch(options);
+            return;
+        }
         // Обработчик — до создания любых окон: сбой при запуске тоже должен сохранить то, что уже есть.
         SwingCrashHooks.install();
         try {

@@ -16,6 +16,7 @@ import java.time.Duration;
 import ru.cashprediction.core.app.flow.*;
 import ru.cashprediction.core.session.SessionRecorder;
 import ru.cashprediction.core.session.Scheduler;
+import ru.cashprediction.core.session.UiExecutor;
 import ru.cashprediction.core.session.MainWindowState;
 import ru.cashprediction.core.session.WindowState;
 import ru.cashprediction.core.session.WindowType;
@@ -97,11 +98,16 @@ import ru.cashprediction.core.ui.view.popup.SparklineModel;
 public final class AppController implements UiIntents, FlowContext {
 
     private final UiPort port;
+    private final UiPort clientPort;
+    /** Видим и фоновым доставщикам задач; переход выполняется только в потоке контроллера. */
+    private volatile boolean exited;
     private final AppEnvironment environment;
     /** Единственный изменяемый документ; прогноз остаётся ленивым до первого снимка состояния. */
     private final PlanDocument document;
     private AppSettings settings = AppSettings.defaults();
     private String selectedRowId = "";
+    /** Выбор цели меню и раскрытие прошлого публикуются одним завершённым кадром. */
+    private boolean contextSelectionInProgress;
     private boolean pastExpanded;
     private Path plansFolder;
     private long revision;
@@ -131,6 +137,8 @@ public final class AppController implements UiIntents, FlowContext {
     private boolean shown;
     private boolean started;
     private long windowSequence;
+    private long chooserSequence;
+    private long chooserConfirmationSequence;
     private Scheduler.Task statusExpiry;
     private long statusGeneration;
     private String closingResultId;
@@ -142,7 +150,8 @@ public final class AppController implements UiIntents, FlowContext {
      * @param environment окружение процесса
      */
     public AppController(UiPort port, AppEnvironment environment) {
-        this.port = Objects.requireNonNull(port, "port");
+        this.clientPort = Objects.requireNonNull(port, "port");
+        this.port = new LifecyclePort();
         this.environment = Objects.requireNonNull(environment, "environment");
         document = new PlanDocument(Plan.empty(UiText.get("plan.defaultName"), environment.clock().today()), null,
                 environment.clock()::today);
@@ -158,6 +167,7 @@ public final class AppController implements UiIntents, FlowContext {
         autosaveService = new AutosaveService(this);
         settingsService = new SettingsKeeper(this);
         document.addListener(event -> {
+            if (exited) return;
             assertUiThread();
             if (recorder != null) recorder.touch();
             if (event.has(EventKind.PLAN)) {
@@ -177,6 +187,19 @@ public final class AppController implements UiIntents, FlowContext {
         return port;
     }
 
+    /** Завершает доставку задач до вызова клиента; чистый снимок уже подготовлен потоком выхода. */
+    private void terminate(ExitKind kind, int code) {
+        if (exited) return;
+        assertUiThread();
+        autosaveService.stop();
+        if (statusExpiry != null) statusExpiry.cancel();
+        statusGeneration++;
+        port.scheduler().shutdown();
+        // Конечное состояние устанавливается до вызова клиента, включая синхронные события закрытия.
+        exited = true;
+        clientPort.exit(kind, code);
+    }
+
     /** @return окружение процесса */
     public AppEnvironment environment() {
         return environment;
@@ -188,6 +211,7 @@ public final class AppController implements UiIntents, FlowContext {
      * потоке контроллера.
      */
     public void start() {
+        if (exited) return;
         assertUiThread();
         if (started) {
             throw new IllegalStateException("Controller already started");
@@ -228,6 +252,7 @@ public final class AppController implements UiIntents, FlowContext {
 
     @Override
     public void command(CommandId id, CommandArgs args, InvokeSource source) {
+        if (exited) return;
         assertUiThread();
         Objects.requireNonNull(id, "command");
         Objects.requireNonNull(source, "source");
@@ -327,6 +352,7 @@ public final class AppController implements UiIntents, FlowContext {
 
     @Override
     public boolean key(KeyChord chord, FocusScope scope, String focusId) {
+        if (exited) return false;
         assertUiThread();
         if (windows.modalOpen()) return false;
         var binding = HotkeyTable.find(chord, scope, port.profile().kind());
@@ -347,12 +373,14 @@ public final class AppController implements UiIntents, FlowContext {
 
     @Override
     public void selectRow(String rowId) {
+        if (exited) return;
         assertUiThread();
         if (!windows.modalOpen()) views().selectRow(rowId);
     }
 
     @Override
     public void activateRow(String rowId, String columnId, Activation how) {
+        if (exited) return;
         assertUiThread();
         if (windows.modalOpen() || screen == null) return;
         int index = screen.table().indexOf(rowId);
@@ -371,24 +399,28 @@ public final class AppController implements UiIntents, FlowContext {
 
     @Override
     public void filterText(String text) {
+        if (exited) return;
         assertUiThread();
         if (!windows.modalOpen()) views().filterText(text);
     }
 
     @Override
     public void sliderCommit(String itemId, int value) {
+        if (exited) return;
         assertUiThread();
         if (!windows.modalOpen() && "view.horizonSlider".equals(itemId)) views().horizonSliderCommit(value);
     }
 
     @Override
     public void spinnerCommit(String itemId, long value) {
+        if (exited) return;
         assertUiThread();
         if (!windows.modalOpen() && "whatIf.extra".equals(itemId)) tools().setWhatIfExtra(value);
     }
 
     @Override
     public void mainGeometry(WindowBounds bounds, boolean maximized) {
+        if (exited) return;
         assertUiThread();
         // Геометрия принадлежит порту; намерение только помечает снимок изменённым.
         if (recorder != null) recorder.touch();
@@ -396,6 +428,7 @@ public final class AppController implements UiIntents, FlowContext {
 
     @Override
     public void menuHover(String itemIdOrNull) {
+        if (exited) return;
         assertUiThread();
         MenuNode node = screen == null || itemIdOrNull == null ? null : screen.menuBar().find(itemIdOrNull).orElse(null);
         String tip = switch (node) {
@@ -413,23 +446,50 @@ public final class AppController implements UiIntents, FlowContext {
 
     @Override
     public void closeMainRequested() {
+        if (exited) return;
         assertUiThread();
         if (!windows.modalOpen()) exit().requestExit();
     }
 
     @Override
     public void uncaught(Thread thread, Throwable error) {
+        if (exited) return;
         assertUiThread();
         recovery().uncaught(thread, error);
     }
 
+    /** {@inheritDoc} */
+    @Override public void clientError(String message, String stack) {
+        if (exited) return;
+        assertUiThread();
+        recovery().clientError(message, stack);
+    }
+
     @Override
     public List<MenuNode> contextMenu(ContextTarget target) {
+        if (exited) return List.of();
         assertUiThread();
         if (target instanceof ContextTarget.Preview preview) {
             if (session(preview.windowId()).isEmpty() || windows.topModal()
                     .filter(top -> !top.windowId().equals(preview.windowId())).isPresent()) return List.of();
         } else if (windows.modalOpen()) return List.of();
+        String rowId = switch (target) {
+            case ContextTarget.Row row -> row.rowId();
+            case ContextTarget.Total total -> total.rowId();
+            case ContextTarget.PastHeader header -> header.rowId();
+            default -> null;
+        };
+        if (rowId != null) {
+            // JavaFX: ContextMenu → Swing: JPopupMenu → Web: contextmenu.
+            // ViewFlow проверяет id и раскрывает прошлое; клиент не принимает решение о выделении.
+            contextSelectionInProgress = true;
+            try {
+                views().selectRow(rowId);
+            } finally {
+                contextSelectionInProgress = false;
+                refresh();
+            }
+        }
         return MenuModels.contextMenu(state(), target, port.profile().kind());
     }
 
@@ -516,20 +576,24 @@ public final class AppController implements UiIntents, FlowContext {
 
     /** {@inheritDoc} */
     @Override public void setRecorderStatus(RecorderStatus value) {
+        if (exited) return;
         assertUiThread(); recorderStatus = Objects.requireNonNull(value); refresh();
     }
     /** {@inheritDoc} */
     @Override public void setAutosaveProblem(String value) {
+        if (exited) return;
         assertUiThread(); autosaveProblem = Objects.requireNonNullElse(value, ""); refresh();
     }
     /** {@inheritDoc} */
     @Override public void updateSettings(UnaryOperator<AppSettings> change) {
+        if (exited) return;
         assertUiThread();
         AppSettings updated = Objects.requireNonNull(change.apply(settings));
         if (!updated.equals(settings)) { settings = updated; settingsService.changed(); refresh(); }
     }
     /** {@inheritDoc} */
     @Override public void updateView(UnaryOperator<ViewState> change) {
+        if (exited) return;
         assertUiThread();
         ViewState updated = Objects.requireNonNull(change.apply(document.viewState()));
         document.setViewState(updated);
@@ -539,6 +603,7 @@ public final class AppController implements UiIntents, FlowContext {
     }
     /** {@inheritDoc} */
     @Override public void setSelection(String value) {
+        if (exited) return;
         assertUiThread();
         String next = Objects.requireNonNullElse(value, "");
         if (!selectedRowId.equals(next)) {
@@ -549,6 +614,7 @@ public final class AppController implements UiIntents, FlowContext {
     }
     /** {@inheritDoc} */
     @Override public void setPastExpanded(boolean value) {
+        if (exited) return;
         assertUiThread();
         if (pastExpanded != value) {
             pastExpanded = value;
@@ -558,10 +624,12 @@ public final class AppController implements UiIntents, FlowContext {
     }
     /** {@inheritDoc} */
     @Override public void setPlansFolder(Path value) {
+        if (exited) return;
         assertUiThread(); plansFolder = value == null ? environment.cashMemory() : value; refresh();
     }
     /** {@inheritDoc} */
     @Override public void status(StatusLevel level, String key, Object... args) {
+        if (exited) return;
         assertUiThread();
         messages = messages.show(UiText.get(key, args), level, environment.clock().now());
         if (statusExpiry != null) statusExpiry.cancel();
@@ -576,6 +644,7 @@ public final class AppController implements UiIntents, FlowContext {
     }
     /** {@inheritDoc} */
     @Override public void persistentStatus(String cause, String text) {
+        if (exited) return;
         assertUiThread();
         messages = text == null ? messages.withoutPersistent(cause)
                 : messages.withPersistent(cause, text, StatusLevel.ERROR);
@@ -600,7 +669,10 @@ public final class AppController implements UiIntents, FlowContext {
             if (existing.get().handle() != null) existing.get().handle().toFront();
             return existing.get();
         }
-        String id = request.restored() == null ? nextWindowId() : request.restored().id();
+        // Серверный аналог нативного выбора не сдвигает идентификаторы общих диалогов.
+        boolean transientChooser = request.logic() instanceof ru.cashprediction.core.ui.forms.simple.FileBrowserForm;
+        String id = request.restored() == null ? transientChooser ? "chooser" + ++chooserSequence : nextWindowId()
+                : request.restored().id();
         String owner = placement == null ? modalOwner() : placement.ownerId();
         Placement effective = placement == null ? Placement.centered(owner) : placement;
         Consumer<Object> callback = onResult == null ? ignored -> { } : onResult;
@@ -613,14 +685,16 @@ public final class AppController implements UiIntents, FlowContext {
             }
             @Override public void touched(FormSession form) { if (recorder != null) recorder.touch(); }
             @Override public void closed(FormSession form, Object value) {
+                if (exited) return;
                 String previous = closingResultId;
                 closingResultId = form.windowId();
                 try { callback.accept(value); }
                 finally { closingResultId = previous; }
                 removeWindow(form.windowId());
             }
-            @Override public void applied(FormSession form, Object value) { callback.accept(value); }
+            @Override public void applied(FormSession form, Object value) { if (!exited) callback.accept(value); }
             @Override public void openChild(FormSession parent, WindowState child) {
+                if (exited) return;
                 WindowState prepared = child.withIds(nextWindowId(), parent.windowId());
                 new CoreWindowFactory(AppController.this).open(prepared, parent.windowId(), ignored -> { },
                         warning -> { throw new IllegalArgumentException(warning); });
@@ -646,7 +720,9 @@ public final class AppController implements UiIntents, FlowContext {
     /** {@inheritDoc} */
     @Override public WindowHandle showAlert(AlertSpec spec, Consumer<String> onButton) {
         assertUiThread();
-        String id = nextWindowId();
+        // Это часть выбора файла: FX показывает её внутри нативного окна, Swing/Web отдельным сообщением.
+        String id = "replaceFile".equals(spec.purpose()) && !spec.restorable()
+                ? "chooserConfirm" + ++chooserConfirmationSequence : nextWindowId();
         return showAlertSession(spec, id, modalOwner(), null, null, onButton);
     }
 
@@ -677,6 +753,7 @@ public final class AppController implements UiIntents, FlowContext {
         try {
             // JavaFX: Alert → Swing: JDialog → Web: dialog
             WindowHandle handle = port.showAlert(spec, alert, button -> {
+                if (exited) return;
                 assertUiThread();
                 if (answered[0]) return;
                 answered[0] = true;
@@ -693,6 +770,7 @@ public final class AppController implements UiIntents, FlowContext {
 
     /** {@inheritDoc} */
     @Override public void showMain(MainWindowState restored) {
+        if (exited) return;
         assertUiThread();
         if (shown) throw new IllegalStateException("Main window already shown");
         refresh();
@@ -702,7 +780,9 @@ public final class AppController implements UiIntents, FlowContext {
 
     /** {@inheritDoc} */
     @Override public void refresh() {
+        if (exited) return;
         assertUiThread();
+        if (contextSelectionInProgress) return;
         AppState app = state();
         boolean dataChanged = screen == null || renderedState == null
                 || !app.document().plan().equals(renderedState.document().plan())
@@ -776,6 +856,7 @@ public final class AppController implements UiIntents, FlowContext {
 
     /** Убирает окно и закрывает дочерние ручки, не оставляя невидимых сеансов в снимке. */
     private void removeWindow(String id) {
+        if (exited) return;
         OpenWindows remaining = windows.without(id);
         List<String> removed = windows.windows().stream().map(OpenWindows.OpenWindow::windowId)
                 .filter(old -> remaining.windows().stream().noneMatch(w -> w.windowId().equals(old))).toList();
@@ -796,5 +877,115 @@ public final class AppController implements UiIntents, FlowContext {
         if (!port.executor().isUiThread()) {
             throw new IllegalStateException("Controller requires UI thread");
         }
+    }
+
+    /**
+     * Внутренняя граница жизненного цикла: общие потоки получают те же операции клиента,
+     * но таймеры, доставленные задачи и ответы выбора не продолжаются после выхода.
+     * Профиль и средства доставки берутся у клиента один раз, до завершения.
+     */
+    private final class LifecyclePort implements UiPort {
+        private final ClientProfile profile = clientPort.profile();
+        private final UiExecutor clientExecutor = clientPort.executor();
+        private final Scheduler clientScheduler = clientPort.scheduler();
+        private boolean schedulerStopped;
+        private final UiExecutor executor = new UiExecutor() {
+            /** {@inheritDoc} */
+            @Override public void execute(Runnable task) {
+                if (!exited) clientExecutor.execute(guard(task));
+            }
+            /** {@inheritDoc} */
+            @Override public boolean isUiThread() { return clientExecutor.isUiThread(); }
+        };
+        private final Scheduler scheduler = new Scheduler() {
+            /** {@inheritDoc} */
+            @Override public Task schedule(Runnable action, Duration delay) {
+                return exited ? () -> { } : clientScheduler.schedule(guard(action), delay);
+            }
+            /** {@inheritDoc} */
+            @Override public Task scheduleAtFixedRate(Runnable action, Duration initialDelay, Duration period) {
+                return exited ? () -> { } : clientScheduler.scheduleAtFixedRate(guard(action), initialDelay, period);
+            }
+            /** {@inheritDoc} */
+            @Override public void execute(Runnable action) {
+                if (!exited) clientScheduler.execute(guard(action));
+            }
+            /** {@inheritDoc} */
+            @Override public synchronized void shutdown() {
+                if (!schedulerStopped) {
+                    schedulerStopped = true;
+                    clientScheduler.shutdown();
+                }
+            }
+        };
+
+        /** Не позволяет уже доставленному вызову продолжить работу завершённого ядра. */
+        private Runnable guard(Runnable action) { return () -> { if (!exited) action.run(); }; }
+
+        /** Не позволяет прямому вызову потока обратиться к завершённому клиенту. */
+        private void requireActive() {
+            if (exited) throw new IllegalStateException("Controller exited");
+        }
+
+        /** {@inheritDoc} */
+        @Override public ClientProfile profile() { return profile; }
+        /** {@inheritDoc} */
+        @Override public UiExecutor executor() { return executor; }
+        /** {@inheritDoc} */
+        @Override public Scheduler scheduler() { return scheduler; }
+        /** {@inheritDoc} */
+        @Override public void showMain(MainScreenModel model, MainWindowState restored) {
+            requireActive(); clientPort.showMain(model, restored);
+        }
+        /** {@inheritDoc} */
+        @Override public void render(MainScreenModel model, EnumSet<ScreenPart> changed) {
+            requireActive(); clientPort.render(model, changed);
+        }
+        /** {@inheritDoc} */
+        @Override public MainGeometry mainGeometry() { requireActive(); return clientPort.mainGeometry(); }
+        /** {@inheritDoc} */
+        @Override public WindowHandle openForm(FormSession session, ru.cashprediction.core.ui.form.FormSpec spec,
+                ru.cashprediction.core.ui.form.FormView initial, Placement placement) {
+            // JavaFX: Dialog → Swing: JDialog → Web: dialog.
+            requireActive(); return clientPort.openForm(session, spec, initial, placement);
+        }
+        /** {@inheritDoc} */
+        @Override public WindowHandle showAlert(AlertSpec spec, AlertSession session, Consumer<String> onButton) {
+            // JavaFX: Alert → Swing: JDialog → Web: dialog.
+            requireActive(); return clientPort.showAlert(spec, session, button -> {
+                if (!exited) onButton.accept(button);
+            });
+        }
+        /** {@inheritDoc} */
+        @Override public void showContextMenu(ContextTarget target, List<MenuNode> items) {
+            // JavaFX: ContextMenu → Swing: JPopupMenu → Web: contextMenu.
+            requireActive(); clientPort.showContextMenu(target, items);
+        }
+        /** {@inheritDoc} */
+        @Override public void chooseFile(FileChooserSpec spec, Consumer<Optional<Path>> onResult) {
+            // JavaFX: FileChooser → Swing: JFileChooser → Web: dialog.
+            requireActive(); clientPort.chooseFile(spec, result -> { if (!exited) onResult.accept(result); });
+        }
+        /** {@inheritDoc} */
+        @Override public void chooseDirectory(DirectoryChooserSpec spec, Consumer<Optional<Path>> onResult) {
+            // JavaFX: DirectoryChooser → Swing: JFileChooser → Web: dialog.
+            requireActive(); clientPort.chooseDirectory(spec, result -> { if (!exited) onResult.accept(result); });
+        }
+        /** {@inheritDoc} */
+        @Override public byte[] renderChartPng(ChartScene scene) throws java.io.IOException {
+            requireActive(); return clientPort.renderChartPng(scene);
+        }
+        /** {@inheritDoc} */
+        @Override public void focus(FocusTarget target) { requireActive(); clientPort.focus(target); }
+        /** {@inheritDoc} */
+        @Override public void revealRow(String rowId, RevealMode mode) {
+            requireActive(); clientPort.revealRow(rowId, mode);
+        }
+        /** {@inheritDoc} */
+        @Override public void copyToClipboard(String text) { requireActive(); clientPort.copyToClipboard(text); }
+        /** {@inheritDoc} */
+        @Override public void reloadPage() { if (!exited) { assertUiThread(); clientPort.reloadPage(); } }
+        /** {@inheritDoc} */
+        @Override public void exit(ExitKind kind, int code) { terminate(kind, code); }
     }
 }

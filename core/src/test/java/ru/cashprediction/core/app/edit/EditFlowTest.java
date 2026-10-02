@@ -73,6 +73,22 @@ class EditFlowTest {
         assertEquals("Разовая операция «Покупка» удалена", h.statusText);
     }
 
+    /** Сброс скрытого пропуска не зависит от наличия строки в рассчитанном прогнозе. */
+    @Test void resetHiddenSkipRestoresEventAndIsUndoable() {
+        EditHarness h = new EditHarness(plan().withRuleAdded(rule()));
+        OccurrenceKey key = new OccurrenceKey(rule().id(), TODAY);
+        h.edits.skip(ROW);
+        assertFalse(h.document.viewState().showSkipped());
+        assertTrue(h.document.forecast().findRow(ROW).isEmpty());
+        h.edits.reset(ROW);
+        assertTrue(h.document.plan().findAdjustment(key).isEmpty());
+        assertTrue(h.document.forecast().findRow(ROW).isPresent());
+        assertEquals("status.msg.adjustReset", h.statusKey);
+        h.edits.undo();
+        assertInstanceOf(Adjustment.Skip.class, h.document.plan().findAdjustment(key).orElseThrow().action());
+        assertTrue(h.document.forecast().findRow(ROW).isEmpty());
+    }
+
     @Test void adjustmentSkipResetAndDisable() {
         EditHarness h = new EditHarness(plan().withRuleAdded(rule()));
         OccurrenceKey key = new OccurrenceKey(rule().id(), TODAY);

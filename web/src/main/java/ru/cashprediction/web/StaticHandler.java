@@ -7,6 +7,8 @@ import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.Locale;
 import java.util.Map;
+import ru.cashprediction.core.ui.token.TokenCss;
+import ru.cashprediction.core.ui.text.UiText;
 
 /**
  * Отдаёт статические файлы тонкого клиента из ресурсов jar: {@code /} → {@code web/index.html},
@@ -68,6 +70,10 @@ public final class StaticHandler implements HttpHandler {
                 return;
             }
             String path = exchange.getRequestURI().getPath();
+            if ("/app/tokens.css".equals(path)) {
+                HttpUtil.send(exchange, 200, "text/css; charset=utf-8", bytes(TokenCss.webCss()), head);
+                return;
+            }
             String name = resourceName(path);
             if (name == null) {
                 HttpUtil.send(exchange, 404, "text/plain; charset=utf-8", bytes("Не найдено: " + path), head);
@@ -79,6 +85,21 @@ public final class StaticHandler implements HttpHandler {
                     return;
                 }
                 byte[] body = in.readAllBytes();
+                if (name.equals("app.html")) {
+                    String html = new String(body, StandardCharsets.UTF_8);
+                    Map<String, String> texts = new java.util.LinkedHashMap<>();
+                    for (String key : UiText.keys()) {
+                        if (key.startsWith("offline.")) {
+                            texts.put(key, UiText.get(key));
+                            html = html.replace("{{" + key + "}}", escapeHtml(UiText.get(key)));
+                        }
+                    }
+                    // Инертный template разрешён CSP: здесь данные общего каталога, без выполняемого скрипта.
+                    String template = "<template id=\"cp-prebootstrap-texts\">"
+                            + escapeHtml(ru.cashprediction.core.ui.json.UiJson.write(texts)) + "</template>";
+                    html = html.replace("<body>", "<body>" + template);
+                    body = bytes(html);
+                }
                 if (name.endsWith(".html")) {
                     exchange.getResponseHeaders().set("Content-Security-Policy", CONTENT_SECURITY_POLICY);
                 }
@@ -127,5 +148,10 @@ public final class StaticHandler implements HttpHandler {
 
     private static byte[] bytes(String text) {
         return text.getBytes(StandardCharsets.UTF_8);
+    }
+
+    /** Экранирует общие тексты перед подстановкой в HTML. */
+    private static String escapeHtml(String text) {
+        return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("\"", "&quot;").replace("'", "&#39;");
     }
 }

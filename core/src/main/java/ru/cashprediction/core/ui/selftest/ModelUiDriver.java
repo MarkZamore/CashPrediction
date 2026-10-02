@@ -44,6 +44,7 @@ public final class ModelUiDriver implements UiDriver {
     private final java.util.ArrayList<UiDump.Popup> popups = new java.util.ArrayList<>();
     private long clientRevision;
     private ru.cashprediction.core.session.Scheduler.Task filterTask, spinnerTask;
+    private ru.cashprediction.core.session.Scheduler.Task tooltipTask, tooltipHideTask;
 
     /**
      * Создаёт драйвер.
@@ -93,6 +94,7 @@ public final class ModelUiDriver implements UiDriver {
         }
         start();
         if (port.exited) fail("exited");
+        if (!(command instanceof SelfTestCommand.Hover)) clearHoverPopups();
         switch (command) {
             case SelfTestCommand.Sample _ -> menu("file.sample");
             case SelfTestCommand.Save _ -> menu("file.save");
@@ -210,6 +212,7 @@ public final class ModelUiDriver implements UiDriver {
     private void start() {
         if (!started) {
             controller = new AppController(port, environment); intents = controller;
+            port.alertIdentity = () -> controller.state().windows().windows().getLast().windowId();
             controller.start(); started = true;
         }
     }
@@ -311,8 +314,12 @@ public final class ModelUiDriver implements UiDriver {
         return h;
     }
     static List<FieldSpec> fields(RecordingUiPort.Handle h) {
+        return fields(h.spec.pages().get(h.view.page()));
+    }
+    /** Собирает логические поля; RADIO с одним id в разных строках остаётся одной группой (§FieldSpec). */
+    static List<FieldSpec> fields(FormPage page) {
         java.util.ArrayList<FieldSpec> fields = new java.util.ArrayList<>();
-        for (var row : h.spec.pages().get(h.view.page()).rows()) {
+        for (var row : page.rows()) {
             switch (row) {
                 case FormRow.Field f -> fields.add(f.field());
                 case FormRow.Inline i -> fields.addAll(i.fields());
@@ -320,7 +327,21 @@ public final class ModelUiDriver implements UiDriver {
                 default -> { }
             }
         }
-        return fields;
+        Map<String, FieldSpec> logical = new java.util.LinkedHashMap<>();
+        for (FieldSpec field : fields) {
+            FieldSpec previous = logical.putIfAbsent(field.id(), field);
+            if (previous == null) continue;
+            if (previous.kind() != FieldKind.RADIO || field.kind() != FieldKind.RADIO)
+                throw new IllegalArgumentException("Duplicate non-radio field: " + field.id());
+            var options = new java.util.ArrayList<>(previous.options()); options.addAll(field.options());
+            if (options.stream().map(Option::value).distinct().count() != options.size())
+                throw new IllegalArgumentException("Duplicate radio option: " + field.id());
+            logical.put(field.id(), new FieldSpec(previous.id(), previous.kind(), previous.label(), previous.prompt(),
+                    previous.tooltip(), options, previous.min(), previous.max(), previous.step(), previous.columns(),
+                    previous.textRows(), previous.wide(), previous.suffix(), previous.orientation(), previous.focusFirst(),
+                    previous.widthPx()));
+        }
+        return List.copyOf(logical.values());
     }
     private FieldSpec field(RecordingUiPort.Handle h, String label) {
         return fields(h).stream().filter(f -> {
@@ -398,9 +419,12 @@ public final class ModelUiDriver implements UiDriver {
         }
         mainAvailable(); String[] t = target.split(":", 2);
         ContextTarget object = switch (t[0]) {
-            case "row" -> { intents.selectRow(row(t[1])); yield new ContextTarget.Row(t[1]); }
-            case "total" -> new ContextTarget.Total(row(t[1]));
-            case "pastHeader" -> new ContextTarget.PastHeader(ru.cashprediction.core.ui.view.table.LazyTableModel.PAST_HEADER_ROW_ID);
+            case "row" -> { String id = row(t[1]); intents.selectRow(id); yield new ContextTarget.Row(id); }
+            case "total" -> { String id = row(t[1]); intents.selectRow(id); yield new ContextTarget.Total(id); }
+            case "pastHeader" -> {
+                String id = ru.cashprediction.core.ui.view.table.LazyTableModel.PAST_HEADER_ROW_ID;
+                intents.selectRow(id); yield new ContextTarget.PastHeader(id);
+            }
             case "card" -> new ContextTarget.Card(t[1]);
             case "chart" -> { var xy = t[1].split(","); yield new ContextTarget.Chart(Double.parseDouble(xy[0]), Double.parseDouble(xy[1]), port.geometry.bounds().width(), 500); }
             default -> throw new IllegalArgumentException("context");
@@ -408,12 +432,37 @@ public final class ModelUiDriver implements UiDriver {
         // JavaFX: ContextMenu → Swing: JPopupMenu → Web: menu
         port.context = intents.contextMenu(object); port.contextTarget = target;
     }
+    /** Уход указателя или действие закрывает карточку и отменяет ещё не показанную подсказку. */
+    private void clearHoverPopups() {
+        popups.clear();
+        if (tooltipTask != null) tooltipTask.cancel();
+        if (tooltipHideTask != null) tooltipHideTask.cancel();
+    }
+
     private void hover(String target) {
-        mainAvailable(); popups.clear();
-        if (target.startsWith("menu:")) intents.menuHover(target.substring(5));
+        mainAvailable(); clearHoverPopups();
+        if (target.startsWith("menu:")) {
+            String id = target.substring(5);
+            intents.menuHover(id);
+            String tooltip = switch (node(id)) {
+                case MenuNode.Action n -> n.tooltip();
+                case MenuNode.Check n -> n.tooltip();
+                case MenuNode.Radio n -> n.tooltip();
+                case MenuNode.Submenu n -> n.tooltip();
+                case MenuNode.Slider n -> n.tooltip();
+                case MenuNode.Spinner n -> n.tooltip();
+                default -> "";
+            };
+            if (!tooltip.isEmpty()) tooltipTask = port.scheduler.schedule(() -> {
+                popups.add(new UiDump.Popup("tooltip", List.of(tooltip), null));
+                tooltipHideTask = port.scheduler.schedule(() -> popups.removeIf(p -> p.kind().equals("tooltip")),
+                        Duration.ofMillis(ru.cashprediction.core.ui.token.DesignTokens.TOOLTIP_DISMISS_MS));
+            }, Duration.ofMillis(ru.cashprediction.core.ui.token.DesignTokens.TOOLTIP_DELAY_MS));
+        }
         else if (target.startsWith("card:")) {
             SparklineModel s = intents.sparkline(target.substring(5));
-            popups.add(new UiDump.Popup("sparkline", List.of(s.header(), s.explanation(), s.minText(), s.maxText(), s.noDataText()), null));
+            popups.add(new UiDump.Popup("sparkline", java.util.stream.Stream.of(s.header(), s.explanation(), s.minText(), s.maxText(), s.noDataText())
+                    .filter(text -> !text.isEmpty()).toList(), null));
         } else if (target.startsWith("chart:")) {
             var xy = target.substring(6).split(",");
             intents.chartHover(port.screen.chart().revision(), Double.parseDouble(xy[0]), Double.parseDouble(xy[1]),
