@@ -182,13 +182,68 @@ function Invoke-NativeLifecycleDispatchedCell($Row,[string]$Source,$Base,$Target
         $variable=Get-Variable -Name $name -Scope Script -ErrorAction SilentlyContinue
         $saved[$name]=[pscustomobject]@{exists=($null -ne $variable);value=$(if ($null -ne $variable) {$variable.Value} else {$null})}
     }
-    try {Invoke-NativeScenarioDispatch $Row $Source $Base $Target $Life $Cold $Java $Evidence $Timeout}
+    try {
+        Invoke-NativeScenarioDispatch $Row $Source $Base $Target $Life $Cold $Java $Evidence $Timeout
+    }
     finally {
         foreach ($name in $saved.Keys) {
             if ($saved[$name].exists) {Set-Variable -Name $name -Scope Script -Value $saved[$name].value}
             else {Remove-Variable -Name $name -Scope Script -ErrorAction SilentlyContinue}
         }
     }
+}
+
+# Только opt-in MAIN map; наличие path без independently held SHA не разрешает native.
+function Get-NativeLifecyclePinnedIntent($Context,$Row,[string]$Route) {
+    if ($null -eq $Context -or -not $Context.enabled -or $Route -cnotin @('normal','payload')) {return $null}
+    $name=if ($Route -ceq 'normal') {'normalIntentByCell'} else {'payloadAuthorityByCell'}
+    if ($null -eq $Context.PSObject.Properties[$name]) {return $null}
+    $map=$Context.$name
+    $key=$Row.scenario+'/'+$Row.base+'/'+$Row.client+'/'+$Row.path+'/'+$Row.phase
+    if ($map -isnot [Collections.IDictionary]) {throw 'NATIVE_PINNED_MAP_KIND'}
+    if (-not $map.Contains($key)) {return $null}
+    $entry=$map[$key]
+    Assert-ColdKeys $entry @('key','file','sha256','evidenceKind')
+    if ($entry.key -cne $key -or $entry.sha256 -cnotmatch '^[0-9a-f]{64}$' -or
+        -not [IO.Path]::IsPathFullyQualified($entry.file) -or $entry.evidenceKind -cnotin @('UNVERIFIED','NATIVE','UNIT_MOCK')) {throw 'NATIVE_PINNED_ENTRY'}
+    return $entry
+}
+
+# Exact9 dispatcher остаётся нетронут; отдельный adapter возвращает receipt, не sealed signoff.
+function Invoke-NativeLifecyclePinnedCell($Entry,$Row,[string]$Source,$Base,$Target,$Life,$Cold,
+    [string]$Java,[string]$Evidence,[int]$Timeout) {
+    $key=$Row.scenario+'/'+$Row.base+'/'+$Row.client+'/'+$Row.path+'/'+$Row.phase
+    if ($Row.status -cne 'PENDING') {throw 'NATIVE_PINNED_CANONICAL_NOT_PENDING'}
+    $route=Get-NativeDispatchRoute $Row.scenario
+    if ($Entry.evidenceKind -cne 'NATIVE') {
+        return [pscustomobject]@{status='PENDING';scope='MAIN_PINNED_SELECTED_CELL_ONLY';cellKey=$key;
+            acceptanceVerdict='PENDING';evidenceKind=$Entry.evidenceKind;missing=@('MAIN_ACTUAL_NATIVE_PROVENANCE_REQUIRED');
+            errors=@();fullMatrix='PENDING';releaseProvenance='PENDING';canonicalRowUnchanged=$true}
+    }
+    Assert-NativeDispatchFrozen
+    Import-NativeDispatchRoute $PSScriptRoot $route
+    if ($route -ceq 'normal') {
+        . (Join-Path $PSScriptRoot 'NativeUpdatePayloadAcceptance.ps1')
+        . (Join-Path $PSScriptRoot 'NativeUpdateNormalAcceptance.ps1')
+        . (Join-Path $PSScriptRoot 'NativeUpdateNormalAcceptanceCollector.ps1')
+        $ticket=New-NativeNormalCollector $Entry.file $Entry.sha256 'NATIVE'
+        $decision=Invoke-NativeNormalCollectedCell $ticket $Row $Source $Base $Target $Life $Cold $Java $Evidence $Timeout
+    } elseif ($route -ceq 'payload') {
+        $decision=Invoke-NativePayloadAuthorizedCell $Row $Source $Base $Target $Life $Cold $Java $Evidence $Timeout $Entry.file $Entry.sha256
+    } else {throw 'NATIVE_PINNED_ROUTE'}
+    if ($Row.status -cne 'PENDING') {throw 'NATIVE_PINNED_CANONICAL_MUTATED'}
+    if ($null -eq $decision -or $decision.status -cnotin @('PASS','PENDING','FAIL')) {throw 'NATIVE_PINNED_DECISION'}
+    $helper=$decision.helperRow
+    if ($null -ne $helper) {
+        if (($helper.scenario+'/'+$helper.base+'/'+$helper.client+'/'+$helper.path+'/'+$helper.phase) -cne $key) {throw 'NATIVE_PINNED_HELPER_IDENTITY'}
+        # Переносятся observations, но status/reason/helper PASS не переносятся.
+        foreach ($property in $helper.PSObject.Properties) {
+            if ($property.Name -cnotin @('status','reason','scenario','base','client','path','phase')) {$Row | Add-Member $property.Name $property.Value -Force}
+        }
+    }
+    return [pscustomobject]@{status='PENDING';scope='MAIN_PINNED_SELECTED_CELL_ONLY';cellKey=$key;
+        acceptanceVerdict=$decision.status;evidenceKind='NATIVE';decision=$decision;
+        canonicalRowUnchanged=$true;fullMatrix='PENDING';releaseProvenance='PENDING'}
 }
 
 # Никакая временная дата или количество polling не заменяют ограничение монотонных часов.
@@ -251,6 +306,9 @@ function Start-NativeFixture($Life,[string]$Java,[string]$Mode,[int]$Delay) {
     $ownedProcess=Start-NativeOwned $Java @('-XX:-UsePerfData','--add-modules','jdk.httpserver','-cp',$Life.harnessClasspath,
         'ru.cashprediction.parity.update.NativeUpdateServer',$encoded) $owned
     $ownedProcess | Add-Member owned $owned
+    # Конфигурация совпадает с фактически переданным Base64 UTF-8 аргументом сервера.
+    $ownedProcess | Add-Member launchConfig (ConvertFrom-ColdReceiptJson $json)
+    $ownedProcess | Add-Member launchConfigBase64 $encoded
     try {
         Wait-NativeCondition {if ($ownedProcess.process.HasExited) {throw 'NATIVE_SERVER_EXIT'};Test-Path -LiteralPath (Join-Path $owned 'server-receipt.json')} 15 'NATIVE_SERVER_TIMEOUT'
         $receipt=ConvertFrom-ColdReceiptJson (Get-Content -LiteralPath (Join-Path $owned 'server-receipt.json') -Raw -Encoding utf8)
@@ -746,8 +804,48 @@ function Wait-NativeInstalled([string]$Root,$Target,$Exit,[int]$Timeout) {
 }
 
 # Файлы остаются для MAIN; удаляется только собственный selftest UUID после bounded cleanup.
+# Resolver выбирает единственное реальное тело, сохраняя exact9 public и private owned API.
+function Get-NativeLifecycleBodyDefinition($SourceAst) {
+    if ($SourceAst.Parent -is [Management.Automation.Language.FunctionDefinitionAst]) {$SourceAst=$SourceAst.Parent}
+    $definitions=@($SourceAst.FindAll({param($n) $n -is [Management.Automation.Language.FunctionDefinitionAst]},$true))
+    $public=@($definitions | Where-Object {($_.Name -creplace '^(global:|script:)','') -ceq 'Invoke-NativeCell'})
+    if ($public.Count -ne 1) {throw 'NATIVE_BODY_PUBLIC'}
+    $names=@('Row','Source','Base','Target','Life','Cold','Java','Evidence','Timeout')
+    if (@($public[0].Parameters).Count -ne 9 -or
+        (@($public[0].Parameters | ForEach-Object {$_.Name.VariablePath.UserPath}) -join '/') -cne ($names -join '/')) {throw 'NATIVE_BODY_EXACT9'}
+    $private=@($definitions | Where-Object {($_.Name -creplace '^(global:|script:)','') -ceq 'Invoke-NativeCellOwnedContext'})
+    if ($public[0].Extent.Text.Contains('Start-NativeOwned')) {
+        if ($private.Count) {throw 'NATIVE_BODY_DUPLICATED'}
+        return $public[0]
+    }
+    $statements=@($public[0].Body.EndBlock.Statements)
+    if ($statements.Count -ne 1 -or $statements[0].Extent.Text.Trim() -cne
+        'Invoke-NativeCellOwnedContext $Row $Source $Base $Target $Life $Cold $Java $Evidence $Timeout') {throw 'NATIVE_BODY_WRAPPER'}
+    if (-not $private.Count) {
+        $command=Get-Command Invoke-NativeCellOwnedContext -ErrorAction Stop
+        $privateAst=$command.ScriptBlock.Ast
+        if ($privateAst.Parent -is [Management.Automation.Language.FunctionDefinitionAst]) {$privateAst=$privateAst.Parent}
+        $private=@($privateAst)
+    }
+    if ($private.Count -ne 1 -or @($private[0].Parameters).Count -ne 11 -or
+        -not $private[0].Extent.Text.Contains('Start-NativeOwned') -or
+        -not $private[0].Extent.Text.Contains('Close-NativeNormally') -or
+        -not $private[0].Extent.Text.Contains('Wait-NativeInstalled')) {throw 'NATIVE_BODY_PRIVATE'}
+    return $private[0]
+}
 function Invoke-NativeCell($Row,[string]$Source,$Base,$Target,$Life,$Cold,[string]$Java,[string]$Evidence,[int]$Timeout) {
+    Invoke-NativeCellOwnedContext $Row $Source $Base $Target $Life $Cold $Java $Evidence $Timeout
+}
+
+# Единственный настоящий lifecycle body; private owned путь не меняет exact9 dispatcher API.
+function Invoke-NativeCellOwnedContext($Row,[string]$Source,$Base,$Target,$Life,$Cold,[string]$Java,[string]$Evidence,[int]$Timeout,[string]$OwnedRunRoot='',[string]$OwnedNodeNonce='') {
     $run=Join-Path ([IO.Path]::GetTempPath()) ('run-'+[guid]::NewGuid().ToString());[void](Assert-ColdOwnedRun $run ([IO.Path]::GetTempPath()))
+    if ($OwnedRunRoot -or $OwnedNodeNonce) {
+        # Предвыделенные MAIN run-root/registry nonce проверяются до копирования/процессов.
+        if (-not $OwnedRunRoot -or $OwnedNodeNonce -cnotmatch '^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$') {throw 'AUTHORITY_NATIVE_OWNERSHIP'}
+        $run=Assert-ColdOwnedRun $OwnedRunRoot ([IO.Path]::GetTempPath())
+        if (Test-Path -LiteralPath $run) {throw 'AUTHORITY_NATIVE_ROOT_ALREADY_USED'}
+    }
     $variants=@{ascii='plain';cyrillic='Мои программы';unicode='Δ 测试'}
     $root=Join-Path (Join-Path $run $variants[$Row.path]) 'CashPrediction';$script:WorkDir=$run
     foreach ($protected in @($Source,$script:nativeTarget,$Life.artifactDir)) {[void](Get-ValidatedPortablePaths $protected $run $script:nativeProject $script:nativeProfile)}
@@ -757,7 +855,18 @@ function Invoke-NativeCell($Row,[string]$Source,$Base,$Target,$Life,$Cold,[strin
     [IO.File]::WriteAllText((Join-Path $root 'CashMemory/protected-user.txt'),"native-lifecycle-user`n")
     [IO.File]::WriteAllText((Join-Path $root 'protected-root.txt'),"native-lifecycle-root`n")
     $script:nativeNode='ru/cashprediction/selftest/'+[guid]::NewGuid().ToString()
+    if ($OwnedRunRoot) {$script:nativeNode='ru/cashprediction/selftest/'+$OwnedNodeNonce}
     $servers=[Collections.Generic.List[object]]::new();$clients=[Collections.Generic.List[object]]::new();$events=[Collections.Generic.List[object]]::new()
+    # Callback принадлежит MAIN scope/runspace; authority удерживается независимо от Row.
+    $normalAuthority=$null;$normalRetainedSamples=[Collections.Generic.List[object]]::new()
+    $normalBinding=Get-Variable NativeNormalBeforeNativeCollector -Scope Script -ErrorAction SilentlyContinue
+    if ($null -ne $normalBinding) {
+        if ($normalBinding.Value -isnot [scriptblock]) {throw 'NORMAL_COLLECTOR_KIND'}
+        $normalAuthority=& $normalBinding.Value ([pscustomobject]@{scenario=$Row.scenario;base=$Row.base;client=$Row.client;
+            path=$Row.path;phase=$Row.phase;source=$Source;target=$script:nativeTarget;installedRoot=$root;
+            cellEvidence=$cellEvidence;registryNode=$script:nativeNode;java=$Java;baseManifest=$Base;targetManifest=$Target;cold=$Cold;life=$Life})
+        if ($null -eq $normalAuthority -or -not $normalAuthority.bound) {throw 'NORMAL_COLLECTOR_UNBOUND'}
+    }
     $started=[datetime]::UtcNow;$failure=$null;$cleanup=[Collections.Generic.List[string]]::new();$lastClient=$null
     $systemPowerShell=Join-Path $env:SystemRoot 'System32/WindowsPowerShell/v1.0/powershell.exe'
     try {
@@ -766,6 +875,10 @@ function Invoke-NativeCell($Row,[string]$Source,$Base,$Target,$Life,$Cold,[strin
         $Row | Add-Member domainEvidence $domain -Force
         $before=@(Assert-ColdTree $root $Base);$userBefore=Get-NativeUserObject $root;$targetBefore=@(Assert-ColdTree $script:nativeTarget $Target)
         $controlled=@(Get-ColdControlledInventory $root)
+        if ($null -ne $normalAuthority) {
+            Write-ColdJson (Join-Path $cellEvidence 'controlled-before.json') $controlled
+            $null=Save-NormalStage $normalAuthority 'BEFORE' -1 $root $Base $Target
+        }
         $delta=@($Target.deltaPatches | Where-Object {$_.baseReleaseNumber -eq $Base.releaseNumber -and $_.baseCommitSha -ceq $Base.commitSha -and $_.baseTreeSha256 -ceq $Base.treeSha256})
         if ($delta.Count -ne 1) {throw 'NATIVE_DELTA_BASE'}
         $cellLife=$Life
@@ -787,6 +900,11 @@ function Invoke-NativeCell($Row,[string]$Source,$Base,$Target,$Life,$Cold,[strin
         $passes=if ($Row.scenario -ceq 'cancel-next-session') {2} else {1}
         for ($session=0;$session -lt $passes;$session++) {
             $server=Start-NativeFixture $cellLife $Java $mode $delay;$servers.Add($server)
+            if ($null -ne $normalAuthority) {
+                Write-ColdJson (Join-Path $cellEvidence ('normal-server-config-'+$session+'.json')) ([ordered]@{
+                    config=$server.launchConfig;encoded=$server.launchConfigBase64;identity=$server.identity;
+                    capturedUtc=[datetime]::UtcNow.ToString('o')})
+            }
             if ($Row.scenario -ceq 'corrupt-full-retain') {Assert-NativeFullServer $server.receipt $cellLife $Target}
             $arguments=@(Get-NativeArguments $root $Row.client $script:nativeNode);$launchAt=[datetime]::UtcNow
             $native=Start-NativeOwned (Join-Path $root (Get-ColdLauncherName $Row.client)) $arguments $root $server.receipt.manifestUri -Web:($Row.client -ceq 'web')
@@ -832,6 +950,15 @@ function Invoke-NativeCell($Row,[string]$Source,$Base,$Target,$Life,$Cold,[strin
                     $Row | Add-Member nonpollingEvidence $observation -Force
                 }
             }
+            if ($null -ne $normalAuthority) {
+                $normalStage=if ($Row.scenario -ceq 'cancel-next-session' -and $session -eq 0) {'cancel'} elseif (Test-Path -LiteralPath $ready) {'READY'} else {'nonReady'}
+                $null=Save-NormalStage $normalAuthority $normalStage $session $root $Base $Target $native
+                if ($normalStage -ceq 'READY') {
+                    Write-ColdJson (Join-Path $cellEvidence 'ready-old-tree.json') @(Get-ColdManagedInventory $root)
+                    Write-ColdJson (Join-Path $cellEvidence 'ready-staged-tree.json') @(Get-ColdManagedInventory (Join-Path $root 'CashMemory/Updates/Ready/tree'))
+                }
+                Observe-NormalQuiet $normalAuthority $server $native $root $Base $Target $delta[0] $session $Timeout
+            }
             $exit=Close-NativeNormally $native $root $Row.client $Timeout $cellEvidence
             Write-ColdJson (Join-Path $cellEvidence ('exit-'+$session+'.json')) $exit
             if ($Row.scenario -ceq 'cancel-next-session' -and $session -eq 0) {$null=New-Item -ItemType File -Path $server.receipt.cancelPath}
@@ -843,6 +970,7 @@ function Invoke-NativeCell($Row,[string]$Source,$Base,$Target,$Life,$Cold,[strin
                     (Test-Path -LiteralPath $ready) -or (Test-Path -LiteralPath (Join-Path $root 'CashMemory/Updates/payload.download')) -or
                     (Test-Path -LiteralPath (Join-Path $root 'CashMemory/Updates/Staging'))) {throw 'NATIVE_CANCEL_NOT_PROVED'}
                 [void](Assert-ColdTree $root $Base);$mode='valid';$delay=0
+                if ($null -ne $normalAuthority) {$null=Save-NormalStage $normalAuthority 'sessionBoundary' $session $root $Base $Target $native}
             } else {
                 Assert-NativeScenarioHttp $Row.scenario $http $delta[0].assetName $delta[0].sizeBytes $Target.sizeBytes
                 if ($Row.scenario -ceq 'corrupt-full-retain') {
@@ -850,8 +978,19 @@ function Invoke-NativeCell($Row,[string]$Source,$Base,$Target,$Life,$Cold,[strin
                     do {
                         if (@(Get-CopyProcesses $root).Count) {throw 'NATIVE_FULL_RETAIN_RESTART'}
                         Assert-NativeFullRetained $root $Base
+                        if ($null -ne $normalAuthority) {
+                            $normalRetainedSamples.Add([pscustomobject]@{elapsedMillis=$retainedClock.ElapsedMilliseconds;
+                                observedUtc=[datetime]::UtcNow.ToString('o');clients=@(Get-CopyProcesses $root);files=@(Get-ColdManagedInventory $root)})
+                        }
                         Start-Sleep -Milliseconds 250
-                    } while ($retainedClock.ElapsedMilliseconds -lt 3000)
+                    } while ($retainedClock.ElapsedMilliseconds -lt 3000 -or
+                        ($null -ne $normalAuthority -and $normalRetainedSamples.Count -and
+                            ($retainedClock.ElapsedMilliseconds-$normalRetainedSamples[0].elapsedMillis) -lt 3001))
+                    if ($null -ne $normalAuthority) {
+                        $normalRetainedSamples.Add([pscustomobject]@{elapsedMillis=$retainedClock.ElapsedMilliseconds;
+                            observedUtc=[datetime]::UtcNow.ToString('o');clients=@(Get-CopyProcesses $root);files=@(Get-ColdManagedInventory $root)})
+                        Write-ColdJson (Join-Path $cellEvidence 'normal-retained-interval.json') $normalRetainedSamples.ToArray()
+                    }
                     $retained=Join-Path $cellEvidence 'full-retained.json'
                     Write-ColdJson $retained ([ordered]@{status='PASS';observedUtc=[datetime]::UtcNow.ToString('o');version=(Get-ColdVersion $root);
                         files=@(Assert-ColdTree $root $Base);exit=$exit;scope='CORRUPT_FULL_OLD_TREE';elapsedMillis=$retainedClock.ElapsedMilliseconds})
@@ -864,6 +1003,7 @@ function Invoke-NativeCell($Row,[string]$Source,$Base,$Target,$Life,$Cold,[strin
         $userAfter=Get-NativeUserObject $root
         if ((ConvertTo-Json -InputObject $userBefore -Depth 16 -Compress) -cne (ConvertTo-Json -InputObject $userAfter -Depth 16 -Compress)) {throw 'NATIVE_USER_CHANGED'}
         Assert-ColdControlledChanges $controlled @(Get-ColdControlledInventory $root) $Row.client $lastClient.ui $root ([datetime]::UtcNow.Ticks)
+        if ($null -ne $normalAuthority) {Write-ColdJson (Join-Path $cellEvidence 'controlled-after.json') @(Get-ColdControlledInventory $root)}
         $phases=@('SESSION');$nativeLog=Join-Path $root 'CashMemory/Updates/update-log.md'
         if (Test-Path -LiteralPath $nativeLog) {
             Copy-Item -LiteralPath $nativeLog -Destination (Join-Path $cellEvidence 'update-log.md')
@@ -892,6 +1032,9 @@ function Invoke-NativeCell($Row,[string]$Source,$Base,$Target,$Life,$Cold,[strin
                 } catch {$cleanup.Add($_.Exception.Message)}
             }
             $serverIndex++
+            if ($null -ne $normalAuthority) {
+                try {Save-NormalRetainedExit $normalAuthority 'server' ($serverIndex-1) $server.process $server.identity $server.owned} catch {$cleanup.Add($_.Exception.Message)}
+            }
             $server.process.Dispose()
         }
         try {Stop-ColdRecoveryHelpers $root $systemPowerShell $started} catch {$cleanup.Add($_.Exception.Message)}
@@ -899,6 +1042,15 @@ function Invoke-NativeCell($Row,[string]$Source,$Base,$Target,$Life,$Cold,[strin
         $clientIndex=0
         foreach ($native in $clients) {
             try {if ($native.process.HasExited) {Save-NativeOutput $native $cellEvidence ('cleanup-client-'+$clientIndex)}} catch {$cleanup.Add($_.Exception.Message)}
+            if ($null -ne $normalAuthority) {
+                try {
+                    Save-NormalRetainedExit $normalAuthority 'launcher' $clientIndex $native.process $native.identity $root
+                    if ($null -ne $native.uiProcess -and $null -ne $native.ui) {
+                        Save-NormalRetainedExit $normalAuthority 'ui' $clientIndex $native.uiProcess ([pscustomobject]@{
+                            ProcessId=$native.ui.pid;StartedAtTicks=$native.ui.startedAtTicks;ExecutablePath=$native.ui.executablePath}) $root
+                    } else {$normalAuthority.pending.Add('ACTUAL_UI:cleanup')}
+                } catch {$cleanup.Add($_.Exception.Message)}
+            }
             if ($null -ne $native.uiProcess) {$native.uiProcess.Dispose()};$native.process.Dispose();$clientIndex++
         }
         if (-not $cleanup.Count) {
@@ -909,6 +1061,8 @@ function Invoke-NativeCell($Row,[string]$Source,$Base,$Target,$Life,$Cold,[strin
         $Row.status=if ($failure -or $cleanup.Count) {'FAIL'} else {'PASS'}
         $Row.reason=if ($failure) {$failure} elseif ($cleanup.Count) {$cleanup -join '; '} else {'NATIVE_LIFECYCLE_EXECUTED'}
         Write-ColdJson (Join-Path $cellEvidence 'cell.json') $Row
+        # finishedAt относится к assertions до cleanup; индекс запечатывается только после cell.json.
+        if ($null -ne $normalAuthority) {Complete-NormalCollector $normalAuthority $root $started $cleanup.ToArray()}
     }
     if ($failure -or $cleanup.Count) {throw $Row.reason}
 }
@@ -947,7 +1101,8 @@ foreach ($asset in @([pscustomobject]@{assetName=$target.assetName;sizeBytes=$ta
 }
 Initialize-NativeLifecycleDispatch $PSScriptRoot
 # Opt-in context существует до helper запуска. Независимый Expected не выводится из Row.
-$script:nativeAcceptanceContext=[pscustomobject]@{enabled=[bool]$CollectAcceptance;payloadExpectedByCell=@{}}
+$script:nativeAcceptanceContext=[pscustomobject]@{enabled=[bool]$CollectAcceptance;payloadExpectedByCell=@{};
+    normalIntentByCell=@{};payloadAuthorityByCell=@{}}
 if ([bool]$AcceptanceContextFile -ne [bool]$AcceptanceContextSha256) {throw 'ACCEPTANCE_CONTEXT_PIN_PAIR'}
 if ($AcceptanceContextFile) {
     $authority=Read-ColdPinnedJson $AcceptanceContextFile $AcceptanceContextSha256
@@ -958,8 +1113,26 @@ if ($AcceptanceContextFile) {
         if ($script:nativeAcceptanceContext.payloadExpectedByCell.ContainsKey($entry.key)) {throw 'ACCEPTANCE_CONTEXT_DUPLICATE_KEY'}
         $script:nativeAcceptanceContext.payloadExpectedByCell.Add($entry.key,$entry.expected)
     }
+    # Дополнительные opt-in intents закреплены MAIN context SHA, не создаются из helper Row.
+    foreach ($name in 'normalIntentByCell','payloadAuthorityByCell') {
+        if ($null -eq $authority.PSObject.Properties[$name]) {continue}
+        foreach ($entry in @($authority.$name)) {
+            Assert-ColdKeys $entry @('key','file','sha256','evidenceKind')
+            if ($script:nativeAcceptanceContext.$name.ContainsKey($entry.key)) {throw 'NATIVE_PINNED_DUPLICATE_KEY'}
+            $script:nativeAcceptanceContext.$name.Add($entry.key,$entry)
+        }
+    }
 }
 $rows=@(Get-NativeEvidencePlan (Join-Path $script:nativeProject 'ui-parity/src/test/java/ru/cashprediction/parity/update/UpdateEvidence.java'))
+foreach ($name in 'normalIntentByCell','payloadAuthorityByCell') {
+    $route=if ($name -ceq 'normalIntentByCell') {'normal'} else {'payload'}
+    foreach ($key in $script:nativeAcceptanceContext.$name.Keys) {
+        $matches=@($rows | Where-Object {($_.scenario+'/'+$_.base+'/'+$_.client+'/'+$_.path+'/'+$_.phase) -ceq $key -and
+            (Get-NativeDispatchRoute $_.scenario) -ceq $route})
+        if ($matches.Count -ne 1) {throw 'NATIVE_PINNED_UNKNOWN_CELL'}
+        $null=Get-NativeLifecyclePinnedIntent $script:nativeAcceptanceContext $matches[0] $route
+    }
+}
 # Authority keys не могут добавлять сценарий/phase за пределами canonical payload rows.
 foreach ($key in $script:nativeAcceptanceContext.payloadExpectedByCell.Keys) {
     $matches=@($rows | Where-Object {($_.scenario+'/'+$_.base+'/'+$_.client+'/'+$_.path+'/'+$_.phase) -ceq $key -and

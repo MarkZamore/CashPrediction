@@ -283,6 +283,8 @@ try {
     Write-FinalEvidence 'source-inventory.json' (ConvertTo-Json -InputObject $sourceInventory -Depth 8)
     $receipt.source = @{origin = 'archive-extraction'; inventory = 'source-inventory.json'; count = $sourceInventory.Count;
         inventorySha256 = (Get-FileHash -LiteralPath (Join-Path $evidence 'source-inventory.json')).Hash; composition = 'FAILED'}
+    # Общая политика требует и транзитивный PNG-validator, и скрипт размещения модулей;
+    # agent metadata отсекается той же политикой сначала в listing, затем в извлечённом дереве.
     Assert-DeliveredSource $extracted
     $receipt.source.composition = 'VERIFIED'
     if ($VerifyBuild) {
@@ -290,7 +292,12 @@ try {
         Assert-FinalPath $maven
         $receipt.buildStatus = 'FAILED'
         $receipt.maven = @{path = $maven; sha256 = (Get-FileHash -LiteralPath $maven).Hash}
-        $null = Invoke-FinalTool $maven @('-B', 'install') 'source-build.log' $extracted
+        # Свежий собственный repository исключает зависимость от установленных development JAR.
+        $buildRepository = Join-Path $owned 'maven-repository'
+        Assert-FinalPath $buildRepository
+        $null = New-Item -ItemType Directory -Path $buildRepository
+        $receipt.maven.repository = $buildRepository
+        $null = Invoke-FinalTool $maven @('-B', "-Dmaven.repo.local=$buildRepository", 'install') 'source-build.log' $extracted
         foreach ($entry in $sourceInventory | Where-Object { -not $_.directory }) {
             $path = Join-Path $extracted $entry.path; Assert-FinalPath $path
             if ((Get-FileHash -LiteralPath $path).Hash -cne $entry.sha256) { throw 'FINAL_BUILD_CHANGED_SOURCE' }

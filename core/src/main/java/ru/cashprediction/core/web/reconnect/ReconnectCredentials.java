@@ -108,10 +108,16 @@ public final class ReconnectCredentials {
             Files.createFile(file, PosixFilePermissions.asFileAttribute(PosixFilePermissions.fromString("rw-------")));
         else {
             var parentAcl = Files.getFileAttributeView(file.getParent(), AclFileAttributeView.class, LinkOption.NOFOLLOW_LINKS);
-            if (parentAcl == null || parentAcl.getOwner() instanceof GroupPrincipal)
+            if (parentAcl == null)
+                throw new IOException("private reconnect storage unavailable");
+            // У административной учётной записи Windows owner папки бывает группой Administrators.
+            // Разрешение выдаётся конкретному пользователю процесса, а не группе владельца папки.
+            UserPrincipal privateOwner = file.getFileSystem().getUserPrincipalLookupService()
+                    .lookupPrincipalByName(System.getProperty("user.name", ""));
+            if (privateOwner instanceof GroupPrincipal)
                 throw new IOException("private reconnect storage unavailable");
             List<AclEntry> entries = List.of(AclEntry.newBuilder().setType(AclEntryType.ALLOW)
-                    .setPrincipal(parentAcl.getOwner()).setPermissions(EnumSet.allOf(AclEntryPermission.class)).build());
+                    .setPrincipal(privateOwner).setPermissions(EnumSet.allOf(AclEntryPermission.class)).build());
             // ACL задаётся при создании: другой процесс никогда не видит окно унаследованных открытых прав.
             Files.createFile(file, new FileAttribute<List<AclEntry>>() {
                 /**
@@ -120,11 +126,14 @@ public final class ReconnectCredentials {
                  */
                 @Override public String name() { return "acl:acl"; }
                 /**
-                 * Возвращает заранее подготовленное разрешение всех операций только владельцу родительской папки.
+                 * Возвращает разрешение всех операций только индивидуальному пользователю процесса.
                  * @return неизменяемый список из одной разрешающей записи ACL для создаваемого файла
                  */
                 @Override public List<AclEntry> value() { return entries; }
             });
+            // Начальная ACL уже закрыта; смена owner собственного файла не создаёт окна открытых прав.
+            Files.getFileAttributeView(file, AclFileAttributeView.class, LinkOption.NOFOLLOW_LINKS)
+                    .setOwner(privateOwner);
         }
         if (!privatePermissions(file, true)) throw new IOException("private reconnect storage unavailable");
     }

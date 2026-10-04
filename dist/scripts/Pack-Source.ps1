@@ -111,6 +111,10 @@ function Test-IncludedFile([string] $Relative) {
     }
     $name = [IO.Path]::GetFileName($Relative)
     $resource = $Relative -match '^(core|update-tool|ui-fx|ui-swing|web|ui-parity)/src/(main|test)/resources(?:-filtered)?/'
+    # Служебные agent-файлы запрещены по имени в любом дереве, включая ресурсы.
+    # Не запрещаем обычные данные agent-response.json и другие предметные fixtures.
+    if ($name -match '^\.(agents?|claude|codex|gemini|copilot|cursor|windsurf|continue|roo|kilocode|opencode|mcp)(?:[._-].*)?$' -or
+        $name -match '^\.(cursor|windsurf|claude|codex)(rules|ignore)(?:\..*)?$') { return $false }
     # Конфигурация MCP исключается и при прямой проверке файла, и до обхода каталога.
     if ($Relative -match '(^|/)\.mcp/' -or $name -match '^\.?mcp\.json$') { return $false }
     # Именованные документы разработчика отсеиваются независимо от расширения и дерева ресурсов.
@@ -155,6 +159,7 @@ function Assert-NoSourceSecret([string] $Path, [string] $Relative) {
 function Assert-DeliveredSource([string] $Root) {
     $required = @('pom.xml', 'docs/design/architecture.md', 'dist/pom.xml', 'ui-parity/pom.xml',
         'dist/scripts/Set-LauncherUtf8.ps1', 'dist/scripts/Test-Icon-Source.ps1', 'dist/icons/make-icon.ps1',
+        'dist/scripts/Test-IconPayloadIntegrity.ps1', 'dist/scripts/Normalize-AppModules.ps1',
         'dist/launchers/swing.properties', 'dist/launchers/web.properties',
         '.github/scripts/Test-Portable.ps1', '.github/scripts/GhRetry.ps1',
         'core/src/main/resources/ru/cashprediction/core/ui/icons/application.ico',

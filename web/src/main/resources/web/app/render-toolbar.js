@@ -40,8 +40,8 @@ export function renderToolbar(app, model) {
     }
     wrap.append(primary);
     if (item.kind === 'MenuButton' || item.kind === 'SplitButton') {
-      // JavaFX: MenuButton → Swing: SwingMenuButton → Web: button с меню.
-      // JavaFX: SplitMenuButton → Swing: SwingSplitMenuButton → Web: пара кнопок.
+      // JavaFX: MenuButton → Swing: JButton + JPopupMenu → Web: button + div[role=menu].
+      // JavaFX: SplitMenuButton → Swing: JPanel с основной JButton и JButton-стрелкой с JPopupMenu → Web: пара button + div[role=menu].
       const panel = app.menus.panel(item.items, 'TOOLBAR');
       wrap.append(panel);
       if (item.kind === 'SplitButton') {

@@ -181,7 +181,7 @@ function New-NativeGoalPostTransactionProbe($PhaseContext,[string]$PhaseReceipt,
 
 # MAIN вызывает только после своей очереди. Обычный новый EXE launch, без updater env/test seam.
 # Frozen Connect-NativeClient не подходит: его exact args относятся к прежнему lifecycle.
-function Start-NativeGoalPostTransactionClient($Probe,[int]$Timeout=60) {
+function Start-NativeGoalPostTransactionClient($Probe,[int]$Timeout=60,[scriptblock]$WebBridgeAttach=$null) {
     if ($Timeout -lt 10 -or $Timeout -gt 180 -or @(Get-CopyProcesses $Probe.context.root).Count -or
         (Test-Path -LiteralPath (Join-Path $Probe.context.root 'CashMemory/Updates/install-journal.json'))) {throw 'GOAL_PROBE_LAUNCH_GUARD'}
     if ((Get-ColdTreeHash @(Get-ColdManagedInventory $Probe.context.root)) -cne $Probe.managedTreeSha256) {throw 'GOAL_PROBE_TREE_CHANGED'}
@@ -204,6 +204,8 @@ function Start-NativeGoalPostTransactionClient($Probe,[int]$Timeout=60) {
             return $false
         } $Timeout 'GOAL_WEB_URL_TIMEOUT'
         $native.stdout=$native.process.StandardOutput.ReadToEndAsync()
+        # Actual DOM attach должен предшествовать UI-ready: server bootstrap может ждать браузер.
+        if ($null -ne $WebBridgeAttach) {& $WebBridgeAttach $Probe $native | Out-Null}
     }
     Wait-NativeCondition {
         $native.ui=Get-ColdUiReceipt $Probe.context.root $Probe.context.client ([datetime]$Probe.observer.launchAt)
@@ -227,4 +229,175 @@ function Read-NativeGoalPostTransactionObservation($Probe,$BrowserProcess=$null,
     $fresh=Save-NativePhaseSessionObservation $Probe.context 'recovery' $Probe.native.ui $Probe.native.uiProcess
     $file=Join-Path $Probe.context.directory 'recovery.json'
     return Read-NativeRestoredWindowObservation $Probe.observer $Probe.native $fresh $BrowserProcess $BrowserOwnerFile $file ((Get-FileHash -LiteralPath $file).Hash.ToLowerInvariant())
+}
+
+# Cleanup отдельного probe не является обычным выходом пользователя и не заменяет restart proof.
+# Останавливаются только удерживаемые launcher/UI handles; чужой числовой PID не разыскивается.
+function Complete-NativeGoalPostTransactionClient($Probe) {
+    $native=$Probe.native;$errors=[Collections.Generic.List[string]]::new();$exits=[Collections.Generic.List[object]]::new()
+    if ($null -ne $native) {
+        $pairs=[Collections.Generic.List[object]]::new()
+        if ($null -ne $native.uiProcess -and $null -ne $native.ui) {
+            $pairs.Add(@{process=$native.uiProcess;identity=[pscustomobject]@{ProcessId=$native.ui.pid;StartedAtTicks=$native.ui.startedAtTicks;
+                ExecutablePath=$native.ui.executablePath;OwnedRoot=$Probe.context.root}})
+        }
+        $pairs.Add(@{process=$native.process;identity=$native.identity})
+        foreach ($pair in $pairs) {
+            try {
+                if ($pair.process -isnot [Diagnostics.Process]) {throw 'GOAL_CLEANUP_RETAINED_HANDLE_REQUIRED'}
+                Assert-ColdProcessIdentity $pair.identity (Get-ColdProcessReceipt $pair.process $Probe.context.root) $Probe.context.root $pair.identity.ExecutablePath
+                Stop-ColdRetainedProcess $pair.process $pair.identity $Probe.context.root
+                if (-not $pair.process.HasExited) {throw 'GOAL_CLEANUP_RETAINED_ALIVE'}
+                $exits.Add([pscustomobject]@{identity=$pair.identity;actualExit=$pair.process.ExitCode})
+            } catch {$errors.Add($_.Exception.Message)}
+        }
+    }
+    $remaining=@(Get-CopyProcesses $Probe.context.root)
+    if ($remaining.Count) {$errors.Add('GOAL_CLEANUP_ROOT_PROCESSES_ALIVE')}
+    # При rejected stop pipes могут оставаться открытыми: нельзя бесконечно ждать stdout в failure cleanup.
+    if ($errors.Count -eq 0 -and $null -ne $native) {
+        try {Save-NativeOutput $native $Probe.context.directory 'explicit-client'} catch {$errors.Add($_.Exception.Message)}
+    }
+    if ($errors.Count -eq 0) {
+        # Реестр удаляется только после полного root census и только по validated собственному UUID.
+        $nodePath=Get-PortableRegistryPath $Probe.registryNode
+        if (Test-Path -LiteralPath $nodePath) {Remove-Item -LiteralPath $nodePath -Recurse -Force}
+        if ($null -ne $native) {
+            if ($null -ne $native.uiProcess) {$native.uiProcess.Dispose()};$native.process.Dispose()
+        }
+    }
+    $receipt=Join-Path $Probe.context.directory 'probe-native-cleanup.json'
+    Write-ColdJson $receipt ([ordered]@{finishedAt=[datetime]::UtcNow.ToString('o');exits=@($exits.ToArray());remaining=$remaining;
+        errors=@($errors.ToArray());kind='RETAINED_HANDLE_TEARDOWN';nativePass=$false;ordinaryExitProven=$false})
+    if ($errors.Count) {throw ('GOAL_NATIVE_CLEANUP:'+($errors -join ';'))}
+    return [pscustomobject]@{Receipt=$receipt;ReceiptSha256=(Get-FileHash -LiteralPath $receipt).Hash.ToLowerInvariant();nativePass=$false;ordinaryExitProven=$false}
+}
+
+# Один preflight используется перед phase launch и повторно перед отдельным restoration launch.
+function Assert-NativeGoalWebObserverPins($WebRuntime,
+    [string]$RuntimeReceiptSha256='',[string]$Edge='',[string]$EdgeSha256='') {
+        if ($null -eq $WebRuntime -or $RuntimeReceiptSha256 -cnotmatch '^[0-9a-f]{64}$' -or
+            (Get-FileHash -LiteralPath $WebRuntime.receipt).Hash.ToLowerInvariant() -cne $RuntimeReceiptSha256 -or
+            $WebRuntime.receiptSha256 -cne $RuntimeReceiptSha256) {throw 'GOAL_WEB_EXPLICIT_RUNTIME_PIN'}
+        Assert-NativeWebGoalRuntime $WebRuntime
+        $stored=ConvertFrom-ColdReceiptJson ([Text.UTF8Encoding]::new($false,$true).GetString(
+            (Read-RestoredWindowBytes $WebRuntime.receipt $WebRuntime.directory $RuntimeReceiptSha256)))
+        foreach ($key in 'directory','java','javaSha256','core','coreSha256','classes','classpath','sourcePins','classPins') {
+            if (-not (Test-ColdInventoryEqual $stored.$key $WebRuntime.$key)) {throw 'GOAL_WEB_RUNTIME_RECEIPT_BINDING'}
+        }
+        # Проверка Edge pin ДО native launch, не только внутри позднего attach callback.
+        [void](Resolve-PortableSafetyPath $Edge)
+        if ($EdgeSha256 -cnotmatch '^[0-9a-f]{64}$' -or (Get-FileHash -LiteralPath $Edge).Hash.ToLowerInvariant() -cne $EdgeSha256) {throw 'GOAL_WEB_EXPLICIT_EDGE_PIN'}
+}
+
+# Optional production entry: MAIN вызывает явно на готовом новом probe, без изменения 9-cell dispatch.
+# Web runtime должен быть подготовлен заранее и независимо закреплён SHA receipt перед native Start.
+function Invoke-NativeGoalPostTransactionObserver($Probe,[int]$Timeout=60,$WebRuntime=$null,
+    [string]$RuntimeReceiptSha256='',[string]$Edge='',[string]$EdgeSha256='') {
+    $isWeb=$Probe.context.client -ceq 'web';$attach=$null
+    if ($isWeb) {
+        Assert-NativeGoalWebObserverPins $WebRuntime $RuntimeReceiptSha256 $Edge $EdgeSha256
+        $attach={param($p,$n) Start-NativeWebGoalRestorationBridge $p $n $WebRuntime $Edge $EdgeSha256 55}.GetNewClosure()
+    }
+    $failure=$null;$observationUnavailable=$null;$cleanupErrors=[Collections.Generic.List[string]]::new();$window=$null;$browserCleanup=$null;$nativeCleanup=$null
+    $decision=New-RestoredWindowDecision 'PENDING' @('ACTUAL_OBSERVATION_NOT_PRODUCED')
+    try {
+        [void](Start-NativeGoalPostTransactionClient $Probe $Timeout $attach)
+        try {
+            Wait-NativeCondition {Test-Path -LiteralPath (Join-Path $Probe.observer.output 'observed')} 30 'GOAL_SHOT_TIMEOUT'
+        } catch {
+            # Только отсутствие actual shot в этом ожидании означает недоказанность, не успех и не identity failure.
+            if ($_.Exception.Message -cne 'GOAL_SHOT_TIMEOUT') {throw}
+            $observationUnavailable='GOAL_SHOT_TIMEOUT'
+            $decision=New-RestoredWindowDecision 'PENDING' @('ACTUAL_SHOT_SIGNAL_MISSING')
+        }
+        if ($null -eq $observationUnavailable) {
+            $decision=if ($isWeb) {Read-NativeWebGoalRestorationObservation $Probe} else {Read-NativeGoalPostTransactionObservation $Probe}
+        }
+    } catch {$failure=$_.Exception.Message}
+    finally {
+        # Даже attach failure сохраняет Probe.webBridge/Probe.native до cleanup; первичная ошибка не стирается.
+        $bridge=Get-RestoredWindowField $Probe 'webBridge'
+        if ($null -ne $bridge) {
+            try {$browserCleanup=Stop-NativeWebGoalRestorationBridge $bridge} catch {$cleanupErrors.Add($_.Exception.Message)}
+        }
+        try {$nativeCleanup=Complete-NativeGoalPostTransactionClient $Probe} catch {$cleanupErrors.Add($_.Exception.Message)}
+        try {$window=Complete-NativeRestoredWindowObserver $Probe.observer} catch {$cleanupErrors.Add($_.Exception.Message)}
+    }
+    # Последний census collector может опровергнуть ранний sampler; seal следует всем cleanup.
+    if ((Get-RestoredWindowField (Get-RestoredWindowField $window 'decision') 'status') -ceq 'FAIL') {
+        $cleanupErrors.Add('GOAL_WINDOW_FINAL_CLEANUP_FAILED')
+    }
+    if ($isWeb) {
+        try {Assert-NativeGoalWebObserverPins $WebRuntime $RuntimeReceiptSha256 $Edge $EdgeSha256}
+        catch {$cleanupErrors.Add($_.Exception.Message)}
+    }
+    $status=if ($failure -or $cleanupErrors.Count) {'FAIL'} else {$decision.status}
+    $receipt=Join-Path $Probe.context.directory 'goal-probe-execution.json'
+    Write-ColdJson $receipt ([ordered]@{scope='EXPLICIT_POST_TRANSACTION_RESTORATION_PROBE';client=$Probe.context.client;
+        status=$status;failure=$failure;observationUnavailable=$observationUnavailable;cleanupErrors=@($cleanupErrors.ToArray());decision=$decision;window=$window;
+        browserCleanup=$browserCleanup;nativeCleanup=$nativeCleanup;runtimeReceiptSha256=$RuntimeReceiptSha256;edgeSha256=$EdgeSha256;
+        finishedAt=[datetime]::UtcNow.ToString('o');nativePass=$false;fullCellProofComplete=$false;
+        automaticRestartProof=$false;ordinaryExitProven=$false})
+    return [pscustomobject]@{status=$status;failure=$failure;observationUnavailable=$observationUnavailable;cleanupErrors=@($cleanupErrors.ToArray());Receipt=$receipt;
+        ReceiptSha256=(Get-FileHash -LiteralPath $receipt).Hash.ToLowerInvariant();nativePass=$false;fullCellProofComplete=$false}
+}
+
+# MAIN передаёт independently pinned ticket из своей очереди; adapter не создаёт разрешение сам.
+# Ticket связывает полный tuple и срок очереди, но не служит доказательством actual execution.
+function Assert-NativeGoalPhaseMainTicket([string]$MainTicket,[string]$MainTicketSha256,$Binding) {
+    if (-not $MainTicket -or $MainTicketSha256 -cnotmatch '^[0-9a-f]{64}$') {throw 'GOAL_PHASE_MAIN_TICKET_REQUIRED'}
+    $ticket=ConvertFrom-ColdReceiptJson ([Text.UTF8Encoding]::new($false,$true).GetString(
+        (Read-RestoredWindowBytes $MainTicket $Binding.evidence $MainTicketSha256)))
+    if ((Get-RestoredWindowField $ticket 'scope') -cne 'MAIN_SERIALIZED_GOAL_PHASE' -or
+        (Get-RestoredWindowField $ticket 'schemaVersion') -ne 1 -or
+        (Get-RestoredWindowField $ticket 'nonce') -cnotmatch '^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$') {throw 'GOAL_PHASE_MAIN_TICKET_SCHEMA'}
+    $now=[datetime]::UtcNow.Ticks
+    if ((Get-ColdUtcTicks $ticket.issuedAt) -gt $now -or (Get-ColdUtcTicks $ticket.expiresAt) -le $now) {throw 'GOAL_PHASE_MAIN_TICKET_EXPIRED'}
+    if (-not (Test-ColdInventoryEqual $ticket.binding $Binding)) {throw 'GOAL_PHASE_MAIN_TICKET_BINDING'}
+    return $ticket
+}
+
+# Явный phase-session cell route в собственном adapter, не public Jason lifecycle/dispatch.
+# Caller заранее импортирует pinned NEW Invoke-NativeGoalPhaseScenario/Start через AST generators.
+# Входов prebuilt observations нет: post probe всегда получает свежий context исполнившейся phase.
+function Invoke-NativeGoalPhaseSessionCell($Row,[string]$Source,$Base,$Target,$Life,$Cold,[string]$Java,
+    [string]$Evidence,[int]$Timeout=60,$WebRuntime=$null,[string]$RuntimeReceiptSha256='',
+    [string]$Edge='',[string]$EdgeSha256='',[string]$MainTicket='',[string]$MainTicketSha256='') {
+    if ($Row.client -cnotin @('fx','swing','web')) {throw 'GOAL_PHASE_CLIENT'}
+    if ($Timeout -lt 30 -or $Timeout -gt 180) {throw 'GOAL_PHASE_TIMEOUT'}
+    if ($Row.client -ceq 'web') {Assert-NativeGoalWebObserverPins $WebRuntime $RuntimeReceiptSha256 $Edge $EdgeSha256}
+    $binding=[pscustomobject]@{client=$Row.client;scenario=(Get-RestoredWindowField $Row 'scenario');
+        source=$Source;base=$Base;target=$Target;life=$Life;cold=$Cold;java=$Java;evidence=$Evidence;timeout=$Timeout;
+        runtimeReceiptSha256=$RuntimeReceiptSha256;edge=$Edge;edgeSha256=$EdgeSha256}
+    $ticket=Assert-NativeGoalPhaseMainTicket $MainTicket $MainTicketSha256 $binding
+    if (-not (Get-Command Invoke-NativeGoalPhaseScenario -CommandType Function -ErrorAction SilentlyContinue)) {throw 'GOAL_PHASE_PINNED_HOOK_NOT_IMPORTED'}
+    $saved=Get-Variable nativeGoalPhaseContext -Scope Script -ErrorAction SilentlyContinue
+    $old=if ($null -ne $saved) {$saved.Value} else {$null}
+    $script:nativeGoalPhaseContext=$null
+    $phaseResult=$null;$restoration=$null;$failure=$null;$context=$null
+    try {
+        $phaseResult=Invoke-NativeGoalPhaseScenario $Row $Source $Base $Target $Life $Cold $Java $Evidence $Timeout
+        $context=$script:nativeGoalPhaseContext
+        if ($null -eq $context -or $context.client -cne $Row.client) {throw 'GOAL_PHASE_FRESH_CONTEXT_MISSING'}
+        $independent=Get-RestoredWindowField $Row 'phaseSessionIndependent'
+        if ($null -eq $independent) {throw 'GOAL_PHASE_INDEPENDENT_RECEIPT_MISSING'}
+        # Отрицательное состояние phase не разрешает следующий launch; положительное НЕ доказывает окно.
+        if ((Get-RestoredWindowField $Row 'status') -ceq 'FAIL') {throw 'GOAL_PHASE_FAILED_NO_PROBE'}
+        if ((Get-RestoredWindowField $independent 'status') -ceq 'FAIL') {throw 'GOAL_PHASE_COLLECTOR_FAILED_NO_PROBE'}
+        # Очередь и все runtime pins повторно проверяются до rearm/нового запуска.
+        [void](Assert-NativeGoalPhaseMainTicket $MainTicket $MainTicketSha256 $binding)
+        if ($Row.client -ceq 'web') {Assert-NativeGoalWebObserverPins $WebRuntime $RuntimeReceiptSha256 $Edge $EdgeSha256}
+        $probe=New-NativeGoalPostTransactionProbe $context $independent.Receipt $independent.ReceiptSha256
+        $restoration=Invoke-NativeGoalPostTransactionObserver $probe $Timeout $WebRuntime $RuntimeReceiptSha256 $Edge $EdgeSha256
+    } catch {$failure=$_.Exception.Message}
+    finally {
+        if ($null -ne $saved) {$script:nativeGoalPhaseContext=$old} else {Remove-Variable nativeGoalPhaseContext -Scope Script -ErrorAction SilentlyContinue}
+    }
+    # Возвращается отдельный supplemental результат; Row.status/signoff/counts не переписываются.
+    return [pscustomobject]@{scope='PHASE_WITH_EXPLICIT_POST_TRANSACTION_RESTORATION';
+        status=$(if ($failure) {'FAIL'} elseif ($null -eq $restoration) {'PENDING'} else {$restoration.status});
+        failure=$failure;phaseResult=$phaseResult;phaseSessionIndependent=(Get-RestoredWindowField $Row 'phaseSessionIndependent');
+        restoration=$restoration;mainTicket=$MainTicket;mainTicketSha256=$MainTicketSha256;mainNonce=$ticket.nonce;
+        nativePass=$false;fullCellProofComplete=$false;automaticRestartProof=$false}
 }

@@ -78,8 +78,23 @@ public final class AppPaths {
      * @throws IOException если папку создать не удалось (например, носитель только для чтения)
      */
     public static Path ensureCashMemory() throws IOException {
-        Path dir = cashMemory();
-        Files.createDirectories(dir);
-        return dir;
+        Path home = appHome();
+        return ensureCashMemory(home, home.resolve(CASH_MEMORY_DIR));
+    }
+
+    /**
+     * Проверяет runtime home до создания папки, затем повторяет physical проверку.
+     * Существующие файлы и небезопасные ссылки не удаляются и не заменяются.
+     *
+     * @param home домашняя папка выбранного окружения
+     * @param memory соответствующая CashMemory
+     * @return проверенная папка CashMemory
+     * @throws IOException при небезопасном пути или ошибке создания
+     */
+    public static Path ensureCashMemory(Path home, Path memory) throws IOException {
+        CanonicalPaths.requireCashMemory(home, memory);
+        Files.createDirectories(memory);
+        CanonicalPaths.requireCashMemory(home, memory);
+        return memory;
     }
 }

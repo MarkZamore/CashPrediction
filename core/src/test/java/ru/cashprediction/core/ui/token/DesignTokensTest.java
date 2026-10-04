@@ -105,7 +105,8 @@ class DesignTokensTest {
         assertEquals(800, DesignTokens.MAIN_DEFAULT_HEIGHT);
         assertEquals(900, DesignTokens.MAIN_MIN_WIDTH);
         assertEquals(600, DesignTokens.MAIN_MIN_HEIGHT);
-        assertEquals(118, DesignTokens.CARD_MIN_WIDTH);
+        assertEquals(140, DesignTokens.CARD_MIN_WIDTH);
+        assertTrue(TokenCss.webCss().contains("--cp-card-min-width: 140px;"));
         assertEquals(6, DesignTokens.CARD_GAP);
         assertTrue(TokenCss.webCss().contains("--cp-card-gap: 6px;"));
         assertEquals(List.of(80, 24, 28, 32), List.of(DesignTokens.CHART_MARGIN_LEFT, DesignTokens.CHART_MARGIN_RIGHT,

@@ -461,11 +461,7 @@ public final class SwingUiDriver implements UiDriver {
         remaining(request.deadlineNanos());
         BufferedImage image = Objects.requireNonNull(screen.capture(before.rectangle()));
         remaining(request.deadlineNanos());
-        byte[] png;
-        try (var bytes = new ByteArrayOutputStream(); var output = new MemoryCacheImageOutputStream(bytes)) {
-            if (!ImageIO.write(image, "png", output)) throw new IOException("PNG encoder unavailable");
-            output.flush(); png = bytes.toByteArray();
-        }
+        byte[] png = encodePng(image);
         return captureEdt(request.deadlineNanos(), () -> transaction.finish(request, before, image, png));
     }
 
@@ -690,8 +686,21 @@ public final class SwingUiDriver implements UiDriver {
                 if (root.getWidth() <= 0 || root.getHeight() <= 0) throw new IllegalStateException("Visible capture target has no size");
                 return new Rectangle(p.x, p.y, root.getWidth(), root.getHeight());
             });
-            BufferedImage image = robot.createScreenCapture(bounds); ByteArrayOutputStream bytes = new ByteArrayOutputStream(); ImageIO.write(image, "png", bytes); return bytes.toByteArray();
+            return encodePng(robot.createScreenCapture(bounds));
         } catch (Exception e) { throw new IOException("Screenshot", e); }
+    }
+
+    /**
+     * Кодирует уже снятый растр без Robot и файлового ImageIO cache вне CashMemory.
+     * Caller-owned memory stream закрывается до выдачи bytes, включая отказ PNG writer.
+     * Глобальные ImageIO cache settings не изменяются; отсутствующий writer даёт IOException.
+     */
+    static byte[] encodePng(BufferedImage image) throws IOException {
+        ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+        try (var output = new MemoryCacheImageOutputStream(bytes)) {
+            if (!ImageIO.write(image, "png", output)) throw new IOException("PNG encoder unavailable");
+        }
+        return bytes.toByteArray();
     }
 
     /** Не создаёт фиктивное главное окно ради снимка вопроса восстановления или второго экземпляра. */

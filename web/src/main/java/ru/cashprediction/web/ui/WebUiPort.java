@@ -59,15 +59,7 @@ public final class WebUiPort implements UiPort {
     public WebBootstrap bootstrap() {
         thread.check();
         // Модель до showMain нужна только для страницы под диалогом восстановления; рендеринг не вызывается.
-        MainScreenModel model = screen;
-        if (model == null) {
-            var state = controller.state();
-            model = new MainScreenModel(0, UiText.get("alert.info.title"), MenuModels.menuBar(state, ClientKind.WEB),
-                    MenuModels.toolbar(state, ClientKind.WEB), ru.cashprediction.core.ui.view.summary.SummaryBuilder.build(state),
-                    ru.cashprediction.core.ui.view.table.LazyTableModel.build(state, 0),
-                    ru.cashprediction.core.ui.view.chart.ChartLayout.model(state, 0),
-                    ru.cashprediction.core.ui.view.status.StatusBuilder.build(state, controller.environment().clock().now()), state.view().mode());
-        }
+        MainScreenModel model = screen == null ? controller.bootstrapPlaceholder() : screen;
         Map<String, String> texts = new LinkedHashMap<>();
         UiText.keys().stream().filter(key -> key.startsWith(WebBootstrap.OFFLINE_PREFIX)
                 || WebBootstrap.CHROME_TEXT_KEYS.contains(key)).sorted().forEach(key -> texts.put(key, UiText.get(key)));
@@ -144,7 +136,7 @@ public final class WebUiPort implements UiPort {
         String id = session != null ? session.windowId() : controller.state().windows().windows().getLast().windowId();
         String owner = session != null ? session.ownerId() : controller.state().windows().windows().getLast().ownerId();
         WindowBounds bounds = session == null ? null : session.captureState().bounds();
-        // JavaFX: Alert → Swing: JOptionPane → Web: dialog
+        // JavaFX: Alert → Swing: SwingAlerts (JDialog) → Web: dialog
         Handle handle = new Handle(id, Placement.restored(owner, bounds), null, null, null, spec, session);
         windows.put(id, handle);
         String originTab = tab;

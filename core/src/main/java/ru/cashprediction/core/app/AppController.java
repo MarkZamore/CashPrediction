@@ -252,6 +252,24 @@ public final class AppController implements UiIntents, FlowContext {
                 messages, autosaveProblem);
     }
 
+
+    /**
+     * Строит общую модель страницы под предстартовым диалогом, не публикуя главный экран.
+     * Сохраняет прежние bootstrap revision 0 и заголовок сообщения; не вызывает refresh/showMain.
+     * Даже после внутреннего refresh это отдельная placeholder-модель, а не опубликованный screen.
+     *
+     * @return неизменяемая модель для адаптера до первого showMain
+     */
+    public MainScreenModel bootstrapPlaceholder() {
+        assertUiThread();
+        AppState app = state();
+        return new MainScreenModel(0, UiText.get("alert.info.title"),
+                MenuModels.menuBar(app, port.profile().kind()), MenuModels.toolbar(app, port.profile().kind()),
+                SummaryBuilder.build(app), LazyTableModel.build(app, 0), ChartLayout.model(app, 0),
+                StatusBuilder.build(app, environment.clock().now()), app.view().mode());
+    }
+
+
     /**
      * Сколько раз команда была действительно выполнена (после проверок модальности и доступности).
      *

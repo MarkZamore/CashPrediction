@@ -24,10 +24,10 @@ class SwingSummaryGeometryTest {
                 Dimension preferred = panel.getPreferredSize();
                 panel.setSize(panelWidth, preferred.height); panel.doLayout();
                 Insets in = panel.getInsets();
-                int columns = panelWidth == 900 ? 7 : 9;
-                int expectedWidth = panelWidth == 900 ? 121 : 126;
+                int columns = panelWidth == 900 ? 6 : 8;
+                int expectedWidth = 142;
                 int height = panel.getComponent(0).getPreferredSize().height;
-                int rows = panelWidth == 900 ? 2 : 1;
+                int rows = 2;
                 assertEquals(in.top + in.bottom + rows * height + (rows - 1) * 6, preferred.height);
                 for (int i = 0; i < 9; i++) {
                     Component card = panel.getComponent(i);
@@ -51,6 +51,29 @@ class SwingSummaryGeometryTest {
                 }
                 assertEquals(panelWidth, preferred.width);
             }
+        });
+    }
+
+    /** Штатное отсутствующее значение помещается в реальную строку при минимальной ширине карточки. */
+    @Test void beyondValueFitsActualCardFontAtMinimumWidth() throws Exception {
+        SwingUtilities.invokeAndWait(() -> {
+            SwingLook.install();
+            String beyond = UiText.get("summary.beyond.value");
+            var panel = new SwingSummaryPanel(null);
+            var card = panel.new Card(new CardModel("min", "", beyond, ColorToken.TEXT_PRIMARY,
+                    "", ColorToken.TEXT_MUTED, null, "", ""));
+            card.setSize(DesignTokens.CARD_MIN_WIDTH, card.getPreferredSize().height);
+            card.doLayout();
+            assertEquals(SwingLook.font(FontToken.CARD), card.value.getFont());
+            var metrics = card.value.getFontMetrics(card.value.getFont());
+            Insets in = card.getInsets();
+            assertTrue(metrics.stringWidth(beyond) <= DesignTokens.CARD_MIN_WIDTH - in.left - in.right);
+            assertTrue(metrics.stringWidth(beyond) <= card.value.getWidth());
+            String displayed = SwingUtilities.layoutCompoundLabel(card.value, metrics, beyond, null,
+                    card.value.getVerticalAlignment(), card.value.getHorizontalAlignment(),
+                    card.value.getVerticalTextPosition(), card.value.getHorizontalTextPosition(),
+                    new Rectangle(0, 0, card.value.getWidth(), card.value.getHeight()), new Rectangle(), new Rectangle(), 0);
+            assertEquals(beyond, displayed);
         });
     }
 
@@ -119,7 +142,7 @@ class SwingSummaryGeometryTest {
         SwingUtilities.invokeAndWait(() -> {
             SwingLook.install();
             var panel = nineCards(null);
-            for (int width : new int[]{900, 1125, 1126, 1125, 1200, 900}) {
+            for (int width : new int[]{900, 1323, 1324, 1323, 1200, 900}) {
                 panel.setSize(width, panel.getHeight());
                 panel.setSize(width, panel.getPreferredSize().height);
                 panel.doLayout();
@@ -144,7 +167,7 @@ class SwingSummaryGeometryTest {
             north.add(controls, BorderLayout.CENTER);
             root.add(north, BorderLayout.NORTH);
             root.add(center, BorderLayout.CENTER);
-            for (int width : new int[]{1200, 1125, 1126, 900, 1200}) {
+            for (int width : new int[]{1200, 1323, 1324, 900, 1200}) {
                 root.setSize(width, 600);
                 // Первый проход присваивает новую ширину; следующий моделирует revalidate после resize.
                 layoutTree(root);
@@ -230,8 +253,8 @@ class SwingSummaryGeometryTest {
     /** Проверяет текущую сетку и высоту, включая неполный ряд после resize. */
     private static void geometry(SwingSummaryPanel panel, int width) {
         Insets in = panel.getInsets();
-        int columns = Math.min(9, (width - in.left - in.right + 6) / 124);
-        assertEquals(width == 1125 ? 8 : width == 1126 ? 9 : width == 900 ? 7 : 9, columns);
+        int columns = Math.min(9, (width - in.left - in.right + 6) / 146);
+        assertEquals(width == 1323 ? 8 : width == 1324 ? 9 : width == 900 ? 6 : 8, columns);
         int cardWidth = (width - in.left - in.right - (columns - 1) * 6) / columns;
         int height = panel.getComponent(0).getPreferredSize().height;
         int rows = (9 + columns - 1) / columns;

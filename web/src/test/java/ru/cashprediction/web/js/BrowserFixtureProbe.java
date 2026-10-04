@@ -167,7 +167,7 @@ public final class BrowserFixtureProbe {
                     Files.writeString(output.resolve("alignment-" + width + ".json"), JsonWriter.write(cdp.evaluate("(() => {const rect=node=>node?.getBoundingClientRect().toJSON(); const table=document.getElementById('table'); const scroll=table.querySelector('.table-scroll'); return {cards:[...document.querySelectorAll('#summary .card')].map(rect),header:rect(table.querySelector('.table-header')),scrollWidth:scroll.offsetWidth,clientWidth:scroll.clientWidth,columns:[...table.querySelector('.table-header').children].map(node=>({id:node.dataset.cpId,header:rect(node),cell:rect(table.querySelector('.table-row [data-cp-id='+node.dataset.cpId+']'))}))};})()")), StandardCharsets.UTF_8);
                     check(cdp.evaluate("(() => {const table=document.getElementById('table'); const header=table.querySelector('.table-header'); const scroll=table.querySelector('.table-scroll'); const cards=[...document.querySelectorAll('#summary .card')]; return cards.every(card=>card.getBoundingClientRect().height===72) && header.getBoundingClientRect().width===scroll.clientWidth && scroll.offsetWidth-scroll.clientWidth===16 && [...header.children].every(column=>{const cell=table.querySelector('.table-row [data-cp-id='+column.dataset.cpId+']'); return cell && Math.abs(cell.getBoundingClientRect().x-column.getBoundingClientRect().x)<0.1 && Math.abs(cell.getBoundingClientRect().width-column.getBoundingClientRect().width)<0.1;});})()"), "actual card height and scrollbar-aware header/body alignment");
                     if (width == 1200) {
-                        check(cdp.evaluate("document.getElementById('summary').getBoundingClientRect().height===84 && document.querySelector('.table-header').getBoundingClientRect().width===1184 && document.querySelector('.table-header [data-cp-id=title]').getBoundingClientRect().width===456"), "desktop shared summary and title geometry at 1200px");
+                        check(cdp.evaluate("document.getElementById('summary').getBoundingClientRect().height===162 && document.querySelector('.table-header').getBoundingClientRect().width===1184 && document.querySelector('.table-header [data-cp-id=title]').getBoundingClientRect().width===456"), "desktop shared summary and title geometry at 1200px");
                         probe.tableSelection("fixture-0");
                         cdp.waitFor("document.querySelector('.table-row[aria-selected=true]')?.dataset.cpId==='fixture-0'", Duration.ofSeconds(5));
                         check(cdp.evaluate("window.cpParityTestApi.dump({step:'physical-selection'}).then(reply=>reply.value.table.selectedRowId==='fixture-0')"), "present physical selection is dumped");
@@ -367,9 +367,10 @@ public final class BrowserFixtureProbe {
         int expense = ColorToken.EXPENSE.argb();
         String expenseRgb = JsonWriter.write("rgb(" + ((expense >> 16) & 255) + ", "
                 + ((expense >> 8) & 255) + ", " + (expense & 255) + ")");
-        check(DesignTokens.CARD_MIN_WIDTH == 118 && DesignTokens.CARD_GAP == 6, "canonical summary tokens");
+        check(DesignTokens.CARD_MIN_WIDTH == 140 && DesignTokens.CARD_GAP == 6, "canonical summary tokens");
+        String beyond = JsonWriter.write(UiText.get("summary.beyond.value"));
         Object result = cdp.evaluate("(async()=>{const model=" + summary + ";const unavailable=" + unavailable
-                + ";const expenseRgb=" + expenseRgb + ";" + """
+                + ";const expenseRgb=" + expenseRgb + ";const beyond=" + beyond + ";" + """
                 const {renderSummary}=await import('/app/render-summary.js');
                 const {Application}=await import('/app/main.js');
                 const original=document.getElementById('summary');
@@ -385,7 +386,7 @@ public final class BrowserFixtureProbe {
                 const savedScroll=[scroll.scrollLeft,scroll.scrollTop];
                 const savedSend=Application.prototype.send;
                 const initialWidth=main.getBoundingClientRect().width;
-                const initialColumns=new Map([[1200,9],[400,3],[500,3],[1920,9]]).get(initialWidth);
+                const initialColumns=new Map([[1200,8],[400,2],[500,3],[1920,9]]).get(initialWidth);
                 const cases=[]; let app; let checks=0;
                 /** Даёт ошибке имя сценария и считает только выполненные утверждения. */
                 const verify=(condition,label)=>{if(!condition)throw new Error('Summary polish: '+label);checks++;};
@@ -398,13 +399,13 @@ public final class BrowserFixtureProbe {
                   const available=outerWidth-16-2*border;
                   const width=(available-6*(expectedColumns-1))/expectedColumns;
                   const rows=Math.ceil(cardCount/expectedColumns); const height=12+2*border+rows*72+(rows-1)*6;
-                  return cards.length===cardCount && parseFloat(css.getPropertyValue('--cp-card-min-width'))===118
+                  return cards.length===cardCount && parseFloat(css.getPropertyValue('--cp-card-min-width'))===140
                     && parseFloat(css.columnGap)===6 && parseFloat(css.rowGap)===6 && css.display==='grid'
                     && parseFloat(css.paddingLeft)===8 && parseFloat(css.paddingRight)===8
                     && parseFloat(css.paddingTop)===6 && parseFloat(css.paddingBottom)===6
                     && Math.abs(box.width-outerWidth)<0.1 && Math.abs(box.height-height)<0.1
                     && panel.scrollWidth<=panel.clientWidth
-                    && (outerWidth-2*border<134 ? width<118 : width>=118)
+                    && (outerWidth-2*border<156 ? width<140 : width>=140)
                     && css.gridTemplateColumns.trim().split(' ').length===expectedColumns
                     && cards.every((card,index)=>{const rect=card.getBoundingClientRect();return rect.height===72
                       && Math.abs(rect.width-width)<0.1
@@ -466,8 +467,8 @@ public final class BrowserFixtureProbe {
                   const balances=[...table.querySelectorAll('.table-row [data-cp-id=balance]')];
                   verify(balances.length>0 && balances.every(node=>Number(getComputedStyle(node).fontWeight)===700),
                     'nonempty actual balance cells retain bold');
-                  // Независимые ожидания: при 800px последний ряд содержит три карточки из шести колонок.
-                  for(const [width,columns] of [[800,6],[500,3],[400,3],[1200,9],[800,6]]){
+                  // Независимые ожидания: при 800px последний ряд содержит четыре карточки из пяти колонок.
+                  for(const [width,columns] of [[800,5],[500,3],[400,2],[900,6],[1200,8],[800,5]]){
                     main.style.width=width+'px'; await settle();
                     verify(equalGrid(original,columns,width) && liveGeometry(),'main allocation '+width);
                     verify(savedCards.every((card,index)=>original.children[index]===card),'resize preserves live cards '+width);
@@ -484,30 +485,45 @@ public final class BrowserFixtureProbe {
                   main.style.width='400px'; await settle();
                   verify(original.style.getPropertyValue('--cp-summary-columns')===hiddenColumns,'hidden resize defers measurement');
                   original.hidden=false; await settle();
-                  verify(equalGrid(original,3,400) && liveGeometry(),'ResizeObserver remeasures newly visible panel');
+                  verify(equalGrid(original,2,400) && liveGeometry(),'ResizeObserver remeasures newly visible panel');
                   main.hidden=true; main.style.width='800px'; await settle();
                   verify(original.getClientRects().length===0,'hidden ancestor hides actual panel');
                   main.hidden=false; await settle();
-                  verify(equalGrid(original,6,800) && liveGeometry(),'ResizeObserver remeasures after ancestor visibility');
+                  verify(equalGrid(original,5,800) && liveGeometry(),'ResizeObserver remeasures after ancestor visibility');
                   // Изменение ширины без повторного рендера проверяет настоящий ResizeObserver.
                   // Пороги заданы примерами вручную и не вычисляются формулой реализации.
-                  for(const [width,columns] of [[500,3],[1200,9],[1920,9],[140,1],[116,1],
-                    [133,1],[133.75,1],[134,1],[257,1],[257.75,1],[258,2],[258.25,2],[259,2],
-                    [381,2],[381.75,2],[382,3],[505.75,3],[506,4],[629.75,4],[630,5],
-                    [753.75,5],[754,6],[877.75,6],[878,7],[1001,7],[1001.75,7],[1002,8],
-                    [1125,8],[1125.75,8],[1126,9],[800,6]]){
+                  for(const [width,columns] of [[500,3],[1200,8],[1920,9],[140,1],[116,1],
+                    [155,1],[155.75,1],[156,1],[301,1],[301.75,1],[302,2],[302.25,2],[303,2],
+                    [447,2],[447.75,2],[448,3],[593.75,3],[594,4],[739.75,4],[740,5],
+                    [885.75,5],[886,6],[1031.75,6],[1032,7],[1177,7],[1177.75,7],[1178,8],
+                    [1323,8],[1323.75,8],[1324,9],[800,5]]){
                     main.style.width=width+'px'; await settle();
                     verify(equalGrid(original,columns,width),'independent threshold '+width+' / '+columns);
                     verify(savedCards.every((card,index)=>original.children[index]===card),'observer keeps cards '+width);
                     record('threshold',width,columns);
                   }
                   original.style.border='1px solid var(--cp-border)';
-                  for(const [width,columns] of [[258,1],[259.75,1],[260,2]]){
+                  for(const [width,columns] of [[302,1],[303.75,1],[304,2]]){
                     main.style.width=width+'px'; await settle();
                     verify(equalGrid(original,columns,width,9,1),'content width excludes panel border '+width);
                     record('border',width,columns);
                   }
                   if(savedPanelStyle===null)original.removeAttribute('style');else original.setAttribute('style',savedPanelStyle);
+                  // Общий отсутствующий результат проверяется в настоящем DOM с загруженным шрифтом.
+                  await document.fonts.ready;
+                  const missingModel={...model,cards:model.cards.map(card=>({...card,value:beyond}))};
+                  for(const [width,columns] of [[156,1],[900,6],[1200,8]]){
+                    main.style.width=width+'px'; renderSummary(app,missingModel); await settle();
+                    verify(equalGrid(original,columns,width),'missing value geometry '+width);
+                    verify([...original.querySelectorAll('.card-value')].every(line=>{
+                      const range=document.createRange();range.selectNodeContents(line);
+                      const css=getComputedStyle(line);const measured=range.getBoundingClientRect().width;
+                      return line.textContent===beyond && parseFloat(css.fontSize)===16 && Number(css.fontWeight)===700
+                        && line.clientWidth>=118 && measured<=line.clientWidth && line.scrollWidth<=line.clientWidth;
+                    }),'actual missing value fits loaded CARD font '+width);
+                    record('missing-value',width,columns);
+                  }
+                  renderSummary(app,model); await settle();
                   main.style.width='116px';
                   const longModel={...model,cards:model.cards.map(card=>({...card,
                     title:card.title.repeat(24),value:card.value.repeat(24),caption:card.caption.repeat(24)}))};
@@ -524,7 +540,7 @@ public final class BrowserFixtureProbe {
                   renderSummary(app,{...model,visible:false}); await settle();
                   verify(original.hidden && original.getClientRects().length===0,'renderer hides actual panel');
                   main.style.width='400px'; renderSummary(app,{...model,visible:true});
-                  verify(equalGrid(original,3,400),'visible render synchronously computes correct columns');
+                  verify(equalGrid(original,2,400),'visible render synchronously computes correct columns');
                   await settle();
                   // Ошибка имеет приоритет даже при оставшихся карточках в переданной модели.
                   renderSummary(app,{...model,visible:true,unavailableText:unavailable}); await settle();
@@ -538,7 +554,7 @@ public final class BrowserFixtureProbe {
                   verify(original.children.length===1 && original.firstChild.textContent===longError
                     && original.scrollWidth<=original.clientWidth,'unbroken unavailable text has no horizontal overflow');
                   main.style.width='400px'; renderSummary(app,{...model,unavailableText:''}); await settle();
-                  verify(equalGrid(original,3,400),'summary recovers after unavailable text');
+                  verify(equalGrid(original,2,400),'summary recovers after unavailable text');
                   main.style.width='1920px'; renderSummary(app,{...model,cards:model.cards.slice(0,2)}); await settle();
                   verify(equalGrid(original,2,1920,2),'columns capped by current card count');
                   renderSummary(app,{...model,cards:[]}); await settle();

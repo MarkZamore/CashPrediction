@@ -1,8 +1,11 @@
 package ru.cashprediction.core.app;
 
+import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.nio.file.Path;
 import java.util.Objects;
 import ru.cashprediction.core.io.AppPaths;
+import ru.cashprediction.core.io.CanonicalPaths;
 import ru.cashprediction.core.session.store.MarkdownSessionStore;
 import ru.cashprediction.core.session.store.RegistrySessionStore;
 import ru.cashprediction.core.session.store.XmlSessionStore;
@@ -26,6 +29,12 @@ public record AppEnvironment(LaunchOptions options, Path appHome, Path cashMemor
         appHome = Objects.requireNonNull(appHome, "appHome").toAbsolutePath().normalize();
         cashMemory = Objects.requireNonNull(cashMemory, "cashMemory").toAbsolutePath().normalize();
         Objects.requireNonNull(clock, "clock");
+        // Runtime safety не зависит от включённости updater и предшествует любым writers.
+        try {
+            CanonicalPaths.requireCashMemory(appHome, cashMemory);
+        } catch (IOException unsafe) {
+            throw new UncheckedIOException(unsafe);
+        }
     }
 
     /**

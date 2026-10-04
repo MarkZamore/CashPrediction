@@ -13,6 +13,28 @@ import org.junit.jupiter.api.io.TempDir;
 class ReconnectCredentialsTest {
     @TempDir Path directory;
 
+    /** Недоступная индивидуальная Windows identity не заменяется группой владельца папки. */
+    @Test void unknownWindowsPrincipalFailsClosedBeforeCreatingFiles() throws Exception {
+        if (Files.getFileAttributeView(directory, PosixFileAttributeView.class) != null) return;
+        String original = System.getProperty("user.name");
+        try {
+            System.setProperty("user.name", "cp-missing-user-" + UUID.randomUUID());
+            assertTrue(ReconnectCredentials.open(directory).isEmpty());
+            try (var entries = Files.list(directory)) { assertEquals(0, entries.count()); }
+        } finally {
+            if (original == null) System.clearProperty("user.name");
+            else System.setProperty("user.name", original);
+        }
+        assertTrue(ReconnectCredentials.open(directory).isPresent());
+        var acl = Files.getFileAttributeView(directory.resolve("web-reconnect.md"), AclFileAttributeView.class);
+        UserPrincipal expected = directory.getFileSystem().getUserPrincipalLookupService()
+                .lookupPrincipalByName(System.getProperty("user.name"));
+        assertEquals(expected, acl.getOwner());
+        assertFalse(acl.getOwner() instanceof GroupPrincipal);
+        assertTrue(acl.getAcl().stream().filter(entry -> entry.type() == AclEntryType.ALLOW)
+                .allMatch(entry -> entry.principal().equals(expected)));
+    }
+
     @Test void repeatedAndConcurrentOpenRetainsOneCredential() throws Exception {
         var first = ReconnectCredentials.open(directory).orElseThrow();
         try (var pool = Executors.newFixedThreadPool(8)) {

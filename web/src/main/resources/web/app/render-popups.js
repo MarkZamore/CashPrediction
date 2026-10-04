@@ -90,7 +90,7 @@ export class Popups {
 
   /** Подключает задержку показа спарклайна к карточке. */
   sparkline(anchor, cardId) {
-    // JavaFX: PopupControl → Swing: SwingPopupControl → Web: div.sparkline.
+    // JavaFX: PopupControl → Swing: SwingPopups.spark (JWindow) → Web: div.sparkline.
     const start = /** Начинает новый цикл отложенного показа спарклайна карточки. */ () => {
       this.hide('sparkline'); const epoch = this.sparklineEpoch;
       const generation = this.app.transport.generation;

@@ -100,8 +100,10 @@ public final class FxUiPort implements UiPort {
     }
     /** Открывает контекстное меню из готовых пунктов. */
     @Override public void showContextMenu(ContextTarget target, List<MenuNode> items) {
+        // JavaFX: ContextMenu → Swing: JPopupMenu → Web: div[role=menu]
         ContextMenu context = menus.context(items, ru.cashprediction.core.ui.command.InvokeSource.CONTEXT_MENU);
         context.getProperties().put("cp.target", contextId(target));
+        // JavaFX: ContextMenu → Swing: JPopupMenu → Web: div[role=menu]
         context.show(stage, stage.getX() + 100, stage.getY() + 200);
     }
     /** Показывает нативный выбор файла; в самотесте записывает только запрос. */
@@ -187,7 +189,7 @@ public final class FxUiPort implements UiPort {
     void day(DayCardModel model, double x, double y) {
         hideDay();
         // JavaFX: PopupWindow → Swing: JWindow → Web: div.day-card
-        // JavaFX: Popup → Swing: PopupFactory → Web: div.popover
+        // JavaFX: Popup → Swing: SwingPopups.day (JWindow) → Web: div.dayCard
         dayPopup = probe.created(new Popup()); dayPopup.getProperties().put("cp.popupKind", "dayCard");
         dayPopup.setAnchorLocation(PopupWindow.AnchorLocation.CONTENT_TOP_LEFT);
         VBox content = dayContent(model);
@@ -208,7 +210,7 @@ public final class FxUiPort implements UiPort {
     void hideDay() { if (dayPopup != null) dayPopup.hide(); }
     void spark(Node owner, String cardId) {
         hideSpark(); SparklineModel model = intents.sparkline(cardId);
-        // JavaFX: PopupControl → Swing: SwingPopupControl → Web: div.sparkline
+        // JavaFX: PopupControl → Swing: SwingPopups.spark (JWindow) → Web: div.sparkline
         sparkPopup = probe.created(new PopupControl()); sparkPopup.getProperties().put("cp.popupKind", "sparkline");
         sparkPopup.setAnchorLocation(PopupWindow.AnchorLocation.CONTENT_TOP_LEFT);
         VBox content = sparkContent(model);

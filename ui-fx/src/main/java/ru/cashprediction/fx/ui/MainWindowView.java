@@ -40,6 +40,9 @@ public final class MainWindowView {
         toolbar = new FxToolbar(port.menus, port.intents, port.probe); table = new FxTable(port.intents, port.menus, port.probe);
         FxStyles.id(summary, "summary"); FxStyles.id(status, "status"); FxStyles.id(chartPane, "center");
         summary.getStyleClass().add("cp-summary"); status.getStyleClass().add("cp-status");
+        // Минимум панели инструментов не растягивает всю верхнюю область за границы окна.
+        // Сводка рассчитывает перенос по фактической доступной ширине, в том числе при 900 px.
+        top.setMinWidth(0);
         summary.setPadding(new Insets(6, 8, 6, 8)); status.setPrefHeight(24); status.setMinHeight(24); status.setPadding(new Insets(2, 8, 2, 8));
         status.setAlignment(javafx.geometry.Pos.CENTER_LEFT);
         root.setTop(top); root.setBottom(status);

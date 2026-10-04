@@ -158,6 +158,37 @@ try {
     Assert-BridgeFixture ($v.status -ceq 'FAIL' -and $v.contradictions -ccontains 'ACCEPT_DISPATCH_VERDICT_SCOPE') 'wrong acceptance scope is contradiction'
     # Actual isolated runspace и текущий rollback acceptor, только UNIT_MOCK missing path.
     Set-Item Function:Invoke-NativeAcceptanceRouteRead $realReader
+    $r=New-BridgeFixtureRow 'delta'
+    $v=Invoke-NativeUpdateAcceptanceDispatch $r $null $base $target $null '' $null -EvidenceKind UNIT_MOCK
+    Assert-BridgeFixture ($v.status -ceq 'PENDING' -and $v.gaps -ccontains 'EVIDENCE:normal:Authority' -and $v.gaps -cnotcontains 'NORMAL_ACCEPTANCE_OUTSIDE_BRIDGE_SCOPE') 'normal missing pre-native authority pending'
+    $normal=[pscustomobject]@{Authority=[pscustomobject]@{origin='MAIN_PRE_NATIVE_NORMAL_COLLECTOR';sourcePins=@{};intent=@{};
+        intentFile=$dummy;intentSha256=$dummyPin;createdUtc='2026-10-04T00:00:00Z';nonce='UNIT_MOCK';bound=$false;sealed=$false};SourcePins=@{}}
+    $v=Invoke-NativeUpdateAcceptanceDispatch $r $null $base $target $null '' $normal -EvidenceKind UNIT_MOCK
+    Assert-BridgeFixture ($v.status -ceq 'PENDING' -and $v.gaps -ccontains 'NORMAL_PRE_NATIVE_BIND_POST_CLEANUP_SEAL_REQUIRED') 'normal partial collector pending'
+    $normal.Authority.bound=$true;$normal.Authority.sealed=$true
+    foreach ($field in 'expectedFile','indexFile') {$normal.Authority | Add-Member $field $dummy}
+    foreach ($field in 'expectedSha256','indexSha256') {$normal.Authority | Add-Member $field $dummyPin}
+    $v=Invoke-NativeUpdateAcceptanceDispatch $r $null $base $target $null '' $normal -EvidenceKind UNIT_MOCK
+    Assert-BridgeFixture ($v.status -ceq 'FAIL' -and @($v.contradictions | Where-Object {$_ -like 'NORMAL_MAIN_SOURCE_PIN:*'}).Count -gt 0) ('actual private normal reader rejects missing source inventory: '+($v.contradictions -join ';'))
+    # Настоящий private reader проходит source guards, затем отвергает wrong cell, не mock verdict.
+    $normalFiles=@('NativeUpdateNormalAcceptanceCollector.ps1','NativeUpdateNormalAcceptance.ps1','NativeUpdatePayloadAcceptance.ps1',
+        'NativeUpdatePayloadScenarios.ps1','Test-NativeUpdateLifecycle.ps1','Test-UpdateBootstrap.ps1','Test-Portable.ps1',
+        'New-NativeUpdateArtifacts.ps1','New-NativeUpdateLifecycleConfig.ps1','New-UpdateBootstrapCommands.ps1','S7-Release.ps1',
+        'NativeUpdateScenarioDispatch.ps1','NativeUpdateAcceptanceDispatch.ps1')
+    foreach ($file in $normalFiles) {
+        $pin=(Get-FileHash -LiteralPath (Join-Path $PSScriptRoot $file)).Hash.ToLowerInvariant()
+        $normal.SourcePins[$file]=$pin;$normal.Authority.sourcePins[$file]=$pin
+    }
+    $normal.Authority.intent=[pscustomobject]@{Scenario='offline';Base='B1';Client='web';Path='ascii';Phase='SESSION'}
+    $normal.Authority | Add-Member kind 'UNIT_MOCK'
+    $v=Invoke-NativeUpdateAcceptanceDispatch $r $null $base $target $null '' $normal -EvidenceKind UNIT_MOCK
+    Assert-BridgeFixture ($v.status -ceq 'FAIL' -and $v.contradictions -ccontains 'NORMAL_MAIN_CELL_IDENTITY') 'actual normal reader source-good wrong cell rejected'
+    $normal.Authority.intent.Scenario='delta';$normal.SourcePins['NativeUpdateNormalAcceptanceCollector.ps1']='0'*64
+    $v=Invoke-NativeUpdateAcceptanceDispatch $r $null $base $target $null '' $normal -EvidenceKind UNIT_MOCK
+    Assert-BridgeFixture ($v.status -ceq 'FAIL' -and $v.contradictions -ccontains 'NORMAL_MAIN_SOURCE_PIN:NativeUpdateNormalAcceptanceCollector.ps1') 'independent closure source pin tamper rejected'
+    $normal.Authority.origin='ROW_RETURN'
+    $v=Invoke-NativeUpdateAcceptanceDispatch $r $null $base $target $null '' $normal -EvidenceKind UNIT_MOCK
+    Assert-BridgeFixture ($v.status -ceq 'FAIL' -and $v.contradictions -ccontains 'NORMAL_MAIN_AUTHORITY_CONTEXT') 'late row authority rejected'
     $r=New-BridgeFixtureRow 'locked-rollback'
     $v=Invoke-NativeUpdateAcceptanceDispatch $r $null $base $target $null '' $contexts.rollback -EvidenceKind UNIT_MOCK
     Assert-BridgeFixture ($v.status -ceq 'PENDING' -and $v.gaps -ccontains 'ACCEPTOR:UNIT_MOCK_NOT_NATIVE_EVIDENCE') ('actual reader and rollback entry no process: '+($v.contradictions -join ';')+' gaps='+($v.gaps -join ';'))

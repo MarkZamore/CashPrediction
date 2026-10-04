@@ -171,7 +171,14 @@ $badContext=$context | ConvertTo-Json -Depth 32 | ConvertFrom-Json;$badContext.S
 Reject-AuthorityFixture {Assert-NativePayloadContext $badContext} 'PAYLOAD_BASE_CONTEXT'
 $badContext=$context | ConvertTo-Json -Depth 32 | ConvertFrom-Json;$badContext.TargetPortableDir=$bases[0]
 Reject-AuthorityFixture {Assert-NativePayloadContext $badContext} 'PAYLOAD_INPUT_OVERLAP'
-# Реальные AST frozen producer ещё не имеют review hook; исполнение должно оставаться запрещённым.
-Assert-AuthorityFixture (-not (Get-Command Invoke-NativePayloadWorker).Parameters.ContainsKey('AuthorityFile')) 'FROZEN_WORKER_UNPATCHED'
-Assert-AuthorityFixture (-not (Get-Command Invoke-NativeCell).Parameters.ContainsKey('OwnedRunRoot')) 'FROZEN_LIFECYCLE_UNPATCHED'
+# Реальные producer hooks интегрированы; public exact9 и единственное private тело проверяются без исполнения.
+Assert-AuthorityFixture ((Get-Command Invoke-NativePayloadWorker).Parameters.ContainsKey('AuthorityFile') -and
+    (Get-Command Invoke-NativePayloadWorker).Parameters.ContainsKey('AuthoritySha256')) 'WORKER_AUTHORITY_PREBINDING_API'
+Assert-AuthorityFixture (-not (Get-Command Invoke-NativeCell).Parameters.ContainsKey('OwnedRunRoot')) 'PUBLIC_OWNERSHIP_API_NOT_EXPANDED'
+$nativeBody=Get-NativeLifecycleBodyDefinition (Get-Command Invoke-NativeCell).ScriptBlock.Ast
+Assert-AuthorityFixture (($nativeBody.Name -creplace '^(global:|script:)','') -ceq 'Invoke-NativeCellOwnedContext' -and
+    (Get-Command Invoke-NativeCellOwnedContext).Parameters.ContainsKey('OwnedRunRoot')) 'SINGLE_OWNED_BODY_RESOLVED'
+. (Join-Path $PSScriptRoot 'NativeUpdateScenarioDispatch.ps1')
+Assert-NativeDispatchCommand 'Invoke-NativeCell'
+Assert-AuthorityFixture $true 'ACTUAL_DISPATCH_EXACT9_PRESERVED'
 [pscustomobject]@{status='UNIT_MOCK';checks=$script:checks;nativeStatus='PENDING';fixtureRoot=$fixtureRoot;fullMatrix='PENDING';releaseProvenance='PENDING'} | ConvertTo-Json

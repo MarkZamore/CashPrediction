@@ -4,7 +4,7 @@
 .DESCRIPTION
 Не читает дерево приложения, не создаёт архив, не запускает Maven, Java или GUI.
 Каждый случай получает отдельную папку во временном каталоге; результаты сохраняются.
-Минимальные PNG/ICO проверяют заголовки и совпадение байтов, а не декодирование графики.
+PNG fixture создан JDK encoder; проверяются chunks/CRC и совпадение ICO, не GUI/decode.
 .EXAMPLE
 ./dist/scripts/Test-Icon-SourceFixtures.ps1
 #>
@@ -80,10 +80,8 @@ function New-Fixture {
 '@).Replace('ICON', $shared)
     foreach ($launcher in @('swing', 'web')) { Set-Fixture "dist/launchers/$launcher.properties" "icon=$shared" }
     $null = [IO.Directory]::CreateDirectory((Join-Path $fixture $resource))
-    [byte[]] $png = New-Object byte[] 33
-    [Convert]::FromBase64String('iVBORw0KGgo=').CopyTo($png, 0)
-    [Text.Encoding]::ASCII.GetBytes('IHDR').CopyTo($png, 12)
-    [Convert]::FromBase64String('AAABAAAAAQA=').CopyTo($png, 16)
+    # Валидный прозрачный 256x256 PNG от настоящего JDK writer, не header-only mock.
+    [byte[]] $png = [Convert]::FromBase64String('iVBORw0KGgoAAAANSUhEUgAAAQAAAAEACAYAAABccqhmAAABFUlEQVR4Xu3BMQEAAADCoPVP7WsIoAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAeAMBPAABQcXTOwAAAABJRU5ErkJggg==')
     [IO.File]::WriteAllBytes((Join-Path $fixture "$resource/application.png"), $png)
     [byte[]] $ico = New-Object byte[] (22 + $png.Length)
     $ico[2] = 1; $ico[4] = 1
@@ -152,4 +150,25 @@ Test-Fixture 'ico-frame-mismatch' {
     $bytes = [IO.File]::ReadAllBytes($path); $bytes[$bytes.Length - 1] = 1
     [IO.File]::WriteAllBytes($path, $bytes)
 } 'ICO 256x256 frame differs'
+Test-Fixture 'payload-valid-empty-idat' {
+    $path=Join-Path $fixture "$resource/undo.png";$bytes=[IO.File]::ReadAllBytes($path)
+    # Корректный zero-length IDAT допустим рядом с непустым IDAT, CRC type IDAT = 35af061e.
+    [IO.File]::WriteAllBytes($path,[byte[]]($bytes[0..32]+@(0,0,0,0,73,68,65,84,53,175,6,30)+$bytes[33..($bytes.Length-1)]))
+}
+Test-Fixture 'payload-header-only' {
+    $path=Join-Path $fixture "$resource/undo.png";$bytes=[IO.File]::ReadAllBytes($path)
+    [IO.File]::WriteAllBytes($path,$bytes[0..32])
+} 'Invalid icon payload undo.png: ICON_PNG_SIGNATURE_OR_SIZE'
+Test-Fixture 'payload-crc' {
+    $path=Join-Path $fixture "$resource/undo-accent.png";$bytes=[IO.File]::ReadAllBytes($path);$bytes[-1]=$bytes[-1] -bxor 1
+    [IO.File]::WriteAllBytes($path,$bytes)
+} 'Invalid icon payload undo-accent.png: ICON_PNG_CRC'
+Test-Fixture 'payload-truncated' {
+    $path=Join-Path $fixture "$resource/undo.png";$bytes=[IO.File]::ReadAllBytes($path)
+    [IO.File]::WriteAllBytes($path,$bytes[0..($bytes.Length-13)])
+} 'Invalid icon payload undo.png: ICON_PNG_IEND_MISSING'
+Test-Fixture 'payload-trailing' {
+    $path=Join-Path $fixture "$resource/undo.png";$bytes=[IO.File]::ReadAllBytes($path)
+    [IO.File]::WriteAllBytes($path,[byte[]]($bytes+@(0)))
+} 'Invalid icon payload undo.png: ICON_PNG_IEND_OR_TRAILING'
 Write-Output "OK: isolated source icon fixtures. Retained at: $fixtureRoot"

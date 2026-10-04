@@ -125,8 +125,10 @@ public final class FxFormDialog implements WindowHandle {
                         preview.control.setOnContextMenuRequested(e -> {
                             port.probe.created(e);
                             int selected = ((ListView<?>) preview.control).getSelectionModel().getSelectedIndex();
+                            // JavaFX: ContextMenu → Swing: JPopupMenu → Web: div[role=menu]
                             var context = port.menus.context(port.intents.contextMenu(new ru.cashprediction.core.ui.menu.ContextTarget.Preview(session.windowId(), selected)), ru.cashprediction.core.ui.command.InvokeSource.FORM);
                             context.getProperties().put("cp.target", "preview:" + session.windowId() + ":" + selected);
+                            // JavaFX: ContextMenu → Swing: JPopupMenu → Web: div[role=menu]
                             context.show(preview.control, e.getScreenX(), e.getScreenY()); e.consume();
                         });
                     }

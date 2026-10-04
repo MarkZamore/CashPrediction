@@ -334,24 +334,180 @@ class PowerShellHelperTest {
         TreeDeltaEngine.verify(rollback.root, rollback.old, rollback.oldHash);
     }
 
+    /** Symlink отклоняется до обращения к внешним данным; успешный rollback не означает установку. */
     @Test void sourceAndDestinationReparsePointsAreRejectedBeforeTouchingExternalData() throws Exception {
         windows();
         for (String location : List.of("Backup", "Ready/tree/runtime")) {
             HelperFixture f = new HelperFixture(temporary.resolve("reparse-" + location.replace('/', '-')));
             Path outside = Files.createDirectory(temporary.resolve("outside-" + location.replace('/', '-')));
             Files.writeString(outside.resolve("sentinel.txt"), "outside-data");
+            HelperFixture.put(outside, "nested/untouched.txt", "outside-nested");
+            Map<String, String> before = junctionOutsideInventory(outside);
             Path link = f.updates.resolve(location);
-            if (Files.exists(link)) {
-                Files.move(link, f.updates.resolve("held-runtime"));
-            }
+            if (Files.exists(link)) Files.move(link, f.updates.resolve("held-runtime"));
+            // Прежний capability assumption только для symlink; обязательные junction-тесты не пропускаются.
             try { Files.createSymbolicLink(link, outside); }
             catch (java.io.IOException | UnsupportedOperationException denied) {
                 assumeTrue(false, "Windows symlink privilege unavailable");
             }
-            assertEquals(1, f.run(0, false));
-            assertEquals("outside-data", Files.readString(outside.resolve("sentinel.txt")));
-            f.assertUserFiles();
+            try {
+                assertTrue(Files.isSymbolicLink(link));
+                assertEquals(outside.toRealPath(), link.toRealPath());
+                assertFalse(Files.exists(f.updates.resolve("requests")));
+                assertFalse(Files.exists(f.updates.resolve("processes")));
+                assertPublishedGuardRejectsSymlink(f, link);
+                int exit = f.run(0, false);
+                if (location.equals("Backup")) {
+                    // Reparse в backup запрещает также восстановление: outer catch возвращает ошибку.
+                    assertEquals(1, exit, f::diagnostics);
+                    assertTrue(f.diagnostics().contains("REPARSE_PATH"), f::diagnostics);
+                    assertFalse(Files.exists(f.updates.resolve("last-install.json")));
+                } else {
+                    // Source Guard срабатывает до moves; проверенное старое дерево завершает rollback.
+                    assertEquals(0, exit, f::diagnostics);
+                    assertEquals("ROLLED_BACK",
+                            InstallFiles.object(f.updates.resolve("last-install.json")).get("outcome"));
+                    String log = Files.readString(f.updates.resolve("update-log.md"));
+                    assertTrue(log.contains("PHASE_ROLLING_BACK"));
+                    assertFalse(log.contains("PHASE_COMMITTED"));
+                    assertFalse(Files.exists(f.updates.resolve("install-journal.json")));
+                }
+                assertEquals(before, junctionOutsideInventory(outside));
+                TreeDeltaEngine.verify(f.root, f.old, f.oldHash);
+                f.assertUserFiles();
+            } finally {
+                // Files.delete удаляет только собственный symlink entry, не target и не его дерево.
+                if (Files.exists(link, java.nio.file.LinkOption.NOFOLLOW_LINKS)) {
+                    assertTrue(Files.isSymbolicLink(link), "UNLINK_NOT_SYMLINK");
+                    Files.delete(link);
+                }
+            }
+            assertEquals(before, junctionOutsideInventory(outside));
         }
+    }
+
+    /** Исполняет только настоящий Guard опубликованного helper и требует точный отказ reparse. */
+    private void assertPublishedGuardRejectsSymlink(HelperFixture f, Path link) throws Exception {
+        String helper = f.updates.resolve("apply-update.ps1").toString().replace("'", "''");
+        String root = f.root.toString().replace("'", "''");
+        String path = link.toString().replace("'", "''");
+        Path output = f.updates.resolve("symlink-guard-output.txt");
+        runJunctionCommand("$ErrorActionPreference='Stop'; $root='" + root + "'; "
+                + "$tokens=$null;$errors=$null; $ast=[Management.Automation.Language.Parser]::ParseFile('"
+                + helper + "',[ref]$tokens,[ref]$errors); if ($errors.Count) {throw 'HELPER_PARSE'}; "
+                + "$guards=@($ast.EndBlock.Statements | Where-Object {$_ -is [Management.Automation.Language.FunctionDefinitionAst] -and $_.Name -ceq 'Guard'}); "
+                + "if ($guards.Count -ne 1) {throw 'GUARD_CENSUS'}; . ([scriptblock]::Create($guards[0].Extent.Text)); "
+                + "try { [void](Guard '" + path + "'); throw 'GUARD_ACCEPTED_SYMLINK' } "
+                + "catch {if ($_.Exception.Message -cne 'REPARSE_PATH') {throw}; Write-Output 'EXACT_GUARD_REPARSE_PATH'}", output);
+        assertTrue(Files.readString(output).contains("EXACT_GUARD_REPARSE_PATH"));
+    }
+
+    /** Junction в source проверяется без права создания symbolic link. */
+    @Test void sourceDirectoryJunctionIsRejectedBeforeTouchingExternalData() throws Exception {
+        windows();
+        assertDirectoryJunctionRejected("Ready/tree/runtime");
+    }
+
+    /** Junction в destination backup не должен разрешать запись вне installation root. */
+    @Test void destinationDirectoryJunctionIsRejectedBeforeTouchingExternalData() throws Exception {
+        windows();
+        assertDirectoryJunctionRejected("Backup");
+    }
+
+    /** Проверяет настоящий reparse tag junction, точный отказ Guard и полное внешнее дерево. */
+    private void assertDirectoryJunctionRejected(String location) throws Exception {
+        HelperFixture f = new HelperFixture(temporary.resolve("junction-" + location.replace('/', '-')));
+        Path outside = Files.createDirectory(temporary.resolve("outside-junction"));
+        Path sentinel = outside.resolve("sentinel.bin");
+        byte[] bytes = new byte[] {0, 1, 42, (byte) 0xff, 13, 10};
+        Files.write(sentinel, bytes);
+        HelperFixture.put(outside, "nested/untouched.txt", "outside-data");
+        Map<String, String> before = junctionOutsideInventory(outside);
+        Path link = f.updates.resolve(location);
+        if (Files.exists(link)) Files.move(link, f.updates.resolve("held-runtime"));
+        // Пустые requests/leases исключают запуск клиентов и lookup чужих PID из lease.
+        assertFalse(Files.exists(f.updates.resolve("requests")));
+        assertFalse(Files.exists(f.updates.resolve("processes")));
+        Path diagnostics = temporary.resolve("junction-output.txt");
+        String quotedLink = link.toString().replace("'", "''");
+        String quotedOutside = outside.toString().replace("'", "''");
+        try {
+            runJunctionCommand("$ErrorActionPreference='Stop'; "
+                    + "New-Item -ItemType Junction -Path '" + quotedLink + "' -Target '" + quotedOutside + "' | Out-Null; "
+                    + "$item=Get-Item -LiteralPath '" + quotedLink + "' -Force; "
+                    + "if ($item.LinkType -cne 'Junction' -or ($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -eq 0) {throw 'NOT_JUNCTION'}; "
+                    + "Write-Output ('JUNCTION_VERIFIED '+$item.FullName)", diagnostics);
+            assertTrue(Files.isDirectory(link));
+            assertEquals(outside.toRealPath(), link.toRealPath());
+            // Точный Guard извлекается из фактически опубликованного helper, без исполнения его top-level body.
+            Path guardOutput = temporary.resolve("junction-guard-output.txt");
+            String quotedHelper = f.updates.resolve("apply-update.ps1").toString().replace("'", "''");
+            runJunctionCommand("$ErrorActionPreference='Stop'; $root='" + f.root.toString().replace("'", "''") + "'; "
+                    + "$tokens=$null;$errors=$null; $ast=[Management.Automation.Language.Parser]::ParseFile('"
+                    + quotedHelper + "',[ref]$tokens,[ref]$errors); if ($errors.Count) {throw 'HELPER_PARSE'}; "
+                    + "$guards=@($ast.EndBlock.Statements | Where-Object {$_ -is [Management.Automation.Language.FunctionDefinitionAst] -and $_.Name -ceq 'Guard'}); "
+                    + "if ($guards.Count -ne 1) {throw 'GUARD_CENSUS'}; . ([scriptblock]::Create($guards[0].Extent.Text)); "
+                    + "try { [void](Guard '" + quotedLink + "'); throw 'GUARD_ACCEPTED_JUNCTION' } "
+                    + "catch {if ($_.Exception.Message -cne 'REPARSE_PATH') {throw}; Write-Output 'EXACT_GUARD_REPARSE_PATH'}", guardOutput);
+            assertTrue(Files.readString(guardOutput).contains("EXACT_GUARD_REPARSE_PATH"));
+            int exit = f.run(0, false);
+            if (location.equals("Backup")) {
+                assertEquals(1, exit, f::diagnostics);
+                assertTrue(f.diagnostics().contains("REPARSE_PATH"), f::diagnostics);
+            } else {
+                // Source отказ ловится install catch: штатный rollback возвращает 0, но target не committed.
+                assertEquals(0, exit, f::diagnostics);
+                assertEquals("ROLLED_BACK", InstallFiles.object(f.updates.resolve("last-install.json")).get("outcome"));
+                assertTrue(Files.readString(f.updates.resolve("update-log.md")).contains("PHASE_ROLLING_BACK"));
+            }
+            assertArrayEquals(bytes, Files.readAllBytes(sentinel));
+            assertEquals(before, junctionOutsideInventory(outside));
+            TreeDeltaEngine.verify(f.root, f.old, f.oldHash);
+            f.assertUserFiles();
+            System.out.println("JUNCTION_GUARD " + location + " exit=" + exit + " EXACT_GUARD_REPARSE_PATH outsideTreeUnchanged=true sentinelUnchanged=true helperSha256="
+                    + java.util.HexFormat.of().formatHex(java.security.MessageDigest.getInstance("SHA-256")
+                            .digest(Files.readAllBytes(f.updates.resolve("apply-update.ps1")))));
+        } finally {
+            // Удаляется только junction entry, никогда не target или рекурсивное внешнее дерево.
+            runJunctionCommand("$ErrorActionPreference='Stop'; if (Test-Path -LiteralPath '" + quotedLink + "') { "
+                    + "$item=Get-Item -LiteralPath '" + quotedLink + "' -Force; "
+                    + "if ($item.LinkType -cne 'Junction') {throw 'UNLINK_NOT_JUNCTION'}; "
+                    + "[IO.Directory]::Delete('" + quotedLink + "') }", temporary.resolve("junction-unlink-output.txt"));
+        }
+        assertFalse(Files.exists(link));
+        assertArrayEquals(bytes, Files.readAllBytes(sentinel));
+        assertEquals(before, junctionOutsideInventory(outside));
+    }
+
+    /** Снимок всех каталогов и содержимого файлов вне installation root, без traversal через links. */
+    private Map<String, String> junctionOutsideInventory(Path outside) throws Exception {
+        Map<String, String> inventory = new LinkedHashMap<>();
+        try (var paths = Files.walk(outside)) {
+            for (Path path : paths.sorted().toList()) {
+                assertFalse(Files.isSymbolicLink(path));
+                String value = Files.isDirectory(path) ? "DIRECTORY" : java.util.HexFormat.of().formatHex(
+                        java.security.MessageDigest.getInstance("SHA-256").digest(Files.readAllBytes(path)));
+                inventory.put(outside.relativize(path).toString(), value);
+            }
+        }
+        return inventory;
+    }
+
+    /** Создаёт/снимает только fixture junction; отказ является FAIL, а не privilege skip. */
+    private void runJunctionCommand(String command, Path output) throws Exception {
+        // Только child process: исключаем локализованный CLIXML progress и явно фиксируем UTF-8 output.
+        String isolatedCommand = "$ProgressPreference='SilentlyContinue'; [Console]::OutputEncoding=[Text.UTF8Encoding]::new($false); " + command;
+        String encoded = Base64.getEncoder().encodeToString(isolatedCommand.getBytes(StandardCharsets.UTF_16LE));
+        Process junction = new ProcessBuilder(Path.of(System.getenv("SystemRoot"),
+                "System32/WindowsPowerShell/v1.0/powershell.exe").toString(),
+                "-NoProfile", "-NonInteractive", "-WindowStyle", "Hidden", "-EncodedCommand", encoded)
+                .redirectErrorStream(true).redirectOutput(output.toFile()).start();
+        try {
+            assertTrue(junction.waitFor(20, TimeUnit.SECONDS), "JUNCTION_COMMAND_TIMEOUT");
+            assertEquals(0, junction.exitValue(), () -> {
+                try { return Files.readString(output); } catch (java.io.IOException error) { return error.toString(); }
+            });
+        } finally { junction.destroyForcibly(); }
     }
 
     @Test void unicodeReadOnlyFilesSurviveRollback() throws Exception {

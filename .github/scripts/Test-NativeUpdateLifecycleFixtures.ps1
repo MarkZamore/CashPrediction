@@ -505,7 +505,7 @@ Assert-NativeMockReject {Assert-NativeLifecycleConfig $bad} 'COLD_FIELDS'
 # Структурный контроль: обычный exit не включает Kill; ядро/selftest не запускается через java -m.
 $close=@($ast.FindAll({param($n) $n -is [Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -ceq 'Close-NativeNormally'},$true))[0].Extent.Text
 Assert-NativeMock ($close.Contains('CloseMainWindow()') -and $close.Contains("type='closeMain'") -and -not $close.Contains('.Kill(')) 'ORDINARY_CLOSE_ONLY'
-$cell=@($ast.FindAll({param($n) $n -is [Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -ceq 'Invoke-NativeCell'},$true))[0].Extent.Text
+$cell=(Get-NativeLifecycleBodyDefinition $ast).Extent.Text
 Assert-NativeMock ($cell.IndexOf('Close-NativeNormally') -lt $cell.IndexOf('Wait-NativeInstalled')) 'CLIENT_EXIT_BEFORE_INSTALL_OBSERVATION'
 Assert-NativeMock ($cell.Contains('Get-ColdLauncherName') -and $cell.Contains('Connect-NativeClient')) 'REAL_NATIVE_WITNESS_REQUIRED'
 Assert-NativeMock ($cell.IndexOf('Initialize-NativeDomainSession') -lt $cell.IndexOf('Get-NativeUserObject') -and

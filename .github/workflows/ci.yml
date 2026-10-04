@@ -44,20 +44,31 @@ jobs:
           & .github/scripts/Test-GateOutcomePayload.ps1
           & .github/scripts/Test-GateReportExport.ps1
           & .github/scripts/Test-ReleaseSafety.ps1
+          & .github/scripts/Test-ReleaseMockScopeFixtures.ps1 -ReceiptPath (Join-Path $env:RUNNER_TEMP ('release-mock-scope-' + [guid]::NewGuid() + '.json'))
           # Общий каталог иконок проверяется до GUI: ошибки источников не маскируются дампами.
           & dist/scripts/Test-Icon-Source.ps1
           & dist/scripts/Test-Icon-SourceFixtures.ps1
           # Все тесты приложения и документов; потеря любого обязательного документа ломает сборку.
+          # Независимое наблюдение Windows identity для диагностики закрытого Web-хранилища, без ключей и изменения ACL.
+          $identityProbe = Join-Path $env:RUNNER_TEMP ('reconnect-owner-' + [guid]::NewGuid())
+          New-Item -ItemType Directory -Path $identityProbe | Out-Null
+          try {
+            $processIdentity = [Security.Principal.WindowsIdentity]::GetCurrent().Name
+            $directoryOwner = (Get-Acl -LiteralPath $identityProbe).Owner
+            Write-Host "Reconnect identity: process=$processIdentity; newDirectoryOwner=$directoryOwner"
+          } finally { Remove-Item -LiteralPath $identityProbe }
           & mvn -B -ntp install
           if ($LASTEXITCODE -ne 0) { throw "Сборка или тесты не прошли." }
 
       - name: Actual UI gates (S4, blocking)
+        id: ui_gates
         timeout-minutes: 90
         shell: pwsh
         run: |
           & .github/scripts/Invoke-UiGates.ps1 -Mode UI
 
       - name: Actual recovery gates (S4, blocking)
+        id: recovery_gates
         timeout-minutes: 60
         shell: pwsh
         run: |
@@ -128,7 +139,8 @@ jobs:
           if-no-files-found: ignore
 
       - name: Actual UI and recovery evidence
-        if: always()
+        # Отсутствие отчётов остаётся ошибкой после попытки gate, но не после отказа ранней сборки.
+        if: ${{ always() && ((steps.ui_gates.outcome != '' && steps.ui_gates.outcome != 'skipped') || (steps.recovery_gates.outcome != '' && steps.recovery_gates.outcome != 'skipped')) }}
         uses: actions/upload-artifact@v4
         with:
           name: s4-gate-evidence

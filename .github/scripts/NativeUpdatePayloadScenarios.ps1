@@ -196,6 +196,51 @@ function Assert-NativePayloadResult($Result,$Context) {
 }
 
 # Атомарная по валидации передача всей scoped metadata и inventory links в исходную Row MAIN.
+# Проверка MAIN cell против pre-native authority не читает helper return и не запускает процессы.
+function Assert-NativePayloadAuthorityCellBinding($Ticket,$Row,[string]$Source,$Base,$Target,$Life,$Cold,
+    [string]$Java,[int]$Timeout,[string]$TargetRoot) {
+    $context=$Ticket.input.context
+    foreach ($name in 'scenario','base','client','path','phase') {
+        if ($Row.$name -cne $context.Row.$name) {throw 'PAYLOAD_AUTHORITY_CELL_IDENTITY'}
+    }
+    if ($Row.status -cne 'PENDING' -or $context.Row.status -cne 'PENDING' -or $context.Source -cne $Source -or
+        $context.Java -cne $Java -or $context.Timeout -ne $Timeout -or $context.TargetPortableDir -cne $TargetRoot) {throw 'PAYLOAD_AUTHORITY_CALL_BINDING'}
+    $baseIndex=if ($Row.base -ceq 'B1') {0} else {1}
+    foreach ($pair in @(@($Base,$Ticket.input.bases[$baseIndex]),@($Target,$Ticket.input.target))) {
+        foreach ($field in 'releaseNumber','commitSha','treeSha256') {
+            if ($pair[0].$field -cne $pair[1].$field) {throw 'PAYLOAD_AUTHORITY_IMAGE_IDENTITY'}
+        }
+        if (-not (Test-ColdInventoryEqual $pair[0].files $pair[1].files)) {throw 'PAYLOAD_AUTHORITY_IMAGE_FILES'}
+    }
+    if (-not (Test-ColdInventoryEqual $Cold $Ticket.input.cold) -or
+        -not (Test-ColdInventoryEqual $Life $Ticket.input.life)) {throw 'PAYLOAD_AUTHORITY_CONFIG_BINDING'}
+}
+
+# Отдельный authorized adapter не расширяет public Invoke-NativePayloadCell exact9.
+function Invoke-NativePayloadAuthorizedCell($Row,[string]$Source,$Base,$Target,$Life,$Cold,[string]$Java,
+    [string]$Evidence,[int]$Timeout,[string]$AuthorityFile,[string]$AuthoritySha256) {
+    . (Join-Path $PSScriptRoot 'NativeUpdatePayloadAuthority.ps1')
+    $ticket=Read-PayloadAuthorityIntent $AuthorityFile $AuthoritySha256
+    $binding=Get-Variable nativeTarget -Scope Script -ValueOnly -ErrorAction SilentlyContinue
+    if ($null -eq $binding) {$binding=Get-Variable nativeTarget -Scope Global -ValueOnly -ErrorAction SilentlyContinue}
+    Assert-NativePayloadAuthorityCellBinding $ticket $Row $Source $Base $Target $Life $Cold $Java $Timeout $binding
+    if ($ticket.intent.evidenceKind -cne 'NATIVE') {throw 'AUTHORITY_UNIT_MOCK_NO_EXECUTION'}
+    # Настоящий existing authority worker удерживает Expected SHA до native invocation.
+    $executed=Invoke-NativePayloadAuthorizedScenario $AuthorityFile $AuthoritySha256
+    $sealed=Read-ColdPinnedJson $executed.authority.file $executed.authority.sha256
+    if ($sealed.authorityFile -cne $AuthorityFile -or $sealed.authoritySha256 -cne $AuthoritySha256 -or
+        $sealed.nonce -cne $ticket.owned.Nonce -or $executed.observationFile -cne $sealed.observationFile) {throw 'PAYLOAD_AUTHORITY_RETURN_BINDING'}
+    $observationSha=(Get-FileHash -LiteralPath (Resolve-PortableSafetyPath $sealed.observationFile)).Hash.ToLowerInvariant()
+    . (Join-Path $PSScriptRoot 'NativeUpdatePayloadAcceptance.ps1')
+    $decision=Test-NativePayloadAcceptance $sealed.observationFile $observationSha $sealed.Expected -EvidenceKind NATIVE
+    $decision | Add-Member helperRow $executed.payload.cell
+    $decision | Add-Member expectedFile $executed.authority.file
+    $decision | Add-Member expectedSha256 $executed.authority.sha256
+    $decision | Add-Member observationFile $sealed.observationFile
+    $decision | Add-Member observationSha256 $observationSha
+    return $decision
+}
+
 function Copy-NativePayloadCellEvidence($Destination,$Cell) {
     foreach ($name in 'scenario','base','client','path') {
         if ($Destination.$name -cne $Cell.$name) {throw 'PAYLOAD_ROW_PROPAGATION_IDENTITY'}
@@ -330,8 +375,16 @@ function Assert-NativePayloadObservation($Row,$Base,$Target,$Fixture=$null) {
 }
 
 # Частный worker удерживает original pins до/после всех действий, включая failure cleanup.
-function Invoke-NativePayloadWorker($Context,[string]$ScriptsRoot) {
+function Invoke-NativePayloadWorker($Context,[string]$ScriptsRoot,[string]$AuthorityFile='',[string]$AuthoritySha256='') {
     Assert-NativePayloadContext $Context
+    $authorityTicket=$null
+    if ($AuthorityFile) {
+        . (Join-Path $ScriptsRoot 'NativeUpdatePayloadAuthority.ps1')
+        $authorityTicket=Read-PayloadAuthorityIntent $AuthorityFile $AuthoritySha256
+        if ($authorityTicket.intent.evidenceKind -cne 'NATIVE' -or
+            -not (Test-ColdInventoryEqual $Context $authorityTicket.input.context)) {throw 'AUTHORITY_WORKER_CONTEXT'}
+        Assert-PayloadAuthorityOwned $authorityTicket.owned $authorityTicket.input $authorityTicket.intent.contextFile $authorityTicket.intent.ownedFile
+    }
     $cold=Read-ColdPinnedJson $Context.CommandFile $Context.CommandFileSha256
     Assert-ColdCommand $cold $Context.Java $Context.PortableDir $Context.TargetPortableDir
     $life=Read-ColdPinnedJson $Context.LifecycleFile $Context.LifecycleFileSha256;Assert-NativeLifecycleConfig $life
@@ -365,6 +418,7 @@ function Invoke-NativePayloadWorker($Context,[string]$ScriptsRoot) {
         if ($Context.Row.scenario -ceq 'unicode-payload') {
             $derived=New-NativePayloadDerivedTarget $Context $cold $target $work
             $output=Join-Path ([IO.Path]::GetTempPath()) ([guid]::NewGuid().ToString())
+            if ($null -ne $authorityTicket) {$output=$authorityTicket.owned.ArtifactRoot}
             # Штатный builder получает неизменённый parameter contract и свой Temp UUID.
             $preparation=& (Join-Path $ScriptsRoot 'New-NativeUpdateArtifacts.ps1') -CommandFile $derived.command `
                 -CommandFileSha256 $derived.commandSha256 -Runtime $Context.Java -PortableDir $Context.PortableDir `
@@ -388,7 +442,18 @@ function Invoke-NativePayloadWorker($Context,[string]$ScriptsRoot) {
         $row=ConvertFrom-ColdReceiptJson (ConvertTo-Json -InputObject $Context.Row -Depth 32 -Compress)
         $scenario=$row.scenario;$row.scenario='delta'
         # Тот же normal flow: Ready/tree, nonpolling, ordinary exit, installer, userdata, bounded cleanup.
-        Invoke-NativeCell $row $Context.Source $base $target $life $cold $Context.Java $work $Context.Timeout
+        if ($null -ne $authorityTicket) {
+            # Authority перечитывает подготовленные файлы до native, не доверяя preparation return.
+            $seal=Complete-PayloadAuthorityIntent $AuthorityFile $AuthoritySha256
+            $sealed=Read-ColdPinnedJson $seal.file $seal.sha256
+            if ($sealed.Expected.TargetRoot -cne $script:nativeTarget -or
+                $sealed.Expected.ManifestSha256 -cne $life.manifestSha256 -or
+                $sealed.Expected.CommandSha256 -cne $usedCommandSha -or
+                $sealed.Expected.LifecycleSha256 -cne $usedLifecycleSha) {throw 'AUTHORITY_EXECUTION_BINDING'}
+            Invoke-NativeCellOwnedContext $row $Context.Source $base $target $life $cold $Context.Java $work $Context.Timeout $authorityTicket.owned.RunRoot $authorityTicket.owned.Nonce
+        } else {
+            Invoke-NativeCell $row $Context.Source $base $target $life $cold $Context.Java $work $Context.Timeout
+        }
         Assert-NativePayloadObservation $row $base $target $fixture
         $row.scenario=$scenario
         $fields=@{payloadScope='SCOPED_EXECUTED_NOT_MATRIX_SIGNOFF';payloadFullMatrix='PENDING';payloadReleaseProvenance='NOT_PROVEN';

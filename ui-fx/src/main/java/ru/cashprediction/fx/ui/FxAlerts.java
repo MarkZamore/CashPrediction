@@ -31,7 +31,7 @@ public final class FxAlerts implements WindowHandle {
     public FxAlerts(AlertSpec spec, AlertSession session, Consumer<String> answer, FxUiPort port) {
         this.port = port; this.answer = answer; this.session = session;
         id = session == null ? ((AppController) port.intents).state().windows().windows().getLast().windowId() : session.windowId();
-        // JavaFX: Alert → Swing: SwingAlert → Web: dialog.alert
+        // JavaFX: Alert → Swing: SwingAlerts (JDialog) → Web: dialog.alert
         alert = port.probe.created(new Alert(Alert.AlertType.valueOf(spec.kind().name())));
         alert.initOwner(session == null ? port.stage : port.owner(session.ownerId()));
         alert.initModality(javafx.stage.Modality.APPLICATION_MODAL);

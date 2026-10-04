@@ -7,6 +7,7 @@ import java.awt.image.BufferedImage;
 import java.io.*;
 import java.util.List;
 import javax.imageio.ImageIO;
+import javax.imageio.stream.MemoryCacheImageOutputStream;
 import javax.swing.*;
 import ru.cashprediction.core.ui.command.*;
 import ru.cashprediction.core.ui.menu.ContextTarget;
@@ -98,12 +99,22 @@ public final class SwingChart extends JComponent {
         return painted.hits().stream().filter(hit -> hit.contains(e.getX(), e.getY())).findFirst().map(hit -> SwingLook.html(hit.tooltip(), 420)).orElse(null);
     }
 
-    /** Кодирует PNG строго по переданной сцене, не рассчитывая прогноз. */
+    /**
+     * Кодирует PNG строго по переданной сцене, не рассчитывая прогноз.
+     * Кэш принадлежит этому вызову и хранится в памяти: настройки ImageIO других потребителей не меняются.
+     *
+     * @param scene готовая сцена ядра
+     * @return полные байты PNG после закрытия потока кодирования
+     * @throws IOException если PNG-кодировщик недоступен или запись не завершилась
+     */
     public static byte[] png(ChartScene scene) throws IOException {
         BufferedImage image = new BufferedImage(Math.max(1, (int) scene.width()), Math.max(1, (int) scene.height()), BufferedImage.TYPE_INT_ARGB);
         Graphics2D g = image.createGraphics(); paint(g, scene); g.dispose();
         ByteArrayOutputStream bytes = new ByteArrayOutputStream();
-        if (!ImageIO.write(image, "png", bytes)) throw new IOException("PNG encoder");
+        // OutputStream overload сам выбирает disk cache; явный поток исключает temp file до выбора Save.
+        try (MemoryCacheImageOutputStream output = new MemoryCacheImageOutputStream(bytes)) {
+            if (!ImageIO.write(image, "png", output)) throw new IOException("PNG encoder");
+        }
         return bytes.toByteArray();
     }
 

@@ -66,6 +66,19 @@ public record OpenWindows(List<OpenWindow> windows) {
         return Optional.empty();
     }
 
+
+    /**
+     * Проверяет общую политику ввода для адресованной формы или сообщения.
+     * Без модального окна политика допускает ввод; наличие живого адресата проверяет вызывающий слой.
+     * Это не проверка регистрации, ревизии запроса или подтверждения lifecycle-события.
+     *
+     * @param windowId идентификатор адресата
+     * @return разрешён ли ввод при текущем верхнем модальном окне
+     */
+    public boolean acceptsWindowInput(String windowId) {
+        return topModal().map(window -> window.windowId().equals(windowId)).orElse(true);
+    }
+
     /**
      * Ищет окно единственного экземпляра.
      *

@@ -63,7 +63,8 @@ function Copy-NativeAcceptanceDispatchRow($Row,[string]$Route) {
 function Import-NativeAcceptanceDefinitions([string]$Root,[string]$File,[string[]]$Names=@()) {
     if ($File -cnotin @('Test-Portable.ps1','Test-UpdateBootstrap.ps1','Test-NativeUpdateLifecycle.ps1',
         'NativeUpdatePhaseScenarios.ps1','NativeUpdateConcurrentAcceptance.ps1','NativeUpdateTwoClientAcceptance.ps1','NativeUpdateReadyAcceptance.ps1',
-        'NativeUpdatePhaseAcceptance.ps1','NativeUpdateRollbackAcceptance.ps1','NativeUpdateRollbackAcceptanceCollector.ps1','NativeUpdatePayloadAcceptance.ps1')) {throw 'ACCEPT_DISPATCH_IMPORT_FILE'}
+        'NativeUpdatePhaseAcceptance.ps1','NativeUpdateRollbackAcceptance.ps1','NativeUpdateRollbackAcceptanceCollector.ps1','NativeUpdatePayloadAcceptance.ps1',
+        'NativeUpdatePayloadScenarios.ps1','NativeUpdateNormalAcceptance.ps1','NativeUpdateNormalAcceptanceCollector.ps1')) {throw 'ACCEPT_DISPATCH_IMPORT_FILE'}
     $path=Join-Path $Root $File
     if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {throw ('ACCEPT_DISPATCH_MISSING_SOURCE:'+ $File)}
     $tokens=$null;$issues=$null;$ast=[Management.Automation.Language.Parser]::ParseFile($path,[ref]$tokens,[ref]$issues)
@@ -110,6 +111,25 @@ function Invoke-NativeAcceptanceRouteRead([string]$Route,$Row,$Receipt,$Base,$Ta
             }
             $decision=$null;$stored=$null
             switch -CaseSensitive -Exact ($route) {
+                'normal' {
+                    Import-NativeAcceptanceDefinitions $root 'NativeUpdatePayloadScenarios.ps1'
+                    Initialize-NativePayloadDependencies $root
+                    Import-NativeAcceptanceDefinitions $root 'NativeUpdatePayloadAcceptance.ps1'
+                    Import-NativeAcceptanceDefinitions $root 'NativeUpdateNormalAcceptance.ps1'
+                    Import-NativeAcceptanceDefinitions $root 'NativeUpdateNormalAcceptanceCollector.ps1'
+                    Assert-Entry 'Test-NativeNormalCollectedAcceptance' 'Authority'
+                    $authority=$evidence.Authority
+                    foreach ($file in Get-NativeNormalSourceFiles) {
+                        $pin=$evidence.SourcePins[$file]
+                        if ($pin -cnotmatch '^[0-9a-f]{64}$' -or $pin -cne $authority.sourcePins[$file] -or
+                            $pin -cne (Get-FileHash -LiteralPath (Join-Path $root $file)).Hash.ToLowerInvariant()) {throw ('NORMAL_MAIN_SOURCE_PIN:'+ $file)}
+                    }
+                    foreach ($pair in @(@('scenario','Scenario'),@('base','Base'),@('client','Client'),@('path','Path'),@('phase','Phase'))) {
+                        if ($row.($pair[0]) -cne $authority.intent.($pair[1])) {throw 'NORMAL_MAIN_CELL_IDENTITY'}
+                    }
+                    if ($authority.kind -cne $kind) {throw 'NORMAL_MAIN_EVIDENCE_KIND'}
+                    $decision=Test-NativeNormalCollectedAcceptance $authority
+                }
                 'concurrent' {
                     if ($row.scenario -ceq 'two-clients') {
                         Import-NativeAcceptanceDefinitions $root 'NativeUpdateTwoClientAcceptance.ps1'
@@ -224,6 +244,7 @@ function Invoke-NativeUpdateAcceptanceDispatch($Row,$Envelope,$Base,$Target,$Col
         Test-NativeAcceptanceCommonFields $copy $missing $errors
         if ($EvidenceKind -cne 'NATIVE') {$missing.Add('MAIN_ACTUAL_NATIVE_PROVENANCE_REQUIRED')}
         $required=switch ($route) {
+            'normal' {@('Authority','SourcePins')}
             'concurrent' {@('CellEvidence','BaseManifest','BaseSha256','TargetManifest','TargetSha256','ExpectedHelperSha256','SupplementalDirectory')}
             'ready' {@('Receipt','ReceiptSha256','IndependentFile','IndependentSha256')}
             'rollback' {@('Authority','RetainedHelper')}
@@ -235,7 +256,20 @@ function Invoke-NativeUpdateAcceptanceDispatch($Row,$Envelope,$Base,$Target,$Col
             $value=Get-NativeAcceptanceValue $Evidence $field
             if ($null -eq $value -or ($value -is [string] -and $value -ceq '')) {$missing.Add('EVIDENCE:'+ $route+':'+$field);$routeMissing=$true}
         }
-        if ($route -ceq 'normal') {$missing.Add('NORMAL_ACCEPTANCE_OUTSIDE_BRIDGE_SCOPE');$routeMissing=$true}
+        if ($route -ceq 'normal' -and -not $routeMissing) {
+            $authority=$Evidence.Authority
+            foreach ($field in 'origin','sourcePins','intent','intentFile','intentSha256','createdUtc','nonce','bound','sealed') {
+                if ($null -eq (Get-NativeAcceptanceValue $authority $field)) {$missing.Add('NORMAL_AUTHORITY:'+ $field);$routeMissing=$true}
+            }
+            if (-not $routeMissing -and ($authority.origin -cne 'MAIN_PRE_NATIVE_NORMAL_COLLECTOR' -or
+                $authority.sourcePins -isnot [Collections.IDictionary] -or $Evidence.SourcePins -isnot [Collections.IDictionary])) {throw 'NORMAL_MAIN_AUTHORITY_CONTEXT'}
+            if (-not $routeMissing -and (-not $authority.bound -or -not $authority.sealed)) {$missing.Add('NORMAL_PRE_NATIVE_BIND_POST_CLEANUP_SEAL_REQUIRED');$routeMissing=$true}
+            if (-not $routeMissing) {
+                foreach ($field in 'expectedFile','expectedSha256','indexFile','indexSha256') {
+                    if (-not (Get-NativeAcceptanceValue $authority $field)) {$missing.Add('NORMAL_AUTHORITY:'+ $field);$routeMissing=$true}
+                }
+            }
+        }
         if ($Row.scenario -ceq 'two-clients') {
             $pin=Get-NativeAcceptanceValue $Evidence 'IndependentSha256'
             if ($null -eq $pin -or $pin -ceq '') {$missing.Add('EVIDENCE:concurrent:IndependentSha256');$routeMissing=$true}
@@ -289,6 +323,7 @@ function Invoke-NativeUpdateAcceptanceDispatch($Row,$Envelope,$Base,$Target,$Col
             $status=Get-NativeAcceptanceValue $decision 'status'
             if ($status -cnotin @('PASS','PENDING','FAIL','RECEIPT_CONTRACT_VALIDATED')) {throw 'ACCEPT_DISPATCH_INVALID_VERDICT'}
             $expectedScope=switch ($route) {
+                'normal' {'NATIVE_NORMAL_TRANSPORT_CELL'}
                 'ready' {'READY_CELL_ONLY'}
                 'concurrent' {if ($Row.scenario -ceq 'two-clients') {'NATIVE_TWO_CLIENT_WAIT_BARRIER'} else {'NATIVE_STALE_LEASE_BIRTH_MISMATCH'}}
                 'rollback' {'SINGLE_CELL_GUARDED_HELPER_CODE_NOT_OS_WIDE_TRACE'}
@@ -299,6 +334,7 @@ function Invoke-NativeUpdateAcceptanceDispatch($Row,$Envelope,$Base,$Target,$Col
                 (Get-NativeAcceptanceValue $decision 'scope') -cne $expectedScope) {throw 'ACCEPT_DISPATCH_VERDICT_SCOPE'}
             if ($status -ceq 'FAIL') {$errors.Add('ACCEPTOR_REPORTED_FAILURE')}
             $validated=switch ($route) {
+                'normal' {$flag=Get-NativeAcceptanceValue $decision 'proofComplete';$status -ceq 'PASS' -and $flag -is [bool] -and $flag -and (Get-NativeAcceptanceValue $decision 'scope') -ceq 'NATIVE_NORMAL_TRANSPORT_CELL'}
                 'ready' {$flag=Get-NativeAcceptanceValue $decision 'cellEvidenceValidated';$status -ceq 'PENDING' -and $flag -is [bool] -and $flag -and (Get-NativeAcceptanceValue $decision 'scope') -ceq 'READY_CELL_ONLY'}
                 'phase' {$status -ceq 'RECEIPT_CONTRACT_VALIDATED'}
                 'concurrent' {

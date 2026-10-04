@@ -25,7 +25,7 @@ public final class SwingMenus {
 
     /** Строит строку меню в порядке модели. */
     public JMenuBar bar(MenuBarModel model) {
-        // JavaFX: MenuBar → Swing: JMenuBar → Web: div[role=menubar]
+        // JavaFX: MenuBar → Swing: JMenuBar → Web: nav[role=menubar]
         JMenuBar bar = SwingLook.id(new JMenuBar(), "menuBar");
         Map<String, ButtonGroup> groups = new HashMap<>();
         model.menus().forEach(n -> bar.add(widget(n, InvokeSource.MENU, groups)));
@@ -51,7 +51,7 @@ public final class SwingMenus {
     private JComponent widget(MenuNode node, InvokeSource source, Map<String, ButtonGroup> groups) {
         JComponent widget = switch (node) {
             case MenuNode.Submenu n -> {
-                // JavaFX: Menu → Swing: JMenu → Web: div[role=menuitem] + div[role=menu]
+                // JavaFX: Menu → Swing: JMenu → Web: button[role=menuitem] + div[role=menu]
                 JMenu menu = new JMenu(n.text()) {
                     /** Привязывает подсказку к целому submenu тем же способом, что к обычному пункту. */
                     @Override public java.awt.Point getToolTipLocation(MouseEvent event) { return new java.awt.Point(DesignTokens.SPACING, getHeight() + DesignTokens.SPACING); }
@@ -71,21 +71,21 @@ public final class SwingMenus {
                 yield menu;
             }
             case MenuNode.Action n -> {
-                // JavaFX: MenuItem → Swing: JMenuItem → Web: div[role=menuitem]
+                // JavaFX: MenuItem → Swing: JMenuItem → Web: button[role=menuitem]
                 yield action(new JMenuItem(n.text()) {
                     /** Размещает подсказку под настоящим пунктом, независимо от положения указателя внутри него. */
                     @Override public java.awt.Point getToolTipLocation(MouseEvent event) { return new java.awt.Point(DesignTokens.SPACING, getHeight() + DesignTokens.SPACING); }
                 }, n.command(), n.args(), n.accel(), n.tooltip(), n.enabled(), source);
             }
             case MenuNode.Check n -> {
-                // JavaFX: CheckMenuItem → Swing: JCheckBoxMenuItem → Web: div[role=menuitemcheckbox]
+                // JavaFX: CheckMenuItem → Swing: JCheckBoxMenuItem → Web: button[role=menuitemcheckbox]
                 yield action(new JCheckBoxMenuItem(n.text(), n.checked()) {
                     /** Размещает подсказку под настоящим пунктом. */
                     @Override public java.awt.Point getToolTipLocation(MouseEvent event) { return new java.awt.Point(DesignTokens.SPACING, getHeight() + DesignTokens.SPACING); }
                 }, n.command(), n.args(), n.accel(), n.tooltip(), n.enabled(), source);
             }
             case MenuNode.Radio n -> {
-                // JavaFX: RadioMenuItem → Swing: JRadioButtonMenuItem + ButtonGroup → Web: div[role=menuitemradio]
+                // JavaFX: RadioMenuItem → Swing: JRadioButtonMenuItem + ButtonGroup → Web: button[role=menuitemradio]
                 JRadioButtonMenuItem item = new JRadioButtonMenuItem(n.text(), n.selected()) {
                     /** Размещает подсказку под настоящим пунктом. */
                     @Override public java.awt.Point getToolTipLocation(MouseEvent event) { return new java.awt.Point(DesignTokens.SPACING, getHeight() + DesignTokens.SPACING); }
@@ -107,7 +107,7 @@ public final class SwingMenus {
                 separator.setEnabled(false); yield separator;
             }
             case MenuNode.Info n -> {
-                // JavaFX: MenuItem → Swing: JMenuItem → Web: div[role=menuitem]
+                // JavaFX: MenuItem → Swing: JMenuItem (недоступный) → Web: button[role=menuitem] (недоступный)
                 JMenuItem info = new JMenuItem(n.text()); info.setEnabled(false); yield info;
             }
             case MenuNode.Slider n -> slider(n);

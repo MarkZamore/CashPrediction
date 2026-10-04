@@ -90,6 +90,7 @@ try {
     $rootPom = '<project xmlns="http://maven.apache.org/POM/4.0.0"><modules><module>core</module><module>update-tool</module><module>ui-fx</module><module>ui-swing</module><module>web</module><module>repository-doc-audits</module></modules><profiles><profile><id>dist</id><modules><module>dist</module></modules></profile><profile><id>ui-tests</id><modules><module>ui-parity</module></modules></profile></profiles></project>'
     $kept = @('pom.xml', 'docs/design/architecture.md', 'repository-doc-audits/pom.xml',
         'dist/scripts/Set-LauncherUtf8.ps1', 'dist/scripts/Test-Icon-Source.ps1', 'dist/icons/make-icon.ps1',
+        'dist/scripts/Test-IconPayloadIntegrity.ps1', 'dist/scripts/Normalize-AppModules.ps1',
         'dist/launchers/swing.properties', 'dist/launchers/web.properties',
         '.github/scripts/Test-Portable.ps1', '.github/scripts/GhRetry.ps1',
         'core/src/main/resources/ru/cashprediction/core/ui/icons/application.ico',
@@ -161,6 +162,10 @@ try {
     foreach ($relative in @('update-tool/pom.xml', 'dist/scripts/Set-LauncherUtf8.ps1',
         'core/src/main/resources/ru/cashprediction/core/ui/icons/application.ico')) {
         Test-MissingFixture $relative 'Обязательный файл|POM модуля'
+    }
+    # Каждый новый вход сборки должен отклоняться именно по своему отсутствующему пути.
+    foreach ($relative in @('dist/scripts/Test-IconPayloadIntegrity.ps1', 'dist/scripts/Normalize-AppModules.ps1')) {
+        Test-MissingFixture $relative ('Обязательный файл поставки отсутствует: ' + [regex]::Escape($relative))
     }
     Test-MissingFixture 'core/src/main/java/ru/cashprediction/core/update/Update.java' 'core\.update'
     Test-MissingFixture 'update-tool/src/main/java/Example.java' 'исходники обязательного модуля: update-tool'

@@ -300,7 +300,7 @@ throw 'DISPATCH_FIXTURE_RUNNER_BODY_EXECUTED'
     $dispatcher=Get-DispatchFixtureDefinition (Join-Path $PSScriptRoot 'NativeUpdateScenarioDispatch.ps1') 'Invoke-NativeScenarioDispatch'
     Assert-NativeDispatchSignature $dispatcher 'Invoke-NativeScenarioDispatch'
     foreach ($call in $dispatcher.FindAll({param($node) $node -is [Management.Automation.Language.CommandAst]},$true)) {
-        if ($call.GetCommandName() -like 'Invoke-Native*') {Assert-DispatchFixture ($call.GetCommandName() -cin (@($expected.Values)+@('Invoke-NativeReadyAcceptedCell','Invoke-NativeConcurrentScenarioWithAcceptance','Invoke-NativeTwoClientCollectedScenario','Invoke-NativeRollbackCollectedAcceptance','Invoke-NativeUpdateAcceptanceDispatch'))) 'literal fixed route command'}
+        if ($call.GetCommandName() -like 'Invoke-Native*') {Assert-DispatchFixture ($call.GetCommandName() -cin (@($expected.Values)+@('Invoke-NativeReadyAcceptedCell','Invoke-NativeConcurrentScenarioWithAcceptance','Invoke-NativeTwoClientCollectedScenario','Invoke-NativeRollbackCollectedAcceptance','Invoke-NativeNormalCollectedCell','Invoke-NativeUpdateAcceptanceDispatch'))) 'literal fixed route command'}
     }
     # Это только functions/importers. Failure не скрывается за mocks и запрещает MAIN integration.
     try {Initialize-NativeScenarioDispatch $PSScriptRoot;$actualImportReady=$true}

@@ -89,6 +89,40 @@ class PlanDocumentTest {
 
     // ------------------------------------------------------------------ правка и история
 
+    /** Ошибка копирования входной диагностики не оставляет новый план со старым кэшем и историей. */
+    @Test
+    void rejectedReplacePreservesOwnerStateHistoryAndCachedForecast() {
+        doc.edit("first", plan -> plan.withName("first"));
+        doc.edit("second", plan -> plan.withName("second"));
+        doc.undo();
+        Plan before = doc.plan();
+        Forecast cached = doc.forecast();
+        Optional<Path> file = doc.file();
+        boolean dirty = doc.isDirty();
+        ViewState view = doc.viewState();
+        List<Diagnostic> diagnostics = doc.loadDiagnostics();
+        Optional<String> undo = doc.undoDescription();
+        Optional<String> redo = doc.redoDescription();
+        events.clear();
+        List<Diagnostic> invalidDiagnostics = new ArrayList<>();
+        invalidDiagnostics.add(null);
+        assertThrows(NullPointerException.class, () ->
+                doc.replace(before.withName("replacement"), Path.of("replacement.md"), false, invalidDiagnostics));
+        assertSame(before, doc.plan());
+        assertEquals(file, doc.file());
+        assertEquals(dirty, doc.isDirty());
+        assertSame(view, doc.viewState());
+        assertSame(diagnostics, doc.loadDiagnostics());
+        assertSame(cached, doc.forecast());
+        assertEquals(undo, doc.undoDescription());
+        assertEquals(redo, doc.redoDescription());
+        assertTrue(events.isEmpty());
+        doc.redo();
+        doc.undo();
+        doc.undo();
+        assertEquals(basePlan(), doc.plan());
+        assertFalse(doc.isDirty());
+    }
     @Test
     void newDocumentIsCleanWithoutHistory() {
         assertEquals(basePlan(), doc.plan());

@@ -270,12 +270,15 @@ public final class PlanDocument {
      * @param diagnostics диагностика чтения ({@code null} — нет)
      */
     public void replace(Plan plan, Path file, boolean dirty, List<Diagnostic> diagnostics) {
-        this.plan = Objects.requireNonNull(plan, "plan");
+        // Проверка входов завершается до изменения владельца, истории и кэша.
+        Plan replacement = Objects.requireNonNull(plan, "plan");
+        List<Diagnostic> copiedDiagnostics = diagnostics == null ? List.of() : List.copyOf(diagnostics);
+        this.plan = replacement;
         this.file = file;
         this.dirty = dirty;
         // Для восстановленного «грязного» плана сохранённой версии в памяти нет: отмена не сделает его чистым.
         this.savedPlan = dirty ? null : plan;
-        this.loadDiagnostics = diagnostics == null ? List.of() : List.copyOf(diagnostics);
+        this.loadDiagnostics = copiedDiagnostics;
         undoStack.clear();
         redoStack.clear();
         forecast = null;

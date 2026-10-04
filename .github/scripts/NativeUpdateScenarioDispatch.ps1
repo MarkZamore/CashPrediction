@@ -18,7 +18,9 @@ function Get-NativeDispatchFiles {
       'NativeUpdateAcceptanceDispatch.ps1','NativeUpdateConcurrentAcceptance.ps1','NativeUpdateReadyAcceptance.ps1',
       'NativeUpdatePhaseAcceptance.ps1','NativeUpdateRollbackAcceptance.ps1','NativeUpdatePayloadAcceptance.ps1',
       'NativeUpdateReadyAcceptanceCollector.ps1','NativeUpdateRollbackAcceptanceCollector.ps1','Test-NativeUpdateEvidenceSignoff.ps1',
-      'NativeUpdateTwoClientAcceptance.ps1','NativeUpdateTwoClientAcceptanceCollector.ps1')
+      'NativeUpdateTwoClientAcceptance.ps1','NativeUpdateTwoClientAcceptanceCollector.ps1',
+      'NativeUpdateNormalAcceptance.ps1','NativeUpdateNormalAcceptanceCollector.ps1','NativeUpdatePayloadAuthority.ps1',
+      'NativeUpdateScenarioDispatch.ps1')
 }
 
 # Проверяет literal абсолютный путь и каждого предка, не разрешая reparse обход source root.
@@ -307,7 +309,35 @@ function Invoke-NativeScenarioDispatch($Row,[string]$Source,$Base,$Target,$Life,
         $collectEnabled=($null -ne $collect -and $collect.enabled -eq $true)
         $routeInputs=$null;$earlyVerdict=$null;$reportedHelperStatus=$null;$reportedHelperReason=$null
         $helperReceipts=@(switch -CaseSensitive -Exact ($route) {
-            'normal' {Assert-NativeDispatchCommand 'Invoke-NativeCell';Invoke-NativeCell $Row $Source $Base $Target $Life $Cold $Java $Evidence $Timeout}
+            'normal' {
+                Assert-NativeDispatchCommand 'Invoke-NativeCell'
+                $entry=if ($collectEnabled -and $null -ne $collect.PSObject.Properties['normalIntentByCell']) {Get-NativeLifecyclePinnedIntent $collect $Row 'normal'} else {$null}
+                # Opt-in acceptance не запускает native без заранее закреплённого MAIN intent.
+                if ($null -eq $entry -and $collectEnabled) {$reportedHelperStatus='PENDING';$reportedHelperReason='MAIN_PRE_NATIVE_NORMAL_INTENT_REQUIRED'}
+                elseif ($null -eq $entry) {Invoke-NativeCell $Row $Source $Base $Target $Life $Cold $Java $Evidence $Timeout}
+                elseif ($entry.evidenceKind -cne 'NATIVE') {$reportedHelperStatus='PENDING';$reportedHelperReason='MAIN_ACTUAL_NATIVE_PROVENANCE_REQUIRED'}
+                else {
+                    foreach ($file in 'NativeUpdatePayloadScenarios.ps1','NativeUpdatePayloadAcceptance.ps1','NativeUpdateNormalAcceptance.ps1','NativeUpdateNormalAcceptanceCollector.ps1') {
+                        Import-NativeDispatchFunctions $script:nativeDispatchState.SourceScriptsRoot $file
+                    }
+                    $authority=New-NativeNormalCollector $entry.file $entry.sha256 'NATIVE'
+                    $sourcePins=@{}
+                    foreach ($file in Get-NativeNormalSourceFiles) {
+                        $sourcePins[$file]=$script:nativeDispatchState.Pins[$file].ToLowerInvariant()
+                        if ($authority.sourcePins[$file] -cne $sourcePins[$file]) {throw ('NORMAL_PRE_NATIVE_SOURCE_PIN:'+ $file)}
+                    }
+                    $routeInputs=[pscustomobject]@{Authority=$authority;SourcePins=$sourcePins}
+                    $collected=Invoke-NativeNormalCollectedCell $authority $Row $Source $Base $Target $Life $Cold $Java $Evidence $Timeout
+                    $helper=$collected.helperRow
+                    if (($helper.scenario+'/'+$helper.base+'/'+$helper.client+'/'+$helper.path+'/'+$helper.phase) -cne $identity) {throw 'NORMAL_HELPER_IDENTITY'}
+                    if ($collected.status -ceq 'FAIL' -or $helper.status -ceq 'FAIL') {throw 'NORMAL_COLLECTOR_FAILURE'}
+                    foreach ($property in $helper.PSObject.Properties) {
+                        if ($property.Name -cnotin @('status','reason','scenario','base','client','path','phase')) {$Row | Add-Member $property.Name $property.Value -Force}
+                    }
+                    $reportedHelperStatus=$helper.status;$reportedHelperReason=$helper.reason
+                    $collected
+                }
+            }
             'concurrent' {
                 Assert-NativeDispatchCommand 'Invoke-NativeConcurrentScenario'
                 if ($collectEnabled -and $Row.scenario -ceq 'two-clients') {

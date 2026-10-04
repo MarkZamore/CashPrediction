@@ -223,14 +223,14 @@ public final class UiApi implements HttpHandler {
             case WebIntent.FormClose close -> port.form(close.windowId()).ifPresent(form -> { if (editable(form)) form.closeRequested(); });
             case WebIntent.AlertShown shown -> port.alertShown(shown.windowId());
             case WebIntent.AlertAnswer answer -> {
-                if (controller.state().windows().topModal().map(window -> window.windowId().equals(answer.alertId())).orElse(true))
+                if (controller.state().windows().acceptsWindowInput(answer.alertId()))
                     port.answer(answer.alertId(), answer.buttonId());
             }
             case WebIntent.ClientError error -> controller.clientError(error.message(), error.stack());
         }
     }
     private boolean editable(FormSession form) {
-        return controller.state().windows().topModal().map(window -> window.windowId().equals(form.windowId())).orElse(true);
+        return controller.state().windows().acceptsWindowInput(form.windowId());
     }
     private Object query(WebQuery request) {
         var screen = port.screen();

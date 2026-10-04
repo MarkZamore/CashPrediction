@@ -71,9 +71,10 @@ function Get-NormalAcceptanceInput($ExpectedFile,$ExpectedSha256) {
     $paths=@($roots)+@($expected.TargetRoot,$expected.CommandFile,$expected.LifecycleFile,$expected.Java,
         $life.artifactDir,$cold.helperScript)+@($cold.toolFiles | ForEach-Object path)+
         @($cold.baseManifests | ForEach-Object manifest)+@($life.harnessClasspath.Split(';'))
-    $paths+=@('NativeUpdateNormalAcceptance.ps1','NativeUpdatePayloadAcceptance.ps1','NativeUpdatePayloadScenarios.ps1',
+    $paths+=@('NativeUpdateNormalAcceptanceCollector.ps1','NativeUpdateNormalAcceptance.ps1','NativeUpdatePayloadAcceptance.ps1','NativeUpdatePayloadScenarios.ps1',
         'Test-NativeUpdateLifecycle.ps1','Test-UpdateBootstrap.ps1','Test-Portable.ps1',
-        'New-NativeUpdateArtifacts.ps1','New-NativeUpdateLifecycleConfig.ps1','New-UpdateBootstrapCommands.ps1','S7-Release.ps1' |
+        'New-NativeUpdateArtifacts.ps1','New-NativeUpdateLifecycleConfig.ps1','New-UpdateBootstrapCommands.ps1','S7-Release.ps1',
+        'NativeUpdateScenarioDispatch.ps1','NativeUpdateAcceptanceDispatch.ps1' |
         ForEach-Object {Join-Path $PSScriptRoot $_})
     $text=Get-NativePayloadSnapshot $paths
     return [pscustomobject]@{sha256=[Convert]::ToHexString([Security.Cryptography.SHA256]::HashData([Text.Encoding]::UTF8.GetBytes($text))).ToLowerInvariant()}

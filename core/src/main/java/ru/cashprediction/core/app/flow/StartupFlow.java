@@ -121,7 +121,7 @@ public final class StartupFlow {
         guarded(() -> {
             Path home = context.environment().cashMemory();
             try {
-                Files.createDirectories(home);
+                ru.cashprediction.core.io.AppPaths.ensureCashMemory(context.environment().appHome(), home);
             } catch (IOException e) {
                 throw new java.io.UncheckedIOException(e);
             }

@@ -104,16 +104,21 @@ public final class AtomicFiles {
 
     /** Записывает копию с нужным расширением, сохраняя сброс на диск и атомарную замену. */
     private static void write(Path target, byte[] bytes, String suffix) throws IOException {
+        target = CanonicalPaths.requireNoLinks(target);
         Path dir = target.toAbsolutePath().getParent();
         if (dir == null) {
             throw new IOException(Texts.get("io.error.noParentFolder", target));
         }
         Files.createDirectories(dir);
+        CanonicalPaths.requireNoLinks(target);
         Path tmp = temporaryPath(target, suffix);
+        CanonicalPaths.requireNoLinks(tmp);
         boolean created = false;
+        Throwable primary = null;
         try {
             // CREATE_NEW: если такое имя вдруг занято, лучше ошибка, чем чужие данные.
-            try (FileChannel channel = FileChannel.open(tmp, StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE)) {
+            try (FileChannel channel = FileChannel.open(tmp, StandardOpenOption.CREATE_NEW,
+                    StandardOpenOption.WRITE, LinkOption.NOFOLLOW_LINKS)) {
                 created = true;
                 ByteBuffer buffer = ByteBuffer.wrap(bytes);
                 while (buffer.hasRemaining()) {
@@ -124,20 +129,35 @@ public final class AtomicFiles {
                 channel.force(true);
             }
             moveWithRetries(tmp, target);
+        } catch (IOException | RuntimeException | Error failure) {
+            primary = failure;
+            throw failure;
         } finally {
-            // Если перемещение не случилось, временный файл не должен остаться мусором.
-            if (created) Files.deleteIfExists(tmp);
+            // Не удаляем ничего через подменённого предка; cleanup не маскирует primary failure.
+            if (created) {
+                try {
+                    CanonicalPaths.requireNoLinks(tmp);
+                    Files.deleteIfExists(tmp);
+                } catch (IOException cleanup) {
+                    if (primary != null) primary.addSuppressed(cleanup);
+                    else throw cleanup;
+                }
+            }
         }
     }
 
     private static void moveWithRetries(Path tmp, Path target) throws IOException {
         IOException last = null;
         for (int attempt = 1; attempt <= MOVE_ATTEMPTS; attempt++) {
+            CanonicalPaths.requireNoLinks(tmp);
+            CanonicalPaths.requireNoLinks(target);
             try {
                 Files.move(tmp, target, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
                 return;
             } catch (AtomicMoveNotSupportedException e) {
                 // Файловая система не умеет атомарно: заменяем обычным способом.
+                CanonicalPaths.requireNoLinks(tmp);
+                CanonicalPaths.requireNoLinks(target);
                 Files.move(tmp, target, StandardCopyOption.REPLACE_EXISTING);
                 return;
             } catch (AccessDeniedException e) {

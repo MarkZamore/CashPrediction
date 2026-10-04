@@ -262,7 +262,11 @@ class FxComputedFontTest {
     /** Одинаковые ширины и зазор общего токена измеряются в полном и неполном последнем ряду. */
     @Test void summaryCardsKeepEqualWidthAcrossEveryActualRow() throws Exception { onFx(() -> {
         var summary = port.main.summary;
+        var value = (Label) ((VBox) summary.getChildren().getFirst()).getChildren().get(1);
+        String originalValue = value.getText();
+        String beyond = ru.cashprediction.core.ui.text.UiText.get("summary.beyond.value");
         try {
+            value.setText(beyond);
             assertEquals(6, ru.cashprediction.core.ui.token.DesignTokens.CARD_GAP);
             assertEquals(ru.cashprediction.core.ui.token.DesignTokens.CARD_GAP, summary.getHgap());
             assertEquals(ru.cashprediction.core.ui.token.DesignTokens.CARD_GAP, summary.getVgap());
@@ -278,7 +282,19 @@ class FxComputedFontTest {
                     assertTrue(card.getLayoutX() + card.getWidth() <= summary.getWidth() - summary.getInsets().getRight());
                     rows.computeIfAbsent(card.getLayoutY(), y -> new java.util.ArrayList<>()).add(card);
                 }
-                assertEquals(viewport == 1200 ? 1 : 2, rows.size());
+                assertEquals(viewport == 1200 ? 8 : 6, rows.firstEntry().getValue().size());
+                System.out.println("SUMMARY_GEOMETRY viewport=" + viewport + " root=" + port.main.root.getWidth()
+                        + " panel=" + summary.getWidth() + " insets=" + summary.getInsets() + " card=" + width);
+                assertEquals(viewport, summary.getWidth(), 0.001);
+                assertEquals(viewport == 1000 ? 159 : 142, width, 0.001);
+                assertEquals(2, rows.size());
+                // Измеряется текст настоящего Label skin после CSS/layout, не отдельная модель метрик.
+                var glyphs = assertInstanceOf(Text.class, value.lookup(".text"));
+                assertEquals(beyond, glyphs.getText());
+                Region firstCard = cards.getFirst();
+                assertTrue(glyphs.getLayoutBounds().getWidth() <= value.getWidth());
+                assertTrue(glyphs.getLayoutBounds().getWidth() <= ru.cashprediction.core.ui.token.DesignTokens.CARD_MIN_WIDTH
+                        - firstCard.getInsets().getLeft() - firstCard.getInsets().getRight());
                 if (rows.size() > 1) assertTrue(rows.lastEntry().getValue().size() < rows.firstEntry().getValue().size());
                 Region previousRow = null;
                 for (var row : rows.values()) {
@@ -290,7 +306,7 @@ class FxComputedFontTest {
                     previousRow = row.getFirst();
                 }
             }
-        } finally { css(port.main.root, 1200, 800); }
+        } finally { value.setText(originalValue); css(port.main.root, 1200, 800); }
     }); }
 
     /** Сравнивает все декодированные пиксели фактического фона с физическим PNG общего каталога. */

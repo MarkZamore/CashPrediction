@@ -63,7 +63,7 @@ public final class DesignTokens {
     public static final int RESTORE_MIN_HEIGHT = 300;
 
     /** Минимальная ширина карточки сводки. */
-    public static final int CARD_MIN_WIDTH = 118;
+    public static final int CARD_MIN_WIDTH = 140;
     /** Единый зазор между карточками сводки по обеим осям. */
     public static final int CARD_GAP = 6;
     /** Отступ карточки по вертикали. */

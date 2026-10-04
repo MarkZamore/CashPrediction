@@ -90,8 +90,6 @@ public final class FxMain extends Application {
     @Override
     public void start(Stage stage) {
         Thread.currentThread().setUncaughtExceptionHandler((thread, error) -> FxStartupErrors.fatal(error));
-        // Диалог восстановления показывается до главного окна: его закрытие не должно завершать JavaFX.
-        Platform.setImplicitExit(false);
         try {
             // Прямой Application.launch также проходит барьер до создания контроллера и окон.
             if (environment == null) {
@@ -102,6 +100,9 @@ public final class FxMain extends Application {
                 if (!updates.beforeUi()) { Platform.exit(); return; }
                 Runtime.getRuntime().addShutdownHook(new Thread(FxMain::closeUpdates, "cp-fx-update-close"));
             }
+            // Runtime home и предстартовый барьер проверены до конфигурации UI.
+            // Диалог восстановления показывается до главного окна: его закрытие не должно завершать JavaFX.
+            Platform.setImplicitExit(false);
             ru.cashprediction.fx.ui.FxApp.start(stage, environment, updates);
         } catch (Exception | LinkageError e) {
             closeUpdates();

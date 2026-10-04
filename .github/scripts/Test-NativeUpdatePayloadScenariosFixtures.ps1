@@ -340,14 +340,14 @@ try {
             . (Join-Path $root 'NativeUpdatePayloadScenarios.ps1')
             Initialize-NativePayloadDependencies $root
             # Префикс actual Invoke-NativeCell содержит source/target/artifact guard, без mkdir/native.
-            $nativeAst=(Get-Command Invoke-NativeCell).ScriptBlock.Ast
+            $nativeAst=Get-NativeLifecycleBodyDefinition (Get-Command Invoke-NativeCell).ScriptBlock.Ast
             if ($nativeAst -is [Management.Automation.Language.FunctionDefinitionAst]) {$nativeAst=$nativeAst.Body}
             $prefix=@()
             foreach ($statement in $nativeAst.EndBlock.Statements) {
                 if ($statement.Extent.Text -cmatch '^\$cellEvidence=') {break}
                 $prefix+=@($statement.Extent.Text)
             }
-            . ([scriptblock]::Create('function global:Invoke-PayloadRootProbe($Row,[string]$Source,$Life) {'+($prefix -join "`n")+'}'))
+            . ([scriptblock]::Create('function global:Invoke-PayloadRootProbe($Row,[string]$Source,$Life,[string]$OwnedRunRoot="",[string]$OwnedNodeNonce="") {'+($prefix -join "`n")+'}'))
             $global:capturedRoots=[Collections.Generic.List[string]]::new()
             function global:Get-ValidatedPortablePaths($Protected,$Run,$Project,$Profile) {$global:capturedRoots.Add($Protected);return $null}
             Set-NativePayloadPrivateRoots 'C:\owned-original' $root

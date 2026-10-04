@@ -175,4 +175,5 @@ for ($i = 0; $i -lt $count; $i++) {
     }
 }
 Assert-IconSource ($canonicalFrames -eq 1) 'Expected exactly one canonical 256x256 PNG frame in ICO.'
+& (Join-Path $PSScriptRoot 'Test-IconPayloadIntegrity.ps1') -IconDirectory $iconDir | Out-Null
 Write-Output 'OK: shared context PNG sources, manifest/generator/client wiring, three launcher inputs and canonical ICO PNG frame (static checks only).'

@@ -63,7 +63,9 @@ function Test-SourceFilters {
         Assert-True ($definitions.Count -eq 1) "Нет единственного определения: $name"
         . ([scriptblock]::Create($definitions[0].Extent.Text))
     }
-    $rejectedFiles = @('AGENTS.md', 'AGENTS.override.md', 'CLAUDE.md', 'nested/agents.MD',
+    $rejectedFiles = @('.agent.json', '.agents.json', '.windsurfrules',
+        'core/src/test/resources/.agent.json', 'core/src/test/resources/.agents.json',
+        'core/src/test/resources/.windsurfrules', 'AGENTS.md', 'AGENTS.override.md', 'CLAUDE.md', 'nested/agents.MD',
         'core/src/main/resources/CLAUDE.md', 'core/src/test/resources/AGENTS.md',
         'GEMINI.md', 'COPILOT.md', 'INSTRUCTIONS.md', '.codexignore', '.claudeignore', '.mcp.json',
         '.mcp/config.json', 'nested/.MCP/config.json', 'nested\.mcp\config.json',
@@ -161,6 +163,7 @@ function Test-SourceFilters {
             'update-tool/src/test/java/ru/cashprediction/updatetool/UpdateToolTest.java',
             'core/src/main/java/ru/cashprediction/core/update/net/UpdatePreparer.java',
             '.mvn/wrapper/maven-wrapper.jar', 'dist/scripts/Test-Icon-Source.ps1', 'dist/icons/make-icon.ps1',
+            'dist/scripts/Test-IconPayloadIntegrity.ps1', 'dist/scripts/Normalize-AppModules.ps1',
             'core/src/main/resources/ru/cashprediction/core/ui/icons/application.ico',
             'core/src/main/resources/ru/cashprediction/core/ui/icons/application.png',
             'core/src/main/resources/ru/cashprediction/core/ui/icons/calendar.png',
@@ -246,7 +249,8 @@ function Test-DeliveredReactor([string] $Original, [string] $Delivered) {
 
 if ($FiltersOnly -and $VerifyBuild) { throw 'FiltersOnly несовместим с VerifyBuild.' }
 if ($FixturesOnly -and ($FiltersOnly -or $VerifyBuild)) { throw 'FixturesOnly несовместим с FiltersOnly и VerifyBuild.' }
-Test-SourceFilters
+# Fixture-only не повторяет read-only аудит настоящего проекта из FiltersOnly.
+if (-not $FixturesOnly) { Test-SourceFilters }
 if ($FiltersOnly) { return }
 & (Join-Path $PSScriptRoot 'Test-Pack-SourcePolicy.ps1')
 $testBase = [IO.Path]::GetFullPath((Join-Path ([IO.Path]::GetTempPath()) 'CashPredictionDev')).TrimEnd([IO.Path]::DirectorySeparatorChar)
@@ -323,6 +327,7 @@ try {
         '.github/scripts/Test-Portable.ps1', '.github/scripts/GhRetry.ps1',
         'dist/launchers/swing.properties', 'dist/launchers/web.properties',
         'dist/scripts/Test-Icon-Source.ps1', 'dist/scripts/Set-LauncherUtf8.ps1', 'dist/icons/make-icon.ps1',
+        'dist/scripts/Test-IconPayloadIntegrity.ps1', 'dist/scripts/Normalize-AppModules.ps1',
         'core/src/main/resources/ru/cashprediction/core/ui/icons/application.ico',
         'core/src/main/resources/ru/cashprediction/core/ui/icons/application.png',
         'core/src/main/resources/ru/cashprediction/core/ui/icons/calendar.png',
@@ -342,7 +347,8 @@ try {
         'web/src/test/resources/workflows/fixture.json',
         'ui-parity/src/test/resources/docs/fixture.json', 'ui-parity/src/test/resources/docs/session.md',
         'ui-parity/src/test/java/ru/cashprediction/parity/ExampleTest.java', 'ui-parity/src/test/resources/scenario.json')
-    $excluded = @('.git/config', '.claude/settings.json', '.codex/config.toml', '.agents/skill.md', '.cursor/rules/a.txt',
+    $excluded = @('core/src/test/resources/.agent.json', 'core/src/test/resources/.agents.json',
+        'core/src/test/resources/.windsurfrules', '.git/config', '.claude/settings.json', '.codex/config.toml', '.agents/skill.md', '.cursor/rules/a.txt',
         '.github/copilot-instructions.md', '.github/agents/build.agent.md', '.github/instructions/build.instructions.md',
         '.github/modernize/tool.ps1', '.codexignore', '.mcp.json', 'AGENTS.md', 'CLAUDE.md', 'nested/agents.MD',
         '.mcp/config.json', 'nested/.MCP/config.json', 'mcp.json', 'nested/MCP.JSON',
@@ -440,9 +446,12 @@ try {
     $deliveryOriginal = if ($FixturesOnly) { $fixture } else { $source }
     Test-DeliveredReactor $deliveryOriginal $extracted
     if ($VerifyBuild) {
+        # Проверка извлечённых исходников не читает и не заменяет локальные артефакты основной разработки.
+        $buildRepository = Join-Path $testRoot 'maven-repository'
+        $null = New-Item -ItemType Directory -Path $buildRepository
         Push-Location -LiteralPath $extracted
         try {
-            & mvn -B install
+            & mvn -B "-Dmaven.repo.local=$buildRepository" install
             Assert-True ($LASTEXITCODE -eq 0) 'mvn -B install в распакованных исходниках завершился с ошибкой.'
         } finally { Pop-Location }
     }
