@@ -35,7 +35,7 @@ class UiApiTest {
 
     @BeforeEach void start() throws Exception {
         System.setProperty("cashprediction.ui.strictText", "true");
-        server = WebServer.startCore(AppEnvironment.from(LaunchOptions.parse(List.of("--ui", "core", "--home", home.toString(),
+        server = WebServer.startCore(AppEnvironment.from(LaunchOptions.parse(List.of("--home", home.toString(),
                 "--registry", "memory", "--today", "2026-09-13"), new java.util.Properties())), new ServerLog(false), 0, true);
         Map<String, Object> bootstrap = bootstrap("one");
         List<Object> windows = list(bootstrap.get("windows"));
@@ -82,7 +82,7 @@ class UiApiTest {
     /** Синтетическая модель bootstrap не означает показ главного окна во время выбора восстановления. */
     @Test void recoveryPendingPersistsUntilMainIsShownAndReleasesInertOnlyOnce() throws Exception {
         server.stop();
-        var environment = AppEnvironment.from(LaunchOptions.parse(List.of("--ui", "core", "--home", home.toString(),
+        var environment = AppEnvironment.from(LaunchOptions.parse(List.of("--home", home.toString(),
                 "--registry", "memory", "--today", "2026-09-13"), new java.util.Properties()));
         environment.webStore().markDirty(ru.cashprediction.core.session.SessionMarker.running(0,
                 environment.clock().now(), "web"));
@@ -246,7 +246,7 @@ class UiApiTest {
     }
     @Test void enabledTestApiRoutesValidatePendingStepAndRequireToken() throws Exception {
         server.stop();
-        server = WebServer.startCore(AppEnvironment.from(LaunchOptions.parse(List.of("--ui", "core", "--home", home.toString(),
+        server = WebServer.startCore(AppEnvironment.from(LaunchOptions.parse(List.of("--home", home.toString(),
                 "--registry", "memory", "--today", "2026-09-13", "--test-api", "--selftest", "s01-first-run",
                 "--selftest-out", home.resolve("selftest").toString()), new java.util.Properties())), new ServerLog(false), 0, true);
         var boot = bootstrap("one"); assertEquals(true, boot.get("testApi"));
@@ -281,7 +281,10 @@ class UiApiTest {
                 list(query(Map.of("type", "rows", "rev", rev, "from", 0, "count", 300)).get("result")).size());
         assertEquals(true, query(Map.of("type", "rows", "rev", rev - 1, "from", 0, "count", 300)).get("stale"));
         assertEquals(400, post("/api/ui/query", Map.of("type", "rows", "rev", rev, "from", 0, "count", 301)).statusCode());
-        assertNotNull(query(Map.of("type", "tooltip", "rev", rev, "index", 0, "columnId", "balance")).get("result"));
+        Map<String, Object> tooltip = obj(query(Map.of("type", "tooltip", "rev", rev, "index", 0,
+                "columnId", "balance")).get("result"));
+        assertTrue(tooltip.get("text") instanceof String);
+        assertEquals(List.of(), tooltip.get("iconPositions"));
         long chartRev = Json.requireLong(obj(screen.get("chart")), "revision");
         assertNotNull(query(Map.of("type", "chartScene", "rev", chartRev, "w", 1200, "h", 700)).get("result"));
         assertNull(query(Map.of("type", "chartHover", "rev", chartRev, "x", -1, "y", -1, "w", 1200, "h", 700)).get("result"));
@@ -293,7 +296,7 @@ class UiApiTest {
     @Test void todayMismatchFailsRealBootstrapWithoutPublishingBrowserStep() throws Exception {
         server.stop();
         Path output = home.resolve("wrong-date");
-        server = WebServer.startCore(AppEnvironment.from(LaunchOptions.parse(List.of("--ui", "core", "--home", home.toString(),
+        server = WebServer.startCore(AppEnvironment.from(LaunchOptions.parse(List.of("--home", home.toString(),
                 "--registry", "memory", "--today", "2026-09-14", "--test-api", "--selftest", "s01-first-run",
                 "--selftest-out", output.toString()), new java.util.Properties())), new ServerLog(false), 0, true);
         var response = get("/api/ui/bootstrap?tab=one");
@@ -307,7 +310,7 @@ class UiApiTest {
     }
     @Test void firstBootstrapPublishesStepBeyondCursorAndLaterBootstrapCannotReplayIt() throws Exception {
         server.stop();
-        server = WebServer.startCore(AppEnvironment.from(LaunchOptions.parse(List.of("--ui", "core", "--home", home.toString(),
+        server = WebServer.startCore(AppEnvironment.from(LaunchOptions.parse(List.of("--home", home.toString(),
                 "--registry", "memory", "--today", "2026-09-13", "--test-api", "--selftest", "s02-sample-table",
                 "--selftest-out", home.resolve("selftest").toString()), new java.util.Properties())), new ServerLog(false), 0, true);
         var first = bootstrap("collector");
@@ -350,7 +353,7 @@ class UiApiTest {
     }
     @Test void testCountersAreProtectedReadOnlyAndContainActualPositiveCommandIds() throws Exception {
         server.stop();
-        server = WebServer.startCore(AppEnvironment.from(LaunchOptions.parse(List.of("--ui", "core", "--home", home.toString(),
+        server = WebServer.startCore(AppEnvironment.from(LaunchOptions.parse(List.of("--home", home.toString(),
                 "--registry", "memory", "--today", "2026-09-13", "--test-api"), new java.util.Properties())), new ServerLog(false), 0, true);
         bootstrap("one");
         assertTrue(obj(getJson("/api/test/counters").get("counters")).isEmpty());
@@ -422,11 +425,11 @@ class UiApiTest {
             assertEquals(500, response.statusCode()); assertEquals(UiText.get("err.generic"), obj(JsonParser.parse(response.body())).get("error"));
         } finally { faulty.stop(0); }
     }
-    @Test void tokenCssIsGeneratedByCoreAndLegacyRootRemainsReachable() throws Exception {
+    @Test void tokenCssIsGeneratedByCoreAndRootServesUnifiedPage() throws Exception {
         assertEquals(200, get("/app/tokens.css").statusCode());
         assertEquals(ru.cashprediction.core.ui.token.TokenCss.webCss(), get("/app/tokens.css").body());
         assertEquals(200, get("/").statusCode());
-        assertTrue(server.browserUri().getPath().equals("/app.html"));
+        assertTrue(server.browserUri().getPath().equals("/"));
     }
     @Test void exitPublishesScreenBlocksEveryLateFormMutationAndStopsHttp() throws Exception {
         command("file.new"); String id = lastForm();

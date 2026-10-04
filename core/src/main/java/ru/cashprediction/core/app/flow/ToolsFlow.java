@@ -4,13 +4,16 @@ import java.util.Objects;
 import java.util.Map;
 import java.util.List;
 import java.util.ArrayList;
+import java.util.UUID;
 import java.math.BigDecimal;
 import java.time.Duration;
 import ru.cashprediction.core.app.Placement;
-import ru.cashprediction.core.document.PlanDocument;
 import ru.cashprediction.core.forecast.WhatIf;
 import ru.cashprediction.core.model.Money;
 import ru.cashprediction.core.diagnostics.PlanValidator;
+import ru.cashprediction.core.service.plan.PlanCommand;
+import ru.cashprediction.core.service.plan.PlanCommandRequest;
+import ru.cashprediction.core.service.plan.PlanCommandResult;
 import ru.cashprediction.core.session.Scheduler;
 import ru.cashprediction.core.session.WindowType;
 import ru.cashprediction.core.session.WindowState;
@@ -66,7 +69,7 @@ public final class ToolsFlow {
                 null, action -> context.edits().formResult(() -> {
                     if (action instanceof GoalCalculatorForm.SaveGoal saved)
                         context.edits().edit(UiText.get("undo.goal", saved.goal().title()), "status.msg.goalSaved",
-                                p -> p.withGoal(saved.goal()));
+                                new PlanCommand.SetGoal(saved.goal()));
                     else if (action instanceof GoalCalculatorForm.AddWhatIfExtra extra) {
                         cancelExtra();
                         context.updateView(v -> v.withWhatIf(v.whatIf().withExtraMonthlySaving(
@@ -113,6 +116,8 @@ public final class ToolsFlow {
         cancelExtra();
         WhatIf value = context.state().view().whatIf();
         if (value.isNone()) { context.status(StatusLevel.INFO, "status.hint.whatIfOff"); return; }
+        PlanCommandRequest request = new PlanCommandRequest(UUID.randomUUID(), context.planCommands().snapshot().revision(),
+                Texts.get("document.edit.applyWhatIf"), new PlanCommand.ApplyWhatIf(value, context.state().today()));
         List<String> parts = new ArrayList<>();
         if (value.incomeFactor().compareTo(BigDecimal.ONE) != 0)
             parts.add(UiText.get("s2.edit.whatIf.income", value.incomeFactor().toPlainString().replace('.', ',')));
@@ -126,15 +131,8 @@ public final class ToolsFlow {
                 base.glyph(), UiText.get("s2.edit.whatIf.header"), UiText.get("s2.edit.whatIf.content", String.join("; ", parts)),
                 base.details(), base.detailsExpanded(), base.minWidth(), base.buttons(), base.defaultButtonId(), base.restorable()), button -> {
             if (!"apply".equals(button)) return;
-            boolean[] computed = {false};
-            context.edits().edit(Texts.get("document.edit.applyWhatIf"), "", p -> {
-                PlanDocument draft = new PlanDocument(p, null, () -> context.state().today());
-                draft.setViewState(context.state().view().withWhatIf(value));
-                draft.applyWhatIfToPlan();
-                computed[0] = true;
-                return draft.plan();
-            });
-            if (computed[0]) {
+            PlanCommandResult applied = execute(request, "editFailed");
+            if (applied.accepted()) {
                 context.updateView(v -> v.withWhatIf(WhatIf.NONE));
                 context.status(StatusLevel.INFO, "status.msg.whatIfApplied");
             }
@@ -165,11 +163,11 @@ public final class ToolsFlow {
     /** {@code tools.cleanup}: удалить неиспользуемые корректировки, §6.17. */
     public void cleanup() {
         try {
-            PlanDocument draft = new PlanDocument(context.document().plan(), null, () -> context.state().today());
-            draft.setViewState(context.state().view());
-            int removed = draft.removeOrphanAdjustments();
-            if (removed > 0 && !context.edits().edit(Texts.get("document.edit.removeUnusedAdjustments", removed),
-                    "", p -> draft.plan())) return;
+            PlanCommandRequest request = new PlanCommandRequest(UUID.randomUUID(), context.planCommands().snapshot().revision(),
+                    "", new PlanCommand.Cleanup(context.state().today(), context.state().view().whatIf(), context.state().view().showSkipped()));
+            PlanCommandResult result = execute(request, "cleanup");
+            if (!result.accepted()) return;
+            int removed = result.effect().removedAdjustments();
             // JavaFX: Alert → Swing: JOptionPane → Web: dialog.
             if (removed == 0) context.showAlert(AlertCatalog.cleanup(0), null);
             else {
@@ -229,7 +227,19 @@ public final class ToolsFlow {
     /** Изменяет только обозначение валюты, не пересчитывая суммы. */
     private void setCurrency(String value) {
         context.edits().formResult(() ->
-                context.edits().edit(UiText.get("undo.currency", value), "", p -> p.withCurrency(value)));
+                context.edits().edit(UiText.get("undo.currency", value), "", new PlanCommand.SetCurrency(value)));
+    }
+
+    /** Применяет предметную команду инструмента и показывает структурированный отказ прежним сообщением. */
+    private PlanCommandResult execute(PlanCommandRequest request, String errorPurpose) {
+        PlanCommandResult result = context.planCommands().execute(request);
+        if (!result.accepted()) {
+            RuntimeException failure = new IllegalArgumentException(String.join("\n",
+                    result.problems().stream().map(problem -> problem.message()).toList()));
+            // JavaFX: Alert → Swing: JOptionPane → Web: dialog.
+            context.showAlert(AlertCatalog.error(errorPurpose, failure), null);
+        } else if (result.changed()) context.refresh();
+        return result;
     }
 
     /** Короткое объяснение неудачного расчёта. */

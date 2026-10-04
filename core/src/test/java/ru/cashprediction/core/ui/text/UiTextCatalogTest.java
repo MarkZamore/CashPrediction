@@ -80,7 +80,8 @@ class UiTextCatalogTest {
             TextKeyUsage.SourceSet.java("ui-fx", CoreModuleDir.resolve("../ui-fx/src/main/java/ru/cashprediction/fx/ui"), false),
             TextKeyUsage.SourceSet.java("ui-swing",
                     CoreModuleDir.resolve("../ui-swing/src/main/java/ru/cashprediction/swing/ui"), false),
-            TextKeyUsage.SourceSet.java("web", CoreModuleDir.resolve("../web/src/main/java/ru/cashprediction/web/ui"), false),
+            // Общие HTTP-обработчики тоже показывают ошибки пользователю, хотя находятся вне пакета ui.
+            TextKeyUsage.SourceSet.java("web", CoreModuleDir.resolve("../web/src/main/java/ru/cashprediction/web"), false),
             new TextKeyUsage.SourceSet("web-js", CoreModuleDir.resolve("../web/src/main/resources/web/app"),
                     JavaSourceScanner.Syntax.JAVASCRIPT, Pattern.compile("\\.texts\\s*\\[\\s*$"), false));
 
@@ -337,10 +338,34 @@ class UiTextCatalogTest {
         assertEquals(Optional.of("get"), sample.stream().map(TextKeyUsage.Reference::method).findFirst());
     }
 
+    /** Имена общих ресурсов не являются ключами; явный вызов каталога всё равно проверяется. */
+    @Test
+    void iconFilenameIsTechnicalButExplicitLookupStillRequiresAKey(@TempDir Path dir) throws IOException {
+        Files.writeString(dir.resolve("Icons.java"), """
+                class Icons {
+                    String resource = "warning.png";
+                    String invalid = UiText.get("warning.png");
+                    String typo = "warning.missing";
+                }
+                """, StandardCharsets.UTF_8);
+        var refs = TextKeyUsage.collect(List.of(TextKeyUsage.SourceSet.java("probe", dir, true)),
+                UiText.keys(), coreLayerNamespaces(), UiTextCatalogTest::technicalLiteral);
+        assertEquals(List.of("warning.png", "warning.missing"),
+                refs.stream().map(TextKeyUsage.Reference::key).toList());
+        assertEquals(TextKeyUsage.Via.LOOKUP, refs.getFirst().via());
+        assertEquals(2, TextKeyUsage.missing(refs, UiText::has).size());
+    }
+
+    /** @return точное имя грамматики или известный basename общего ресурса */
+    private static boolean technicalLiteral(String key) {
+        return FormatWords.has(key) || ru.cashprediction.core.ui.token.UiIcons.resource(key).isPresent();
+    }
+
     /** @return ссылки на ключи во всех наборах исходников (один проход сканера на запуск класса) */
     private static synchronized List<TextKeyUsage.Reference> references() {
         if (references == null) {
-            references = TextKeyUsage.collect(SOURCES, UiText.keys(), coreLayerNamespaces(), FormatWords::has);
+            references = TextKeyUsage.collect(SOURCES, UiText.keys(), coreLayerNamespaces(),
+                    UiTextCatalogTest::technicalLiteral);
         }
         return references;
     }

@@ -27,6 +27,7 @@
 
   <modules>
     <module>core</module>
+    <module>update-tool</module>
     <module>ui-fx</module>
     <module>ui-swing</module>
     <module>web</module>
@@ -107,7 +108,7 @@
           <configuration>
             <!-- Тесты запускаются на classpath: так JUnit не требует правок module-info. -->
             <useModulePath>false</useModulePath>
-            <argLine>-Dfile.encoding=UTF-8 -Duser.language=ru -Duser.country=RU -XX:-UsePerfData</argLine>
+            <argLine>-Dfile.encoding=UTF-8 -Duser.language=ru -Duser.country=RU -XX:-UsePerfData --enable-native-access=ALL-UNNAMED</argLine>
           </configuration>
         </plugin>
         <plugin>

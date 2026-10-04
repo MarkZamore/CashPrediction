@@ -128,7 +128,8 @@ public final class ModelUiDriver implements UiDriver {
             case SelfTestCommand.FilterType c -> {
                 mainAvailable(); port.focus = FocusTarget.FILTER;
                 if (filterTask != null) filterTask.cancel();
-                filterTask = port.scheduler.schedule(() -> intents.filterText(c.text()), Duration.ofMillis(300));
+                filterTask = port.scheduler.schedule(() -> intents.filterText(c.text()),
+                        Duration.ofMillis(ru.cashprediction.core.ui.token.DesignTokens.FILTER_DEBOUNCE_MS));
             }
             case SelfTestCommand.Filter c -> {
                 String id = switch (c.key()) {

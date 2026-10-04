@@ -18,7 +18,7 @@ public final class PlanSamples {
 
             ## Параметры
 
-            - Формат: CashPrediction 1
+            - Формат: CashPrediction 2
             - Валюта: ₽
             - Начало: 2026-09-01
             - Горизонт: 12 месяцев
@@ -61,6 +61,9 @@ public final class PlanSamples {
             | r4      | 2026-10-03    | пропустить |             |            | в отпуске               |
             | r1      | 2027-03-05    | заменить   | 70 000,00   | 2027-03-07 | новая работа            |
             """;
+
+    /** Исторический вход версии 1 остаётся отдельным от актуального эталона записи. */
+    public static final String FAMILY_BUDGET_V1 = FAMILY_BUDGET.replace("CashPrediction 2", "CashPrediction 1");
 
     private PlanSamples() {
     }

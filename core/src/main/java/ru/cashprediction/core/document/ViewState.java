@@ -2,11 +2,12 @@ package ru.cashprediction.core.document;
 
 import java.time.LocalDate;
 import java.util.Objects;
+import java.util.function.Predicate;
 import ru.cashprediction.core.forecast.ForecastRow;
 import ru.cashprediction.core.forecast.Origin;
 import ru.cashprediction.core.forecast.WhatIf;
-import ru.cashprediction.core.markdown.RuFormats;
 import ru.cashprediction.core.model.Plan;
+import ru.cashprediction.core.util.SearchText;
 
 /**
  * Параметры отображения открытого плана: режим, период, фильтры строк, строка поиска и режим «что-если».
@@ -140,6 +141,33 @@ public record ViewState(
         if (row.origin() == Origin.START) {
             return true;
         }
+        if (!acceptsEventKind(row)) return false;
+        String needle = SearchText.normalize(filterText);
+        if (needle.isEmpty()) return true;
+        return SearchText.normalize(row.title()).contains(needle)
+                || SearchText.normalize(row.category()).contains(needle)
+                || SearchText.normalize(row.note()).contains(needle);
+    }
+
+    /**
+     * Готовит фильтры этого неизменяемого вида для одного прохода по событиям.
+     * Запрос нормализуется один раз; повторяющиеся фактические тексты полей имеют локальный ограниченный кэш.
+     * Предикат не удерживает план/прогноз/id событий и не изменяет порядок строк или финансовые данные.
+     * Для следующего прохода, особенно после смены вида, создаётся новый предикат вне цикла.
+     * @return предикат того же контракта, что accepts, для использования в одном потоке прохода
+     */
+    public Predicate<ForecastRow> rowFilter() {
+        Predicate<String> text = SearchText.prepare(filterText);
+        return row -> {
+            Objects.requireNonNull(row, "row");
+            if (row.origin() == Origin.START) return true;
+            return acceptsEventKind(row)
+                    && (text.test(row.title()) || text.test(row.category()) || text.test(row.note()));
+        };
+    }
+
+    /** Проверяет флаги события без текстового поиска; START обрабатывается до вызова. */
+    private boolean acceptsEventKind(ForecastRow row) {
         if (row.flags().skipped() && !showSkipped) {
             return false;
         }
@@ -152,14 +180,7 @@ public record ViewState(
         if (row.isExpense() && !showExpense) {
             return false;
         }
-        String needle = RuFormats.normalize(filterText);
-        if (needle.isEmpty()) {
-            return true;
-        }
-        // Нормализуем и строку поиска, и поля: пользователь не должен думать о регистре и «ё».
-        return RuFormats.normalize(row.title()).contains(needle)
-                || RuFormats.normalize(row.category()).contains(needle)
-                || RuFormats.normalize(row.note()).contains(needle);
+        return true;
     }
 
     /**

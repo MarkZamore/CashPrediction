@@ -41,6 +41,14 @@ public final class FxUiPort implements UiPort {
     private Optional<Path> queuedChooser;
     boolean selftest;
     volatile boolean exited;
+    private Runnable updateReady = () -> { };
+    private Runnable updateClose = () -> { };
+
+    /** Подключает только события готовности и выхода к общему обновлятору. */
+    public void updateCallbacks(Runnable ready, Runnable close) {
+        updateReady = java.util.Objects.requireNonNull(ready);
+        updateClose = java.util.Objects.requireNonNull(close);
+    }
     private final java.util.function.Supplier<LocalDate> today;
 
     /** Создаёт порт без запуска ядра. */
@@ -48,6 +56,7 @@ public final class FxUiPort implements UiPort {
     /** Использует общие часы окружения для начального месяца календаря пустого поля. */
     public FxUiPort(Stage stage, java.util.function.Supplier<LocalDate> today) {
         this.stage = stage; this.today = today;
+        FxIcons.application(stage);
         // Нативный Dialog требует сцену владельца даже до показа главного окна при восстановлении.
         stage.setScene(new javafx.scene.Scene(new StackPane(), 1200, 800)); stage.setMinWidth(900); stage.setMinHeight(600);
     }
@@ -72,6 +81,7 @@ public final class FxUiPort implements UiPort {
         main = new MainWindowView(this); main.render(model, EnumSet.allOf(ScreenPart.class));
         if (restored != null && restored.bounds() != null) FxFormDialog.applyBounds(stage, restored.bounds());
         if (restored != null) stage.setMaximized(restored.maximized()); stage.show();
+        updateReady.run();
     }
     /** Перерисовывает изменившиеся области. */
     @Override public void render(MainScreenModel model, EnumSet<ScreenPart> changed) { if (main != null) main.render(model, changed); }
@@ -125,7 +135,7 @@ public final class FxUiPort implements UiPort {
         else pendingChooser = callback;
     }
     /** Рисует PNG из актуальной сцены на отдельном холсте. */
-    @Override public byte[] renderChartPng(ChartScene scene) { Canvas canvas = new Canvas(); FxChartCanvas.paint(canvas, scene); return ru.cashprediction.fx.action.PngEncoder.encode(canvas.snapshot(null, null)); }
+    @Override public byte[] renderChartPng(ChartScene scene) { Canvas canvas = new Canvas(); FxChartCanvas.paint(canvas, scene); return ru.cashprediction.fx.ui.PngEncoder.encode(canvas.snapshot(null, null)); }
     /** Переводит фокус по указанию ядра. */
     @Override public void focus(FocusTarget target) {
         if (main == null) return;
@@ -142,7 +152,9 @@ public final class FxUiPort implements UiPort {
     @Override public void copyToClipboard(String text) { ClipboardContent content = new ClipboardContent(); content.putString(text); Clipboard.getSystemClipboard().setContent(content); }
     /** Завершает приложение и фоновые таймеры. */
     @Override public void exit(ExitKind kind, int code) {
+        if (kind == ExitKind.CLEAN) ru.cashprediction.fx.FxMain.recordCleanExit(code);
         exited = true;
+        updateClose.run();
         scheduler.shutdown(); windows.values().forEach(WindowHandle::close); hideDay(); hideSpark(); contexts.forEach(ContextMenu::hide);
         if (kind == ExitKind.HALT) Runtime.getRuntime().halt(code); else { stage.hide(); if (!selftest) Platform.exit(); }
     }
@@ -252,6 +264,7 @@ public final class FxUiPort implements UiPort {
             @Override public void accept(YearMonth m) {
                 CalendarModel model = intents.calendar(m, selected); content.getChildren().clear();
                 Button prev = new Button("\u25c0"), next = new Button("\u25b6");
+                FxIcons.icon(prev, prev.getText(), DesignTokens.INLINE_ICON_SIZE); FxIcons.icon(next, next.getText(), DesignTokens.INLINE_ICON_SIZE);
                 prev.setTooltip(FxStyles.tip(model.prevTooltip(), probe)); next.setTooltip(FxStyles.tip(model.nextTooltip(), probe));
                 prev.setOnAction(e -> accept(m.minusMonths(1))); next.setOnAction(e -> accept(m.plusMonths(1)));
                 content.getChildren().add(new HBox(4, prev, new Label(model.title()), next)); GridPane grid = new GridPane();

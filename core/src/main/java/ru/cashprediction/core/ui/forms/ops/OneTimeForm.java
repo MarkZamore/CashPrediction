@@ -50,6 +50,12 @@ public final class OneTimeForm implements FormLogic {
     public OneTimeForm() {
     }
 
+    /**
+     * Строит раскладку диалога разовой операции с датой, названием, видом, суммой,
+     * категорией и заметкой, кнопками сохранения и отмены.
+     * @param context окружение формы с категориями текущего плана
+     * @return спецификация формы с кнопкой сохранения по умолчанию
+     */
     @Override
     public FormSpec spec(FormContext context) {
         return new FormSpec("oneTime", WindowType.ONE_TIME_EDITOR, "", Presentation.DIALOG,
@@ -64,6 +70,13 @@ public final class OneTimeForm implements FormLogic {
                 List.of(ButtonSpecs.ok(UiText.get("button.save")), ButtonSpecs.cancel()), ButtonSpecs.OK);
     }
 
+    /**
+     * Возвращает поля найденной операции в режиме изменения либо начальные значения новой.
+     * Для новой операции использует корректную дату из контекста, иначе более позднюю
+     * из сегодняшней даты и начала плана; вид по умолчанию задаёт как расход.
+     * @param context окружение с режимом, целью изменения и возможными датой и видом
+     * @return значения по идентификаторам полей; суммы и даты в канонической форме
+     */
     @Override
     public Map<String, String> defaults(FormContext context) {
         OneTimeTransaction existing = existing(context);
@@ -78,6 +91,13 @@ public final class OneTimeForm implements FormLogic {
                 OpsForms.enumValue(Kind.class, context.contextValue("kind"), Kind.EXPENSE).name(), "amount", "", "category", "", "note", "");
     }
 
+    /**
+     * Проверяет обязательные дату, название и положительную сумму, формирует заголовок и поля.
+     * Дата вне горизонта даёт предупреждение и допускает сохранение; ошибка отключает сохранение.
+     * @param state введённые значения
+     * @param context окружение с текущим планом и целью изменения
+     * @return модель формы со строкой проблем и доступностью кнопки сохранения
+     */
     @Override
     public FormView evaluate(FormState state, FormContext context) {
         Optional<String> error = FieldChecks.first(
@@ -97,6 +117,15 @@ public final class OneTimeForm implements FormLogic {
                 OpsForms.problem(error, warning), Map.of(ButtonSpecs.OK, error.isPresent() ? ButtonView.DISABLED : ButtonView.ENABLED), List.of(), List.of(), "", false);
     }
 
+    /**
+     * Отменяет ввод либо после проверки возвращает разовую операцию для применения контроллером.
+     * Сохраняет идентификатор найденной операции, для новой берёт следующий идентификатор плана.
+     * Сам план не изменяет; неизвестная кнопка оставляет форму открытой.
+     * @param buttonId идентификатор кнопки
+     * @param state введённые значения
+     * @param context окружение с текущим планом и целью изменения
+     * @return закрытие без результата при отмене, операция при успехе либо продолжение ввода
+     */
     @Override
     public FormOutcome onButton(String buttonId, FormState state, FormContext context) {
         if (ButtonSpecs.CANCEL.equals(buttonId)) {

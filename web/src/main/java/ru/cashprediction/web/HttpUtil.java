@@ -12,6 +12,7 @@ import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import ru.cashprediction.core.text.Texts;
 
 /**
  * Вспомогательные операции с {@link HttpExchange}: чтение тела и параметров, запись ответа, заголовки.
@@ -41,7 +42,7 @@ public final class HttpUtil {
             int read;
             while ((read = in.read(buffer)) >= 0) {
                 if (out.size() + read > MAX_BODY_BYTES) {
-                    throw ApiException.badRequest("Слишком большой запрос (больше " + MAX_BODY_BYTES / (1024 * 1024) + " МБ)");
+                    throw ApiException.badRequest(Texts.get("app.http.bodyTooLarge", MAX_BODY_BYTES / (1024 * 1024)));
                 }
                 out.write(buffer, 0, read);
             }
@@ -83,7 +84,7 @@ public final class HttpUtil {
         try {
             return URLDecoder.decode(text, StandardCharsets.UTF_8);
         } catch (IllegalArgumentException e) {
-            throw ApiException.badRequest("Некорректная кодировка параметра запроса");
+            throw ApiException.badRequest(Texts.get("app.http.invalidEncoding"));
         }
     }
 

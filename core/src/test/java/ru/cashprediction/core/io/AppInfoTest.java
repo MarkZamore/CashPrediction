@@ -39,4 +39,20 @@ class AppInfoTest {
         }
         assertFalse(text.isBlank());
     }
+
+    /** Явные параметры релизной сборки должны попасть в ресурс, а не остаться только свойствами Maven. */
+    @Test
+    void filteredMetadataMatchesExplicitBuildParameters() {
+        String requestedRelease = System.getProperty("app.release");
+        String requestedCommit = System.getProperty("app.commit");
+        if (requestedRelease != null) {
+            assertEquals(AppInfo.parseRelease(requestedRelease), AppInfo.release(),
+                    "Номер релиза не попал в отфильтрованный ресурс сборки");
+        }
+        if (requestedCommit != null) {
+            assertEquals(AppInfo.normalizeCommit(requestedCommit), AppInfo.commit(),
+                    "Коммит не попал в отфильтрованный ресурс сборки");
+        }
+        assertTrue(AppInfo.release() >= 0);
+    }
 }

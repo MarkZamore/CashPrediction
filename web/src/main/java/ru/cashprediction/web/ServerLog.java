@@ -1,5 +1,7 @@
 package ru.cashprediction.web;
 
+import ru.cashprediction.core.text.Texts;
+
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayDeque;
@@ -58,7 +60,7 @@ public final class ServerLog {
      */
     public void error(String message, Throwable error) {
         String reason = error == null ? "" : ": " + Objects.requireNonNullElse(error.getMessage(), error.getClass().getSimpleName());
-        add(LocalTime.now().format(TIME) + "  ОШИБКА  " + Objects.requireNonNullElse(message, "") + reason);
+        add(LocalTime.now().format(TIME) + Texts.get("app.web.errorPrefix") + Objects.requireNonNullElse(message, "") + reason);
     }
 
     /**

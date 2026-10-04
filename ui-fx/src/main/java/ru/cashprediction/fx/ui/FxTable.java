@@ -27,6 +27,7 @@ public final class FxTable {
     private final FxClassUsageProbe probe;
     private boolean updating;
     private boolean userSelection;
+    private long selectionVersion;
     private String lastModelScrollId = "";
     private long revealVersion;
 
@@ -34,6 +35,8 @@ public final class FxTable {
     public FxTable(UiIntents intents, FxMenus menus, FxClassUsageProbe probe) {
         this.intents = intents; this.menus = menus; this.probe = probe;
         FxStyles.id(root, "table"); root.getProperties().put("cp.scope", FocusScope.TABLE);
+        // Полосы VirtualFlow создаются и заменяются вместе с настоящим скином таблицы.
+        FxIcons.skin(root);
         root.setFixedCellSize(26); root.getSelectionModel().setSelectionMode(SelectionMode.SINGLE);
         root.setColumnResizePolicy(features -> {
             if (model == null) return false;
@@ -47,23 +50,33 @@ public final class FxTable {
         });
         root.setBackground(new javafx.scene.layout.Background(new javafx.scene.layout.BackgroundFill(Color.web(ColorToken.BG_SURFACE.hex()), javafx.scene.layout.CornerRadii.EMPTY, javafx.geometry.Insets.EMPTY)));
         root.addEventFilter(KeyEvent.KEY_PRESSED, e -> { userSelection = true; javafx.application.Platform.runLater(() -> userSelection = false); });
+        root.addEventFilter(MouseEvent.MOUSE_PRESSED, e -> { userSelection = true; javafx.application.Platform.runLater(() -> userSelection = false); });
         root.getSelectionModel().selectedItemProperty().addListener((o, a, b) -> {
-            if (!updating && b != null && model != null) {
-                if (userSelection) intents.selectRow(model.row(b).rowId());
-                else {
+            if (!updating && b != null && model != null && b >= 0 && b < model.rowCount()) {
+                long version = ++selectionVersion;
+                TableModel selectedModel = model;
+                String rowId = model.row(b).rowId();
+                boolean fromInput = userSelection;
+                // TableView ещё меняет selectedIndices: нельзя синхронно перестраивать список или выделение.
+                // Новая модель или следующий жест отменяют отложенный ответ предыдущего события.
+                javafx.application.Platform.runLater(() -> {
+                    if (version != selectionVersion || updating || model != selectedModel
+                            || !Objects.equals(root.getSelectionModel().getSelectedItem(), b)) return;
+                    if (fromInput) { intents.selectRow(rowId); return; }
                     int wanted = model.indexOf(model.selectedRowId());
                     if (wanted != b) {
                         updating = true;
                         try { root.getSelectionModel().clearSelection(); if (wanted >= 0) root.getSelectionModel().select(wanted); }
                         finally { updating = false; }
                     }
-                }
+                });
             }
         });
     }
 
     /** Устанавливает индекс и колонки, не создавая все тексты строк. */
     public void render(TableModel next) {
+        selectionVersion++;
         updating = true;
         try {
             model = next; columns.clear(); root.getColumns().clear();
@@ -71,6 +84,12 @@ public final class FxTable {
                 int columnIndex = i; ColumnSpec spec = next.columns().get(i);
                 TableColumn<Integer, String> column = new TableColumn<>(spec.title());
                 column.setId(spec.id()); column.setSortable(false); column.setReorderable(false); column.setPrefWidth(spec.widthPx());
+                // Скин переносит класс колонки в её заголовок; выравнивание задаёт общая модель.
+                column.getStyleClass().add(switch (spec.align()) {
+                    case LEFT -> "cp-column-left";
+                    case CENTER -> "cp-column-center";
+                    case RIGHT -> "cp-column-right";
+                });
                 // Ширину остатка сообщает нативная раскладка с учётом настоящего scrollbar, без константы 18 px.
                 column.setCellValueFactory(v -> new ReadOnlyStringWrapper(model.row(v.getValue()).cells().get(columnIndex)));
                 column.setCellFactory(c -> new TableCell<>() {
@@ -87,6 +106,8 @@ public final class FxTable {
                     /** Обновляет текст, цвета, подсказку и действия реально отображаемой ячейки. */
                     @Override protected void updateItem(String value, boolean empty) {
                         super.updateItem(value, empty); setText(empty ? null : value); setGraphic(null);
+                        getProperties().remove("cp.paintText"); getProperties().remove("cp.logicalText");
+                        setAccessibleText(null);
                         if (empty || getIndex() < 0 || getIndex() >= model.rowCount()) { setTooltip(null); return; }
                         TableRowView row = model.row(getIndex());
                         CellStyle look = row.cellStyles().get(spec.id()); RowStyle rowLook = row.rowStyle();
@@ -96,10 +117,14 @@ public final class FxTable {
                         Text text = new Text(value); text.setFill(Color.web(color.hex()));
                         text.setFont(Font.font("Segoe UI", bold ? FontWeight.BOLD : FontWeight.NORMAL,
                                 italic ? FontPosture.ITALIC : FontPosture.REGULAR, 13));
-                        text.setStrikethrough(look != null && look.strike()); setText(null); setGraphic(text);
+                        text.setStrikethrough(look != null && look.strike()); setText(null);
+                        getProperties().put("cp.paintText", text); getProperties().put("cp.logicalText", value);
+                        setAccessibleText(value);
+                        setGraphic(spec.id().equals(LazyTableModel.COLUMN_MARKS) || row.kind() == RowKind.PAST_HEADER
+                                ? FxIcons.tableGraphic(text, spec.id().equals(LazyTableModel.COLUMN_MARKS)) : text);
                         setAlignment(switch (spec.align()) { case LEFT -> Pos.CENTER_LEFT; case CENTER -> Pos.CENTER; case RIGHT -> Pos.CENTER_RIGHT; });
                         paintBackground();
-                        setTooltip(FxStyles.tip(intents.tableTooltip(model.revision(), getIndex(), spec.id()), probe));
+                        setTooltip(FxStyles.tip(intents.decoratedTableTooltip(model.revision(), getIndex(), spec.id()), probe));
                         getProperties().put("cp.row", row.rowId()); getProperties().put("cp.column", spec.id());
                         getProperties().put("cp.rowKind", row.kind().name());
                         getProperties().put("cp.background", rowLook.background() == null ? "" : rowLook.background().id());

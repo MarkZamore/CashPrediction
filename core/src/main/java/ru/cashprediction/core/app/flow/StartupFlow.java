@@ -17,8 +17,9 @@ import ru.cashprediction.core.document.AppSettings;
 import ru.cashprediction.core.document.RecoveryStoreKind;
 import ru.cashprediction.core.document.ViewState;
 import ru.cashprediction.core.io.AtomicFiles;
-import ru.cashprediction.core.io.PlanRepository;
-import ru.cashprediction.core.markdown.ReadResult;
+import ru.cashprediction.core.service.storage.FilePlanStorage;
+import ru.cashprediction.core.service.storage.PlanStorage;
+import ru.cashprediction.core.service.storage.PlanStorageException;
 import ru.cashprediction.core.markdown.SettingsMarkdown;
 import ru.cashprediction.core.model.Plan;
 import ru.cashprediction.core.session.CrashDetector;
@@ -63,6 +64,7 @@ import ru.cashprediction.core.ui.view.status.StatusLevel;
 public final class StartupFlow {
 
     private final FlowContext context;
+    private final PlanStorage storage;
     private List<SessionStore> stores;
     private SnapshotSource source;
     private RestoreTarget target;
@@ -76,13 +78,28 @@ public final class StartupFlow {
      * @param context контекст контроллера
      */
     public StartupFlow(FlowContext context) {
+        this(context, context.externalChanges().storage());
+    }
+
+    /**
+     * @param context контекст контроллера
+     * @param storage общий сервис сохранённых планов
+     */
+    public StartupFlow(FlowContext context, PlanStorage storage) {
         this.context = Objects.requireNonNull(context, "context");
+        this.storage = Objects.requireNonNull(storage, "storage");
     }
 
     /** Подменяет только внешние участники запуска для изолированных тестов, без изменения их контрактов. */
     StartupFlow(FlowContext context, List<SessionStore> stores, SnapshotSource source, RestoreTarget target,
                 WindowFactory factory, Supplier<CrashDetector.Detection> detector) {
-        this(context);
+        this(context, context.externalChanges().storage(), stores, source, target, factory, detector);
+    }
+
+    /** Подменяет хранение планов и внешние участники запуска в изолированном тесте. */
+    StartupFlow(FlowContext context, PlanStorage storage, List<SessionStore> stores, SnapshotSource source, RestoreTarget target,
+                WindowFactory factory, Supplier<CrashDetector.Detection> detector) {
+        this(context, storage);
         this.stores = List.copyOf(stores);
         this.source = Objects.requireNonNull(source);
         this.target = Objects.requireNonNull(target);
@@ -135,8 +152,10 @@ public final class StartupFlow {
         try {
             action.run();
         } catch (RuntimeException e) {
+            Throwable shown = e instanceof PlanStorageException && (e.getMessage() == null || e.getMessage().isBlank())
+                    ? new IOException(UiText.get("err.generic"), e) : e;
             // JavaFX: Alert → Swing: JOptionPane → Web: dialog.
-            AlertSpec base = AlertCatalog.startupError(e);
+            AlertSpec base = AlertCatalog.startupError(shown);
             context.showAlert(new AlertSpec(base.kind(), base.purpose(), base.targetId(), UiText.get("alert.uncaught.title"),
                     base.glyph(), UiText.get("s2.startup.errorHeader"), base.content(), base.details(), false, base.minWidth(),
                     base.buttons(), base.defaultButtonId(), false), button -> context.port().exit(ExitKind.CLEAN, 2));
@@ -151,30 +170,31 @@ public final class StartupFlow {
 
     /** Открывает обычный план, показывает главное окно и только затем начинает запись. */
     private void ordinary(boolean record) {
-        PlanRepository repository = new PlanRepository(context.environment().cashMemory());
         String last = context.state().settings().lastPlan();
-        Path file = last.isBlank() ? null : repository.dir().resolve(last);
-        if (file == null || !Files.isRegularFile(file)) {
-            file = repository.list().stream().findFirst().map(info -> info.path()).orElse(null);
+        Path file = last.isBlank() ? null : context.environment().cashMemory().resolve(last);
+        PlanStorage.Version version = file == null ? PlanStorage.Version.ABSENT
+                : storage.version(FilePlanStorage.reference(file)).requireValue();
+        if (PlanStorage.Version.ABSENT.equals(version)) {
+            var first = storage.list(FilePlanStorage.collection(context.environment().cashMemory())).requireValue()
+                    .stream().findFirst();
+            file = first.map(entry -> FilePlanStorage.path(entry.reference())).orElse(null);
+            version = first.map(PlanStorage.Entry::version).orElse(PlanStorage.Version.ABSENT);
         }
-        ReadResult loaded = null;
+        PlanStorage.Snapshot loaded = null;
         if (file != null) {
-            try {
-                loaded = repository.load(file, context.environment().clock().today());
-                context.externalChanges().remember(file);
-                context.document().replace(loaded.plan(), file, false, loaded.diagnostics());
-                Path opened = file;
-                context.updateSettings(settings -> settings.withPlanOpened(opened.toString()));
-            } catch (IOException e) {
-                throw new java.io.UncheckedIOException(e);
-            }
+            loaded = storage.read(FilePlanStorage.reference(file), context.environment().clock().today(),
+                    Optional.of(version)).requireValue();
+            context.externalChanges().remember(loaded.reference(), loaded.version());
+            context.document().replace(loaded.plan(), file, false, loaded.diagnostics());
+            Path opened = file;
+            context.updateSettings(settings -> settings.withPlanOpened(opened.toString()));
         }
         context.showMain(null);
         if (record) {
             installRecorder();
             beginRecording();
         }
-        if (loaded != null && loaded.hasWarnings()) {
+        if (loaded != null && loaded.diagnostics().stream().anyMatch(d -> d.severity() != ru.cashprediction.core.diagnostics.Severity.INFO)) {
             alert(AlertCatalog.loadDiagnostics(file.getFileName().toString(), loaded.diagnostics()), button -> { });
         }
         if (loaded == null) {
@@ -394,13 +414,14 @@ public final class StartupFlow {
             FileChooserSpec spec = new FileChooserSpec(FileChooserSpec.Purpose.SAVE_SNAPSHOT_PLAN,
                     FileChooserSpec.Mode.SAVE, UiText.get("s2.startup.saveTitle"), UiText.get("s2.startup.planFilter"),
                     List.of("md"), context.environment().cashMemory(),
-                    UiText.get("s2.startup.recoveredName", PlanRepository.fileBaseName(context.document().plan().name())));
+                    UiText.get("s2.startup.recoveredName", FilePlanStorage.fileBaseName(context.document().plan().name())));
             context.choosers().chooseFile(spec, result -> guarded(() -> {
                 if (result.isEmpty()) {
                     preservePlan(markdown);
                     return;
                 }
                 try {
+                    // Спасение исходного текста не разбирает повреждённый снимок и сохраняет его целиком.
                     AtomicFiles.writeString(result.get(), markdown);
                 } catch (IOException | RuntimeException e) {
                     alert(AlertCatalog.error("snapshotPlanSave", e), answer -> preservePlan(markdown));

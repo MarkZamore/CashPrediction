@@ -362,6 +362,18 @@ public final class TextCatalog {
         private final List<String> repeated = new ArrayList<>();
         private final List<String> orderedKeys = new ArrayList<>();
 
+        /**
+         * Записывает пару в свойства, фиксируя порядок первого появления ключей
+         * и каждую повторную запись для диагностики дублей внутри файла.
+         * Для списков используется {@link String#valueOf(Object)}, для хранения исходный ключ.
+         * Повтор перезаписывает значение в {@link Properties}; метод не отклоняет дубли.
+         *
+         * @param key ключ свойства
+         * @param value новое значение свойства
+         * @return прежнее значение или {@code null}, если ключа ещё не было
+         * @throws NullPointerException если ключ или значение равны {@code null};
+         *                              списки учёта обновляются до попытки записи в свойства
+         */
         @Override
         public synchronized Object put(Object key, Object value) {
             String name = String.valueOf(key);

@@ -53,7 +53,7 @@ public final class ControlledSnapshotNativeTest {
         var parsed = SelfTestScript.parse("controlled-snapshot", text);
         var target = ClientJarSnapshot.copy(client.equals("fx") ? ClientTarget.fx(layout) : ClientTarget.swing(layout), output);
         var request = new LaunchRequest(client, "controlled-snapshot", fixture.home, fixture.node,
-                LaunchRequest.PARITY_TODAY, script.toString(), output.resolve("dumps"), "core", List.of(), List.of());
+                LaunchRequest.PARITY_TODAY, script.toString(), output.resolve("dumps"), List.of(), List.of());
         fixture.requireAlreadyRunning(); fixture.requireUnchanged();
         LaunchedClient launched = ClientLauncher.launch(target, request);
         try (launched) {

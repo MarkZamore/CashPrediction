@@ -1,10 +1,12 @@
 /** @file Общие операции с настоящими узлами страницы. */
+import {iconText, iconColor} from './icon.js';
 
 /** Создаёт узел без вставки разметки из модели. */
 export function element(tag, className = '', text = '') {
   const node = document.createElement(tag);
   node.className = className;
-  node.textContent = text ?? '';
+  if (['window-glyph', 'toolbar-label', 'toolbar-arrow', 'menu-mark', 'menu-label', 'status-segment'].some(/** Проверяет, относится ли класс узла к виджетам со значками. */ name => className.split(' ').includes(name))) iconText(node, text, true);
+  else node.textContent = text ?? '';
   return node;
 }
 
@@ -23,6 +25,7 @@ export function color(token) {
 /** Применяет оформление текста, уже выбранное ядром. */
 export function look(node, style = {}) {
   node.style.color = color(style.text || style.color);
+  iconColor(node, style.text || style.color || 'TEXT_PRIMARY');
   node.style.fontWeight = style.bold ? '700' : '';
   node.style.fontStyle = style.italic ? 'italic' : '';
   node.style.textDecoration = style.strike ? 'line-through' : '';
@@ -30,9 +33,10 @@ export function look(node, style = {}) {
 
 /** Создаёт кнопку с доступностью и подсказкой из модели. */
 export function button(id, text, tooltip, enabled = true) {
-  const node = identify(element('button', '', text), id);
+  const node = identify(iconText(element('button'), text, id.endsWith('.details') ? 'suffix' : true), id);
   node.type = 'button';
   node.disabled = !enabled;
+  if (tooltip) node.setAttribute('aria-description', tooltip);
   node.dataset.tooltip = tooltip || '';
   return node;
 }
@@ -45,15 +49,15 @@ export function bounds(node) {
 
 /** Измеряет живое содержимое диалога без рамки и аналога заголовка ОС. */
 export function dialogContentBounds(root) {
-  const parts = [...root.querySelectorAll(':scope > .window-header, :scope > .form-body, :scope > .window-buttons, :scope > .alert-content')].filter(visible).map(bounds).filter(rect => rect.width > 0 && rect.height > 0);
+  const parts = [...root.querySelectorAll(':scope > .window-header, :scope > .form-body, :scope > .window-buttons, :scope > .alert-content')].filter(visible).map(bounds).filter(/** Исключает части содержимого с нулевым размером. */ rect => rect.width > 0 && rect.height > 0);
   if (!parts.length) throw new Error('Dialog content missing');
-  const x = Math.min(...parts.map(rect => rect.x)); const y = Math.min(...parts.map(rect => rect.y));
-  return {x, y, width: Math.max(...parts.map(rect => rect.x + rect.width)) - x, height: Math.max(...parts.map(rect => rect.y + rect.height)) - y};
+  const x = Math.min(...parts.map(/** Возвращает левую границу части содержимого. */ rect => rect.x)); const y = Math.min(...parts.map(/** Возвращает верхнюю границу части содержимого. */ rect => rect.y));
+  return {x, y, width: Math.max(...parts.map(/** Возвращает правую границу части содержимого. */ rect => rect.x + rect.width)) - x, height: Math.max(...parts.map(/** Возвращает нижнюю границу части содержимого. */ rect => rect.y + rect.height)) - y};
 }
 
 /** Центрирует измеренное содержимое над живым содержимым владельца, сдвигая внешнее окно. */
 export function centerDialogContent(node, ownerId) {
-  const owner = [...document.querySelectorAll('dialog[open], .quick-edit')].find(candidate => candidate !== node && candidate.dataset.cpId === ownerId);
+  const owner = [...document.querySelectorAll('dialog[open], .quick-edit')].find(/** Находит открытого владельца, исключая само центрируемое окно. */ candidate => candidate !== node && candidate.dataset.cpId === ownerId);
   const main = document.getElementById('main');
   const target = owner ? dialogContentBounds(owner) : bounds(visible(main) ? main : document.documentElement);
   const content = dialogContentBounds(node); const outer = bounds(node);
@@ -75,18 +79,22 @@ export function restoreBounds(node, rectangle) {
 
 /** Ждёт кадра, в котором вставленные узлы могут быть показаны. */
 export function frame() {
-  return new Promise(resolve => requestAnimationFrame(resolve));
+  return new Promise(/** Разрешает ожидание при наступлении следующего кадра браузера. */ resolve => requestAnimationFrame(resolve));
 }
 
 /** Планирует действие и позволяет тесту дождаться последнего ввода. */
 export function debounce(fn, delay) {
   let timer;
+  /** Заменяет отложенный вызов новым с последними аргументами. */
   const run = (...args) => {
     clearTimeout(timer);
-    timer = setTimeout(() => { timer = null; fn(...args); }, delay);
+    timer = setTimeout(/** Снимает признак ожидания и выполняет последнее запланированное действие. */ () => { timer = null; fn(...args); }, delay);
   };
+  /** Отменяет таймер и немедленно выполняет действие с переданными аргументами. */
   run.flush = (...args) => { clearTimeout(timer); timer = null; return fn(...args); };
+  /** Отменяет ожидающий вызов без выполнения действия. */
   run.cancel = () => { clearTimeout(timer); timer = null; };
+  /** Сообщает, ожидает ли действие выполнения по таймеру. */
   run.pending = () => timer != null;
   return run;
 }

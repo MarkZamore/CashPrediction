@@ -25,7 +25,7 @@ public final class FxMenus {
     /** Строит строку меню из готовой модели. */
     public MenuBar bar(MenuBarModel model) {
         byId.clear(); groups.clear();
-        // JavaFX: MenuBar → Swing: JMenuBar → Web: nav.menubar
+        // JavaFX: MenuBar → Swing: JMenuBar → Web: nav[role=menubar]
         MenuBar bar = probe.created(new MenuBar());
         bar.setMinHeight(ru.cashprediction.core.ui.token.DesignTokens.CONTROL_HEIGHT);
         bar.setPrefHeight(ru.cashprediction.core.ui.token.DesignTokens.CONTROL_HEIGHT);
@@ -49,7 +49,7 @@ public final class FxMenus {
         MenuItem item;
         switch (node) {
             case MenuNode.Submenu n -> {
-                // JavaFX: Menu → Swing: JMenu → Web: div.submenu
+                // JavaFX: Menu → Swing: JMenu → Web: button[role=menuitem] + div[role=menu]
                 Menu menu = probe.created(new Menu(n.text()));
                 menu.setDisable(!n.enabled());
                 n.children().forEach(c -> menu.getItems().add(item(c, source)));
@@ -70,24 +70,30 @@ public final class FxMenus {
                 item.setDisable(true);
             }
             case MenuNode.Action n -> {
-                // JavaFX: MenuItem → Swing: JMenuItem → Web: button.menu-item
+                // JavaFX: MenuItem → Swing: JMenuItem → Web: button[role=menuitem]
                 item = probe.created(new MenuItem(n.text()));
                 action(item, n.command(), n.args(), source, n.enabled(), n.accel(), n.tooltip());
             }
             case MenuNode.Check n -> {
-                // JavaFX: CheckMenuItem → Swing: JCheckBoxMenuItem → Web: button.menu-check
+                // JavaFX: CheckMenuItem → Swing: JCheckBoxMenuItem → Web: button[role=menuitemcheckbox]
                 CheckMenuItem check = probe.created(new CheckMenuItem(n.text())); check.setSelected(n.checked()); item = check;
+                check.selectedProperty().addListener((o, previous, selected) -> {
+                    if (check.getStyleableNode() != null) FxIcons.menuMark(check.getStyleableNode(), false, selected);
+                });
                 action(item, n.command(), n.args(), source, n.enabled(), n.accel(), n.tooltip());
             }
             case MenuNode.Radio n -> {
-                // JavaFX: RadioMenuItem → Swing: JRadioButtonMenuItem → Web: button.menu-radio
+                // JavaFX: RadioMenuItem → Swing: JRadioButtonMenuItem + ButtonGroup → Web: button[role=menuitemradio]
                 RadioMenuItem radio = probe.created(new RadioMenuItem(n.text()));
+                radio.selectedProperty().addListener((o, previous, selected) -> {
+                    if (radio.getStyleableNode() != null) FxIcons.menuMark(radio.getStyleableNode(), true, selected);
+                });
                 // Повторения одного радио в меню и тулбаре независимы: выбор каждой копии приходит из ядра.
                 radio.setSelected(n.selected()); item = radio; item.getProperties().put("cp.group", n.group());
                 action(item, n.command(), n.args(), source, n.enabled(), n.accel(), n.tooltip());
             }
             case MenuNode.Info n -> {
-                // JavaFX: MenuItem → Swing: JMenuItem → Web: button.menu-info
+                // JavaFX: MenuItem → Swing: JMenuItem (недоступный) → Web: button[role=menuitem] (недоступный)
                 item = probe.created(new MenuItem(n.text())); item.setDisable(true);
             }
             case MenuNode.Slider n -> {
@@ -101,7 +107,7 @@ public final class FxMenus {
                 });
                 slider.setOnMouseReleased(e -> intents.sliderCommit(n.id(), (int) Math.round(slider.getValue())));
                 slider.setOnKeyReleased(e -> intents.sliderCommit(n.id(), (int) Math.round(slider.getValue())));
-                // JavaFX: CustomMenuItem → Swing: SwingSliderMenuItem → Web: input.range
+                // JavaFX: CustomMenuItem → Swing: JPanel с JLabel и JSlider → Web: input[type=range]
                 item = probe.created(new CustomMenuItem(new VBox(4, label, slider), false));
                 item.getProperties().put("cp.control", slider); item.getProperties().put("cp.label", label);
                 meta(item, n.tooltip(), null);
@@ -116,12 +122,13 @@ public final class FxMenus {
                     @Override public void increment(int steps) { setValue(Math.min(n.max(), getValue() + n.step() * steps)); }
                 });
                 spinner.setEditable(true); spinner.setPrefWidth(n.fieldWidthPx()); FxStyles.id(spinner, n.id());
+                FxIcons.skin(spinner);
                 spinner.getValueFactory().setConverter(new javafx.util.converter.LongStringConverter());
                 PauseTransition delay = new PauseTransition(Duration.millis(n.applyDelayMs()));
                 delay.setOnFinished(e -> intents.spinnerCommit(n.id(), spinner.getValue()));
                 spinner.valueProperty().addListener((o, a, b) -> delay.playFromStart());
                 spinner.getEditor().setOnAction(e -> { try { spinner.getValueFactory().setValue(Long.parseLong(spinner.getEditor().getText())); } catch (NumberFormatException ignored) { } });
-                // JavaFX: CustomMenuItem → Swing: SwingSpinnerMenuItem → Web: input.number
+                // JavaFX: CustomMenuItem → Swing: JPanel с JLabel и JSpinner → Web: input[type=number]
                 item = probe.created(new CustomMenuItem(new VBox(4, new Label(n.label()), spinner), false));
                 item.getProperties().put("cp.control", spinner); item.getProperties().put("cp.label", n.label());
                 meta(item, n.tooltip(), null);
@@ -153,6 +160,11 @@ public final class FxMenus {
         Node node = item.getStyleableNode();
         if (node == null) return;
         if (node.getScene() != null) FxStyles.root(node.getScene().getRoot());
+        node.applyCss(); FxIcons.skinGraphics(node);
+        if (node.getScene() != null) FxIcons.skinGraphics(node.getScene().getRoot());
+        if (item instanceof Menu) FxIcons.submenu(node);
+        if (item instanceof CheckMenuItem check) FxIcons.menuMark(node, false, check.isSelected());
+        if (item instanceof RadioMenuItem radio) FxIcons.menuMark(node, true, radio.isSelected());
         if (node instanceof javafx.scene.layout.Region row && (!(item instanceof CustomMenuItem) || item instanceof SeparatorMenuItem)) {
             double height = item instanceof SeparatorMenuItem ? 2 * ru.cashprediction.core.ui.token.DesignTokens.SPACING + 1
                     : ru.cashprediction.core.ui.token.DesignTokens.CONTROL_HEIGHT;

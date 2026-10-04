@@ -430,7 +430,7 @@ class PlanMarkdownToleranceTest {
 
     @Test
     void newerFormatVersionIsReported() {
-        String text = SAMPLE.replace("- Формат: CashPrediction 1", "- Формат: CashPrediction 2");
+        String text = SAMPLE.replace("- Формат: CashPrediction 2", "- Формат: CashPrediction 3");
         ReadResult result = PlanMarkdownReader.read(text, "x", TODAY);
         assertEquals(1, result.diagnostics().size());
         assertEquals(Severity.WARNING, result.diagnostics().get(0).severity());

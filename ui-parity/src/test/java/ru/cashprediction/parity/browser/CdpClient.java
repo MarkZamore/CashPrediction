@@ -25,8 +25,9 @@ import ru.cashprediction.core.json.JsonWriter;
 /**
  * Минимальный клиент Chrome DevTools Protocol на {@link HttpClient} и {@link WebSocket} из JDK.
  *
- * <p>Поддерживаются ровно три команды: {@code Page.navigate}, {@code Page.captureScreenshot} и
- * {@code Runtime.evaluate} (стадия S0). Ограничение закреплено перечислением {@link Method}: другую команду
+ * <p>Поддерживаются {@code Page.navigate}, {@code Page.captureScreenshot}, {@code Runtime.evaluate}
+ * и {@code Emulation.setDeviceMetricsOverride} для точного размера тестового viewport.
+ * Ограничение закреплено перечислением {@link Method}: другую команду
  * отправить нельзя, так стенд не превращается в самодельный Puppeteer. События протокола игнорируются;
  * загрузку страницы ждут опросом {@code document.readyState} через {@link #waitFor}.</p>
  *
@@ -41,7 +42,9 @@ public final class CdpClient implements AutoCloseable {
         /** Снимок видимой области страницы. */
         PAGE_CAPTURE_SCREENSHOT("Page.captureScreenshot"),
         /** Выполнение выражения JavaScript в странице. */
-        RUNTIME_EVALUATE("Runtime.evaluate");
+        RUNTIME_EVALUATE("Runtime.evaluate"),
+        /** Точный размер окна просмотра без ограничения скрытого окна Windows. */
+        EMULATION_SET_DEVICE_METRICS_OVERRIDE("Emulation.setDeviceMetricsOverride");
 
         private final String wireName;
 
@@ -159,6 +162,32 @@ public final class CdpClient implements AutoCloseable {
             throw new CdpException("Page.navigate to " + url + " failed: " + error, null);
         }
         return Json.string(result, "frameId", "");
+    }
+
+    /**
+     * Задаёт размер тестового окна просмотра с настольным поведением и одним пикселем PNG на CSS-пиксель.
+     * Соединение должно оставаться открытым: Chromium сбрасывает override при отключении отладчика.
+     * При завершении браузера отдельное ожидание закрытия транспорта освобождает клиент автоматически.
+     *
+     * @param width ширина в CSS-пикселях, больше нуля
+     * @param height высота в CSS-пикселях, больше нуля
+     * @param timeout предельное ожидание ответа команды
+     */
+    public void setViewport(int width, int height, Duration timeout) {
+        if (width <= 0 || height <= 0) throw new IllegalArgumentException("viewport must be positive");
+        if (timeout.isZero() || timeout.isNegative()) throw new IllegalArgumentException("timeout");
+        call(Method.EMULATION_SET_DEVICE_METRICS_OVERRIDE,
+                Map.of("width", width, "height", height, "deviceScaleFactor", 1, "mobile", false), timeout);
+        // Ожидание только состояния WebSocket: без опросов страницы, таймеров JS и влияния на её измерения.
+        Thread.ofVirtual().name("cdp-viewport-lifetime").start(() -> {
+            try {
+                while (!socket.isInputClosed() && !socket.isOutputClosed()) Thread.sleep(100);
+            } catch (InterruptedException error) {
+                Thread.currentThread().interrupt();
+            } finally {
+                close();
+            }
+        });
     }
 
     /**

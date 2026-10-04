@@ -7,6 +7,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.function.Predicate;
 import ru.cashprediction.core.app.AppState;
 import ru.cashprediction.core.app.FocusTarget;
 import ru.cashprediction.core.app.RevealMode;
@@ -259,7 +260,7 @@ public final class ViewFlow {
         if (!horizon.equals(context.document().plan().horizon())) {
             context.edits().edit(UiText.get("undo.horizon",
                     UiFormats.horizonLabel(horizon, context.document().plan().startDate())), "",
-                    plan -> plan.withHorizon(horizon));
+                    new ru.cashprediction.core.service.plan.PlanCommand.SetHorizon(horizon));
         }
     }
 
@@ -295,11 +296,12 @@ public final class ViewFlow {
                 return;
             }
             LocalDate end = state.view().periodEnd(plan, forecast.anchor());
+            Predicate<ForecastRow> rowFilter = state.view().rowFilter();
             for (ForecastRow row : forecast.rows()) {
                 if (row.date().isAfter(end)) {
                     break;
                 }
-                if (!state.view().accepts(row)) {
+                if (!rowFilter.test(row)) {
                     continue;
                 }
                 byId.put(row.rowId(), row);

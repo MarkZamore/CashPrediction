@@ -39,6 +39,11 @@ public interface TableModel {
      */
     String tooltip(int index, String columnId);
 
+    /** Возвращает подсказку с явными позициями значков; сторонние модели по умолчанию дают обычный текст. */
+    default DecoratedTooltip decoratedTooltip(int index, String columnId) {
+        return DecoratedTooltip.plain(tooltip(index, columnId));
+    }
+
     /**
      * Индекс строки по идентификатору.
      *

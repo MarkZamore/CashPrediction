@@ -53,7 +53,7 @@ VisualPlan берёт исходный сценарий через SelfTestScrip
 ## Изоляция и блокировки Windows
 
 Каждый запуск использует UUID папки и узел
-ru/cashprediction/selftest/UUID, --today 2026-09-13 и --ui core.
+ru/cashprediction/selftest/UUID, --today 2026-09-13; интерфейс ядра используется по умолчанию.
 Переиспользуются ScenarioFixtures, ClientLauncher и WebScenarioSession.
 Деревья JVM/Edge закрываются через существующие AutoCloseable API.
 Узел удаляется в finally даже после ошибки; реальные session/fx и

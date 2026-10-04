@@ -1,4 +1,4 @@
-# Генерирует иконку CashPrediction.ico без внешних программ.
+# Генерирует общие application.png и application.ico в ресурсах core без внешних программ.
 #
 # Зачем скрипт, а не готовый файл: иконку можно пересоздать и поменять цвета в одном месте.
 # Как работает: System.Drawing рисует картинку в нескольких размерах, каждый размер
@@ -7,11 +7,14 @@
 #
 # Запуск: powershell -ExecutionPolicy Bypass -File dist\icons\make-icon.ps1
 
+Set-StrictMode -Version Latest
+$ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName System.Drawing
 
 $sizes = @(16, 24, 32, 48, 64, 128, 256)
-$outPath = Join-Path $PSScriptRoot 'CashPrediction.ico'
-$pngDir = Join-Path $PSScriptRoot 'png'
+$iconDir = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../../core/src/main/resources/ru/cashprediction/core/ui/icons'))
+$outPath = Join-Path $iconDir 'application.ico'
+$pngPath = Join-Path $iconDir 'application.png'
 
 # Рисует иконку заданного размера и возвращает байты PNG.
 function New-IconPng([int]$size) {
@@ -56,13 +59,21 @@ function New-IconPng([int]$size) {
     $g.DrawLines($pen, $pts)
     # Точка на конце линии: прогнозируемое значение.
     $dot = [single](20 * $s)
-    $g.FillEllipse((New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(255, 255, 214, 90))), [single](206 * $s - $dot), [single](64 * $s - $dot), [single]($dot * 2), [single]($dot * 2))
+    $dotBrush = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(255, 255, 214, 90))
+    $g.FillEllipse($dotBrush, [single](206 * $s - $dot), [single](64 * $s - $dot), [single]($dot * 2), [single]($dot * 2))
 
+    $dotBrush.Dispose()
+    $pen.Dispose()
+    $barBrush.Dispose()
+    $bg.Dispose()
+    $path.Dispose()
     $g.Dispose()
     $ms = New-Object System.IO.MemoryStream
     $bmp.Save($ms, [System.Drawing.Imaging.ImageFormat]::Png)
     $bmp.Dispose()
-    return ,$ms.ToArray()
+    $bytes = $ms.ToArray()
+    $ms.Dispose()
+    return ,$bytes
 }
 
 $images = @()
@@ -87,9 +98,11 @@ for ($i = 0; $i -lt $sizes.Count; $i++) {
 }
 foreach ($img in $images) { $w.Write($img) }
 $w.Flush()
+[System.IO.Directory]::CreateDirectory($iconDir) | Out-Null
 [System.IO.File]::WriteAllBytes($outPath, $out.ToArray())
+$w.Dispose()
+$out.Dispose()
 
-# PNG 256x256 для заголовка окна JavaFX/Swing (иконка Stage/JFrame).
-[System.IO.File]::WriteAllBytes((Join-Path $PSScriptRoot 'icon-256.png'), $images[$sizes.Count - 1])
-[System.IO.File]::WriteAllBytes((Join-Path $PSScriptRoot 'icon-32.png'), $images[2])
+# Тот же PNG 256x256 для заголовков и favicon всех клиентов; его байты уже входят в ICO.
+[System.IO.File]::WriteAllBytes($pngPath, $images[$sizes.Count - 1])
 Write-Output ("ICO written: " + $outPath + " (" + (Get-Item $outPath).Length + " bytes)")

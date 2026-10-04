@@ -71,6 +71,12 @@ public final class RuleEditorForm implements FormLogic {
         return true;
     }
 
+    /**
+     * Строит диалог регулярной операции с полями повтора, границами действия, настройками
+     * выходных и боковой колонкой ближайших дат с кнопкой корректировки выбранного события.
+     * @param context окружение с категориями текущего плана
+     * @return спецификация редактора с сохранением по умолчанию и отменой
+     */
     @Override
     public FormSpec spec(FormContext context) {
         return new FormSpec("ruleEditor", WindowType.RULE_EDITOR, "", Presentation.DIALOG, UiText.get("rule.window"), "↻",
@@ -95,6 +101,14 @@ public final class RuleEditorForm implements FormLogic {
                 List.of(ButtonSpecs.ok(UiText.get("button.save")), ButtonSpecs.cancel()), ButtonSpecs.OK);
     }
 
+    /**
+     * Возвращает поля найденного правила для изменения либо значения новой регулярной операции.
+     * Новое правило включено, имеет ежемесячный повтор и день более поздней из сегодняшней
+     * даты и начала плана; ограничения начала и окончания выключены, сдвиг выходных отсутствует.
+     * Вид берёт из контекста, по умолчанию задаёт расход.
+     * @param context окружение с режимом, идентификатором правила и возможным видом операции
+     * @return значения по идентификаторам полей в канонической форме
+     */
     @Override
     public Map<String, String> defaults(FormContext context) {
         RecurringRule existing = existing(context);
@@ -113,6 +127,15 @@ public final class RuleEditorForm implements FormLogic {
         return Map.copyOf(values);
     }
 
+    /**
+     * Проверяет название, положительную сумму, повтор и включённые границы дат.
+     * Настраивает видимость полей повтора и доступность дат по флажкам, вычисляет предупреждение
+     * и до шести ближайших событий. Сохранение доступно без ошибки; корректировка выбранной
+     * даты доступна только для существующего правила и выбираемого элемента предпросмотра.
+     * @param state введённые значения и индекс выбранной даты
+     * @param context окружение с текущим планом и целью изменения
+     * @return модель редактора с заголовком, строкой проблем, кнопками и предпросмотром
+     */
     @Override
     public FormView evaluate(FormState state, FormContext context) {
         RecurrenceKind recurrenceKind = OpsForms.enumValue(RecurrenceKind.class, state.value("recurrenceKind"), RecurrenceKind.MONTHLY);
@@ -140,6 +163,15 @@ public final class RuleEditorForm implements FormLogic {
         return new FormView(0, 0, header, fields, OpsForms.problem(error, warning), buttons, List.of(), preview, "", false);
     }
 
+    /**
+     * Обрабатывает отмену, открытие корректировки выбранной даты или сохранение проверенного правила.
+     * При сохранении возвращает правило с прежним идентификатором либо следующим идентификатором
+     * плана для применения контроллером. Неизвестная кнопка оставляет форму открытой; план не меняется.
+     * @param buttonId идентификатор кнопки
+     * @param state введённые значения и выбор предпросмотра
+     * @param context окружение с текущим планом и целью изменения
+     * @return закрытие, продолжение ввода либо запрос дочернего редактора корректировки
+     */
     @Override
     public FormOutcome onButton(String buttonId, FormState state, FormContext context) {
         if (ButtonSpecs.CANCEL.equals(buttonId)) {
@@ -158,6 +190,17 @@ public final class RuleEditorForm implements FormLogic {
         return new FormOutcome.Close(OpsForms.rule(ruleId(context), state, context.app().document().plan().startDate()));
     }
 
+    /**
+     * Для активированной даты существующего правила запрашивает дочерний редактор корректировки.
+     * Сопоставляет индекс с предпросмотром текущих введённых значений и передаёт исходную,
+     * а не сдвинутую дату события. Обычный выбор, неверный индекс, невыбираемый элемент
+     * или новое правило не открывают дочернее окно.
+     * @param index индекс даты в предпросмотре, начиная с нуля
+     * @param activated признак активации, а не одиночного выбора
+     * @param state введённые значения правила
+     * @param context окружение с текущим планом и идентификатором родительского окна
+     * @return запрос модального дочернего окна с временным идентификатором либо продолжение ввода
+     */
     @Override
     public FormOutcome onPreview(int index, boolean activated, FormState state, FormContext context) {
         if (!activated || existing(context) == null) {

@@ -17,6 +17,10 @@
   <artifactId>cashprediction-ui-fx</artifactId>
   <name>CashPrediction JavaFX</name>
 
+  <properties>
+    <parity.reports.directory>${project.build.directory}/surefire-reports</parity.reports.directory>
+  </properties>
+
   <dependencies>
     <dependency>
       <groupId>ru.cashprediction</groupId>
@@ -41,6 +45,7 @@
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-surefire-plugin</artifactId>
         <configuration>
+          <reportsDirectory>${parity.reports.directory}</reportsDirectory>
           <systemPropertyVariables>
             <!-- Папка модуля для NoDashesInFxUiTest, который читает исходники и ресурсы ui-fx. -->
             <fx.basedir>${project.basedir}</fx.basedir>

@@ -36,6 +36,17 @@ final class WebAllowanceSession implements AutoCloseable {
 
     /** Создаёт отдельные CashMemory, UUID-узел и headless-профиль; при ошибке завершает только их процессы. */
     static WebAllowanceSession open(ReactorLayout layout, String name, int width) throws Exception {
+        return open(layout, name, width, "probe.json");
+    }
+
+    /** Отделяет проверку значков от закрытого набора наблюдений допустимых различий. */
+    static WebAllowanceSession openIconProof(ReactorLayout layout, int width) throws Exception {
+        return open(layout, "shared-icons", width, "icon-probe.json");
+    }
+
+    /** Общий жизненный цикл; имя свидетельства задаётся только внутренними точками входа. */
+    private static WebAllowanceSession open(ReactorLayout layout, String name, int width,
+                                            String evidenceFile) throws Exception {
         Files.createDirectories(layout.parityRoot());
         Path output = Files.createTempDirectory(layout.parityRoot(), "allowance-" + name + "-");
         String node = RegistryNodeCleaner.newSelftestNode();
@@ -44,7 +55,7 @@ final class WebAllowanceSession implements AutoCloseable {
         try {
             var target = ClientJarSnapshot.copy(ClientTarget.web(layout), output);
             var request = new LaunchRequest("web", "allowance-" + name, output.resolve("home"), node,
-                    LaunchRequest.PARITY_TODAY, null, null, "core", List.of(), List.of());
+                    LaunchRequest.PARITY_TODAY, null, null, List.of(), List.of());
             server = ClientLauncher.launch(target, request);
             final LaunchedClient launched = server;
             server.waitUntil(() -> {
@@ -59,7 +70,7 @@ final class WebAllowanceSession implements AutoCloseable {
             // test API устанавливается до восстановления окон bootstrap; ждём настоящий мастер свежего сеанса.
             cdp.waitFor("!!document.querySelector('dialog[data-kind=NEW_PLAN_WIZARD][open]')", TIMEOUT);
             var result = new WebAllowanceSession(output, server, browser, cdp, node, sessions);
-            Files.writeString(output.resolve("probe.json"), UiJson.write(Map.of("name", name, "width", width,
+            Files.writeString(output.resolve(evidenceFile), UiJson.write(Map.of("name", name, "width", width,
                     "node", node, "command", server.command(), "observation", "real-web-test-api")));
             return result;
         } catch (Exception | AssertionError failure) {

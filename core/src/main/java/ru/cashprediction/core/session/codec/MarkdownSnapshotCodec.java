@@ -126,16 +126,42 @@ public final class MarkdownSnapshotCodec implements SnapshotCodec<String> {
     public MarkdownSnapshotCodec() {
     }
 
+    /**
+     * Возвращает название Markdown-формата для сообщений о снимке.
+     *
+     * @return {@code Markdown}
+     */
     @Override
     public String formatName() {
         return "Markdown";
     }
 
+    /**
+     * Записывает Markdown-документ со снимком и его версией схемы, без маркера сеанса.
+     * Текст несохранённого плана встраивается в огороженный блок; значения полей
+     * экранируются по грамматике файла, переводы строк CRLF нормализуются в LF.
+     *
+     * @param snapshot снимок для последующего восстановления
+     * @return Markdown-текст с переводами строк LF и завершающим переводом строки
+     */
     @Override
     public String encode(SessionSnapshot snapshot) {
         return encodeDocument(new SessionDocument(snapshot.client(), null, snapshot), null);
     }
 
+    /**
+     * Разбирает Markdown-документ и требует наличия раздела главного окна со снимком.
+     * Проверяет грамматику, значения и версию схемы; при отсутствии версии используется
+     * текущая схема. Неизвестные разделы пропускаются, неизвестный тип окна становится
+     * {@code null}. Возвращает данные для восстановления без открытия окон; текст плана
+     * из отдельного файла остаётся пустым, его должно подставить хранилище.
+     *
+     * @param encoded Markdown-текст файла сессии
+     * @return разобранный снимок, включая встроенный несохранённый план, если он указан
+     * @throws SnapshotFormatException если текст пуст, структура или значения некорректны,
+     *                                 схема не поддерживается либо документ не содержит снимка;
+     *                                 сообщение локализовано
+     */
     @Override
     public SessionSnapshot decode(String encoded) throws SnapshotFormatException {
         SessionSnapshot snapshot = decodeDocument(encoded).snapshot();

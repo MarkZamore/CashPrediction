@@ -1,6 +1,7 @@
 package ru.cashprediction.core.app.flow;
 
 import java.nio.file.Files;
+import java.io.IOException;
 import java.nio.file.Path;
 import java.util.Locale;
 import java.util.Map;
@@ -12,9 +13,11 @@ import ru.cashprediction.core.app.ChooserKind;
 import ru.cashprediction.core.app.DirectoryChooserSpec;
 import ru.cashprediction.core.app.FileChooserSpec;
 import ru.cashprediction.core.io.FolderListing;
+import ru.cashprediction.core.io.CashMemoryLayout;
 import ru.cashprediction.core.session.WindowType;
 import ru.cashprediction.core.ui.alert.AlertCatalog;
 import ru.cashprediction.core.ui.forms.simple.FileBrowserForm;
+import ru.cashprediction.core.ui.text.UiText;
 
 /** Общий выбор файлов и папок: нативное окно либо серверная форма, расширение и подтверждение замены. */
 public final class FileChooserService {
@@ -50,12 +53,22 @@ public final class FileChooserService {
                 if (!recognized) path = path.resolveSibling(name + "." + spec.extensions().getFirst());
             }
             Path result = path;
+            String problem = selectionProblem(result);
+            if (problem != null) {
+                rejectFile(spec, result, problem, finish);
+                return;
+            }
             // Нативное подтверждение относится к выбранному имени, а не к дописанному расширению.
             boolean nativeConfirmed = context.port().profile().nativeReplacePrompt() && original.equals(result);
             if (spec.mode() == FileChooserSpec.Mode.SAVE && Files.exists(result) && !nativeConfirmed) {
                 // JavaFX: Alert → Swing: SwingAlert → Web: dialog.
                 context.showAlert(AlertCatalog.replaceFile(result.getFileName().toString()),
-                        once(button -> finish.accept("replace".equals(button) ? Optional.of(result) : Optional.empty())));
+                        once(button -> {
+                            if (!"replace".equals(button)) { finish.accept(Optional.empty()); return; }
+                            String changed = selectionProblem(result);
+                            if (changed == null) finish.accept(Optional.of(result));
+                            else rejectFile(spec, result, changed, finish);
+                        }));
             } else {
                 finish.accept(Optional.of(result));
             }
@@ -70,6 +83,19 @@ public final class FileChooserService {
             // JavaFX: FileChooser → Swing: JFileChooser → Web: FileBrowserForm.
             context.port().chooseFile(spec, selected);
         }
+    }
+
+    /** Проверяет окончательный путь; ошибки разрешения закрывают доступ без технических подробностей. */
+    private String selectionProblem(Path path) {
+        try { return CashMemoryLayout.isProtectedUserPath(context.environment().cashMemory(), path)
+                ? UiText.get("dialog.file.protected") : null; }
+        catch (IOException | RuntimeException unavailable) { return UiText.get("dialog.file.denied", path); }
+    }
+    /** Завершает отказ ровно один раз после подтверждения локализованного сообщения. */
+    private void rejectFile(FileChooserSpec spec, Path path, String problem, Consumer<Optional<Path>> finish) {
+        // JavaFX: Alert → Swing: SwingAlert → Web: dialog.
+        context.showAlert(AlertCatalog.error(spec.mode() == FileChooserSpec.Mode.SAVE ? "save" : "readPlan",
+                new IOException(problem), path), once(button -> finish.accept(Optional.empty())));
     }
 
     /**

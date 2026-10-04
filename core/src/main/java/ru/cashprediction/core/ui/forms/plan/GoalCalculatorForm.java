@@ -7,8 +7,8 @@ import java.util.List;
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
 import ru.cashprediction.core.forecast.Forecast;
-import ru.cashprediction.core.forecast.ForecastEngine;
 import ru.cashprediction.core.forecast.GoalCalculator;
+import ru.cashprediction.core.forecast.service.ForecastRequest;
 import ru.cashprediction.core.model.Goal;
 import ru.cashprediction.core.model.Money;
 import ru.cashprediction.core.ui.form.ButtonRole;
@@ -76,6 +76,7 @@ public final class GoalCalculatorForm implements FormLogic {
     public GoalCalculatorForm() {
     }
 
+    /** {@inheritDoc} */
     @Override
     public FormSpec spec(FormContext context) {
         return new FormSpec("goalCalculator", WindowType.GOAL_CALCULATOR, "", Presentation.DIALOG,
@@ -88,6 +89,7 @@ public final class GoalCalculatorForm implements FormLogic {
                         ButtonSpecs.of("showExtra", UiText.get("button.showWithExtra"), ButtonRole.LEFT), ButtonSpecs.close()), "");
     }
 
+    /** {@inheritDoc} */
     @Override
     public Map<String, String> defaults(FormContext context) {
         Goal goal = context.app().document().plan().goal();
@@ -96,6 +98,7 @@ public final class GoalCalculatorForm implements FormLogic {
                 "byDate", FieldCodec.date(byDate), "extraSaving", "");
     }
 
+    /** {@inheritDoc} */
     @Override
     public FormView evaluate(FormState state, FormContext context) {
         var error = check(state);
@@ -110,6 +113,7 @@ public final class GoalCalculatorForm implements FormLogic {
                 error.isPresent() || !context.app().document().forecastAvailable() ? List.of() : results(state, context), List.of(), "", false);
     }
 
+    /** {@inheritDoc} */
     @Override
     public FormOutcome onButton(String buttonId, FormState state, FormContext context) {
         if ("close".equals(buttonId)) return new FormOutcome.Close(null);
@@ -136,7 +140,52 @@ public final class GoalCalculatorForm implements FormLogic {
     /** Возвращает предупреждение о сроке за горизонтом. */
     private static java.util.Optional<String> warning(FormState s, FormContext c) { if(!FieldCodec.TRUE.equals(s.value("byDateEnabled")))return java.util.Optional.empty(); return FieldCodec.parseDate(s.value("byDate")).filter(d->d.isAfter(c.app().document().plan().endDate())).isPresent()?java.util.Optional.of(UiText.get("form.goal.late")):java.util.Optional.empty(); }
     /** Строит до пяти строк результата, не позволяя исключению прогноза уйти в клиент. */
-    private static List<ResultLine> results(FormState s, FormContext c) { try { Forecast f=c.app().document().forecast(); Money target=FieldCodec.parseMoney(s.value("target")).orElseThrow(); String currency=c.app().document().plan().currency(); List<ResultLine> out=new java.util.ArrayList<>(); out.add(line("form.goal.now", UiFormats.date(c.app().today()), UiFormats.whole(f.balanceAt(c.app().today()),currency))); var reached=GoalCalculator.reachDate(f,target); if(reached.isPresent()){ long months=Math.max(0,ChronoUnit.MONTHS.between(c.app().today(),reached.get())); out.add(line("form.goal.reached",UiFormats.date(reached.get()),months>0?UiText.get("form.goal.months",months):"")); }else out.add(line("form.goal.notReached",UiFormats.date(f.endDate()),UiFormats.whole(f.endBalance(),currency))); if(FieldCodec.TRUE.equals(s.value("byDateEnabled"))){ LocalDate date=FieldCodec.parseDate(s.value("byDate")).orElseThrow(); out.add(line("form.goal.balance",UiFormats.date(date),UiFormats.whole(f.balanceAt(date),currency))); var extra=GoalCalculator.requiredExtraMonthly(f,target,date); out.add(new ResultLine(extra.map(x->x.isZero()?UiText.get("form.goal.noExtra"):UiText.get("form.goal.needExtra",UiFormats.whole(x,currency))).orElse(UiText.get("form.goal.noMonthEnd")),ColorToken.TEXT_PRIMARY)); } FieldCodec.parseMoney(s.value("extraSaving")).filter(Money::isPositive).ifPresent(extra->{ Forecast simulated=ForecastEngine.forecast(c.app().document().plan(),c.app().view().whatIf().withExtraMonthlySaving(c.app().view().whatIf().extraMonthlySaving().plus(extra)),c.app().today(),false); var with=GoalCalculator.reachDate(simulated,target); out.add(new ResultLine(with.map(d->UiText.get("form.goal.withExtra",UiFormats.whole(extra,currency),UiFormats.date(d),monthsSuffix(c.app().today(),d))).orElse(UiText.get("form.goal.withExtraNotReached",UiFormats.whole(extra,currency))),ColorToken.TEXT_PRIMARY)); }); return List.copyOf(out); } catch(RuntimeException ex){ return List.of(new ResultLine(UiText.get("form.goal.forecast",safe(ex)),ColorToken.EXPENSE)); } }
+    private static List<ResultLine> results(FormState state, FormContext context) {
+        try {
+            Forecast forecast = context.app().document().forecast();
+            Money target = FieldCodec.parseMoney(state.value("target")).orElseThrow();
+            String currency = context.app().document().plan().currency();
+            List<ResultLine> result = new java.util.ArrayList<>();
+            result.add(line("form.goal.now", UiFormats.date(context.app().today()),
+                    UiFormats.whole(forecast.balanceAt(context.app().today()), currency)));
+            var reached = GoalCalculator.reachDate(forecast, target);
+            if (reached.isPresent()) {
+                result.add(line("form.goal.reached", UiFormats.date(reached.get()),
+                        monthsSuffix(context.app().today(), reached.get())));
+            } else {
+                result.add(line("form.goal.notReached", UiFormats.date(forecast.endDate()),
+                        UiFormats.whole(forecast.endBalance(), currency)));
+            }
+            if (FieldCodec.TRUE.equals(state.value("byDateEnabled"))) {
+                LocalDate date = FieldCodec.parseDate(state.value("byDate")).orElseThrow();
+                result.add(line("form.goal.balance", UiFormats.date(date),
+                        UiFormats.whole(forecast.balanceAt(date), currency)));
+                var extra = GoalCalculator.requiredExtraMonthly(forecast, target, date);
+                result.add(new ResultLine(extra.map(amount -> amount.isZero()
+                        ? UiText.get("form.goal.noExtra")
+                        : UiText.get("form.goal.needExtra", UiFormats.whole(amount, currency)))
+                        .orElse(UiText.get("form.goal.noMonthEnd")), ColorToken.TEXT_PRIMARY));
+            }
+            FieldCodec.parseMoney(state.value("extraSaving")).filter(Money::isPositive).ifPresent(extra -> {
+                var whatIf = context.app().view().whatIf();
+                Forecast simulated = context.forecastService().calculate(new ForecastRequest(
+                        context.app().document().plan(),
+                        whatIf.withExtraMonthlySaving(whatIf.extraMonthlySaving().plus(extra)),
+                        context.app().today(), false));
+                var with = GoalCalculator.reachDate(simulated, target);
+                result.add(new ResultLine(with.map(date -> UiText.get("form.goal.withExtra",
+                        UiFormats.whole(extra, currency), UiFormats.date(date),
+                        monthsSuffix(context.app().today(), date)))
+                        .orElse(UiText.get("form.goal.withExtraNotReached", UiFormats.whole(extra, currency))),
+                        ColorToken.TEXT_PRIMARY));
+            });
+            return List.copyOf(result);
+        } catch (RuntimeException error) {
+            // Только типизированная ошибка прогноза становится строкой результата формы.
+            if (!(error instanceof ru.cashprediction.core.forecast.service.ForecastFailure)) throw error;
+            return List.of(new ResultLine(UiText.get("form.goal.forecast", safe(error)), ColorToken.EXPENSE));
+        }
+    }
     /** Формирует строку результата по ключу. */
     private static ResultLine line(String key,Object... args){return new ResultLine(UiText.get(key,args),ColorToken.TEXT_PRIMARY);}
     /** Возвращает необязательную часть строки о числе месяцев. */

@@ -34,7 +34,7 @@ class WebExitResponseTest {
                 web + java.io.File.pathSeparator + core, WebMain.class.getName(),
                 "--home", temporary.resolve("home").toString(), "--registry", "memory", "--today", "2026-09-13",
                 "--selftest", script.toString(), "--selftest-out", temporary.resolve("out").toString(),
-                "--ui", "core", "--no-browser", "--no-window", "--test-api")
+                "--no-browser", "--no-window", "--test-api")
                 .redirectError(temporary.resolve("stderr.log").toFile()).start();
         var address = new CompletableFuture<URI>();
         Thread reader = Thread.ofVirtual().start(() -> {

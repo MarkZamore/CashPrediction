@@ -341,26 +341,49 @@ public final class RegistrySessionStore implements SessionStore {
         return backend;
     }
 
+    /**
+     * Возвращает машинный идентификатор хранилища реестра.
+     * @return {@code registry}
+     */
     @Override
     public String id() {
         return "registry";
     }
 
+    /**
+     * Возвращает название хранилища из общей локализации.
+     * @return название для пользователя
+     */
     @Override
     public String title() {
         return Texts.get("session.store.title.registry");
     }
 
+    /**
+     * Проверяет доступность по состоянию бэкенда, не проверяя целостность снимка.
+     * @return доступность бэкенда
+     */
     @Override
     public boolean isAvailable() {
         return backend.isAvailable();
     }
 
+    /**
+     * Возвращает причину недоступности, известную бэкенду.
+     * @return сообщение или пустая строка, если бэкенд доступен
+     */
     @Override
     public String unavailableReason() {
         return backend.isAvailable() ? "" : backend.unavailableReason();
     }
 
+    /**
+     * Записывает поля маркера, версию схемы и известный путь CashMemory, не меняя куски
+     * снимка и {@code snapshot.time}. Сбрасывает изменения и проверяет обратным чтением
+     * только {@code state}. Запись нескольких ключей не является транзакцией: при отказе
+     * возможен частичный маркер, отката нет, причина сохраняется в {@link #lastError()}.
+     * @param marker маркер начавшегося сеанса, не {@code null}
+     */
     @Override
     public synchronized void markDirty(SessionMarker marker) {
         Objects.requireNonNull(marker, "marker");
@@ -384,6 +407,12 @@ public final class RegistrySessionStore implements SessionStore {
         }
     }
 
+    /**
+     * При наличии {@code state} записывает {@code closed}, сбрасывает изменения
+     * и проверяет это значение обратным чтением. Остальные поля и снимок сохраняются.
+     * Без {@code state} ничего не пишет; при отказе сохраняет причину в {@link #lastError()}
+     * без отката уже выполненной записи.
+     */
     @Override
     public synchronized void markClean() {
         if (!backend.isAvailable()) {
@@ -404,6 +433,11 @@ public final class RegistrySessionStore implements SessionStore {
         }
     }
 
+    /**
+     * Собирает маркер из {@code state}, PID, времени старта и клиента; при отсутствии
+     * ключа клиента использует клиента этого хранилища. Снимок и его CRC не проверяет.
+     * @return маркер или пусто, если состояние отсутствует либо поля маркера некорректны
+     */
     @Override
     public synchronized Optional<SessionMarker> readMarker() {
         String state = backend.get(KEY_STATE);
@@ -420,6 +454,19 @@ public final class RegistrySessionStore implements SessionStore {
         }
     }
 
+    /**
+     * Удаляет {@code snapshot.time}, затем пишет дубли полей, JSON-куски не длиннее
+     * {@value #CHUNK_SIZE} единиц UTF-16, их число, длину JSON в единицах UTF-16 и CRC32
+     * по байтам UTF-8 полного JSON. Удаляет устаревшие куски и дубли окон, после чего
+     * записывает {@code snapshot.time} последним как маркер фиксации и сбрасывает изменения.
+     * После сброса проверяет доступность и обратным чтением только маркер фиксации.
+     * Это протокол обнаружения неполной записи, а не транзакция: старый снимок не сохраняется
+     * для отката; без маркера загрузка вернёт пусто, с маркером проверит куски, длину и CRC.
+     * Отказ после записи маркера может оставить новый снимок даже при исключении.
+     * Успех сбрасывает {@link #lastError()}, ошибки сохранения передаются исключением.
+     * @param snapshot снимок, не {@code null}
+     * @throws SessionStoreException если бэкенд недоступен, запись или проверка фиксации не удалась
+     */
     @Override
     public synchronized void save(SessionSnapshot snapshot) throws SessionStoreException {
         Objects.requireNonNull(snapshot, "snapshot");
@@ -461,6 +508,15 @@ public final class RegistrySessionStore implements SessionStore {
         lastError = null;
     }
 
+    /**
+     * При наличии {@code snapshot.time} проверяет число и размеры JSON-кусков, суммарную
+     * длину в единицах UTF-16 и CRC32 по UTF-8, затем декодирует собранный JSON.
+     * Большой буфер выделяется только после проверки реально прочитанных кусков.
+     * Значение {@code snapshot.time} служит признаком фиксации, но здесь не разбирается
+     * как дата и не сравнивается со временем в JSON; читаемые дубли не участвуют в восстановлении.
+     * @return снимок или пусто при отсутствии маркера фиксации
+     * @throws SessionStoreException если бэкенд недоступен, метаданные, куски, CRC или JSON некорректны
+     */
     @Override
     public synchronized Optional<SessionSnapshot> load() throws SessionStoreException {
         requireAvailable();
@@ -515,6 +571,10 @@ public final class RegistrySessionStore implements SessionStore {
         }
     }
 
+    /**
+     * Разбирает только {@code snapshot.time}, не проверяя JSON-куски, длину или CRC.
+     * @return время маркера фиксации или пусто, если значение отсутствует либо не является датой
+     */
     @Override
     public Optional<Instant> lastSavedAt() {
         String time = backend.get(KEY_SNAPSHOT_TIME);
@@ -528,6 +588,11 @@ public final class RegistrySessionStore implements SessionStore {
         }
     }
 
+    /**
+     * Удаляет все перечисленные бэкендом ключи узла, включая маркер, снимок и дубли,
+     * затем сбрасывает изменения; сам узел остаётся. Обратной проверки удаления нет.
+     * При отказе отката частичной очистки нет, причина сохраняется в {@link #lastError()}.
+     */
     @Override
     public synchronized void clear() {
         if (!backend.isAvailable()) {
@@ -545,6 +610,12 @@ public final class RegistrySessionStore implements SessionStore {
         }
     }
 
+    /**
+     * Возвращает сохранённую ошибку записи маркера или очистки узла.
+     * Успешная запись маркера, сохранение снимка или очистка сбрасывает ошибку;
+     * чтение и операции без действия её не меняют.
+     * @return сообщение или пусто, если сохранённой ошибки нет
+     */
     @Override
     public Optional<String> lastError() {
         return Optional.ofNullable(lastError);

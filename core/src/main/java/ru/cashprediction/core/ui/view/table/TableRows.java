@@ -204,8 +204,14 @@ final class TableRows {
      * @return текст с переводами строк
      */
     String eventTooltip(ForecastRow row, String columnId) {
+        return decoratedEventTooltip(row, columnId).text();
+    }
+
+    /** Собирает прежний текст и отмечает только добавляемые ядром служебные строки. */
+    DecoratedTooltip decoratedEventTooltip(ForecastRow row, String columnId) {
         Flags flags = row.flags();
         StringJoiner text = new StringJoiner("\n");
+        List<DecoratedTooltip.IconPosition> icons = new ArrayList<>();
         text.add(titleOf(row));
         switch (row.origin()) {
             case START -> text.add(UiText.get("table.tip.start"));
@@ -217,20 +223,20 @@ final class TableRows {
             text.add(UiText.get("table.tip.dates", UiFormats.date(row.originalDate()), UiFormats.date(row.date())));
         }
         if (flags.amountChanged()) {
-            text.add(UiText.get("table.tip.amountChanged"));
+            addServiceLine(text, icons, "table.tip.amountChanged", MARK_AMOUNT_CHANGED);
         }
         if (flags.moved()) {
-            text.add(UiText.get("table.tip.moved"));
+            addServiceLine(text, icons, "table.tip.moved", MARK_MOVED);
         }
         if (flags.shifted()) {
-            text.add(UiText.get("table.tip.shifted"));
+            addServiceLine(text, icons, "table.tip.shifted", MARK_SHIFTED);
         }
         if (flags.skipped()) {
-            text.add(UiText.get("table.tip.skipped"));
+            addServiceLine(text, icons, "table.tip.skipped", MARK_SKIPPED);
         }
         // У строки WHAT_IF сумма не «изменена», а целиком задана режимом: это уже сказано в строке 2.
         if (flags.whatIf() && row.origin() != Origin.WHAT_IF) {
-            text.add(UiText.get("table.tip.whatIfAmount"));
+            addServiceLine(text, icons, "table.tip.whatIfAmount", MARK_WHAT_IF);
         }
         if (isPast(row)) {
             text.add(UiText.get("table.tip.past"));
@@ -246,7 +252,15 @@ final class TableRows {
         if (row.origin() == Origin.RULE && !flags.skipped() && isAmountColumn(row, columnId)) {
             result = result + "\n\n" + UiText.get("table.tip.quickEdit");
         }
-        return result;
+        return new DecoratedTooltip(result, icons);
+    }
+
+    /** Фиксирует позицию значка в момент добавления известной локализованной строки. */
+    private static void addServiceLine(StringJoiner text, List<DecoratedTooltip.IconPosition> icons,
+                                       String textKey, String iconKey) {
+        String line = UiText.get(textKey);
+        icons.add(new DecoratedTooltip.IconPosition(text.length() + 1, iconKey));
+        text.add(line);
     }
 
     /**

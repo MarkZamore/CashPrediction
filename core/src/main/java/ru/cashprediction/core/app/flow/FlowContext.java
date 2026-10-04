@@ -12,6 +12,8 @@ import ru.cashprediction.core.app.UiPort;
 import ru.cashprediction.core.app.WindowHandle;
 import ru.cashprediction.core.document.AppSettings;
 import ru.cashprediction.core.document.PlanDocument;
+import ru.cashprediction.core.service.plan.PlanCommands;
+import ru.cashprediction.core.service.storage.PlanStorage;
 import ru.cashprediction.core.document.ViewState;
 import ru.cashprediction.core.session.SessionRecorder;
 import ru.cashprediction.core.session.MainWindowState;
@@ -25,9 +27,10 @@ import ru.cashprediction.core.ui.view.status.StatusLevel;
  * Общий контекст потоков приложения (дополнение к архитектуре §3.7). Реализует {@code AppController}; потоки получают
  * контекст в конструкторе и не держат собственного изменяемого состояния приложения.
  *
- * <p><b>Заморожен на этапе S0.</b> Это единственный канал между контроллером (задача S2 core-app-file) и потоками
- * задач core-app-edit и core-app-session, которые пишутся параллельно. Ни одна задача S2 не меняет этот файл;
- * недостающая операция — вопрос к ведущему, который меняет контракт для всех сразу.</p>
+ * <p>Контроллер владеет состоянием приложения, связывает службы и управляет открытыми окнами и записью сеанса.
+ * Потоки используют этот контекст для выполнения сценариев и обновления представления. Текущий план, история
+ * и расчёт принадлежат документу; предметные изменения проходят через {@link #planCommands()}, а сохранённые
+ * планы доступны через {@link #planStorage()}. Порт клиента отвечает за отрисовку и события окон.</p>
  *
  * <p>Все методы — только в потоке контроллера. После изменения состояния поток вызывает {@link #refresh()} (или
  * изменение само вызывает его, если так написано у метода).</p>
@@ -40,8 +43,16 @@ public interface FlowContext {
     /** @return окружение процесса */
     AppEnvironment environment();
 
-    /** @return документ плана (изменения — через {@code EditFlow.edit}, чтобы была одна точка отмены и статусов) */
+    /** @return документ плана; предметные изменения проходят через {@link #planCommands()} */
     PlanDocument document();
+
+    /** @return общий валидирующий сервис команд и истории текущего документа */
+    PlanCommands planCommands();
+
+    /** @return общий сервис сохранённых планов, используемый также проверкой внешних изменений */
+    default PlanStorage planStorage() {
+        return externalChanges().storage();
+    }
 
     /** @return свежий снимок состояния */
     AppState state();

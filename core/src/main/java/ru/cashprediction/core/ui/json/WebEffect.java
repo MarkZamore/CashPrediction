@@ -44,6 +44,7 @@ public sealed interface WebEffect permits WebEffect.Screen, WebEffect.FormOpen, 
             parts = EnumSet.copyOf(parts);
         }
 
+        /** @return идентификатор {@code screen} для обновления изменившихся частей главного экрана */
         @Override
         public String type() {
             return "screen";
@@ -68,6 +69,7 @@ public sealed interface WebEffect permits WebEffect.Screen, WebEffect.FormOpen, 
         public FormOpen(String windowId, String ownerId, boolean modal, Placement placement, FormSpec spec, FormView view) {
             this(windowId, ownerId, modal, placement, spec, view, null);
         }
+        /** @return идентификатор {@code form.open} для открытия формы с раскладкой, начальной моделью и положением */
         @Override
         public String type() {
             return "form.open";
@@ -83,6 +85,7 @@ public sealed interface WebEffect permits WebEffect.Screen, WebEffect.FormOpen, 
      * @param echoClientRev номер правки этой вкладки или 0
      */
     record FormViewUpdate(String windowId, FormView view, String echoTab, long echoClientRev) implements WebEffect {
+        /** @return идентификатор {@code form.view} для обновления модели формы с идентичностью породившей её правки */
         @Override
         public String type() {
             return "form.view";
@@ -95,6 +98,7 @@ public sealed interface WebEffect permits WebEffect.Screen, WebEffect.FormOpen, 
      * @param windowId id окна
      */
     record FormClose(String windowId) implements WebEffect {
+        /** @return идентификатор {@code form.close} для закрытия окна формы */
         @Override
         public String type() {
             return "form.close";
@@ -107,6 +111,7 @@ public sealed interface WebEffect permits WebEffect.Screen, WebEffect.FormOpen, 
      * @param windowId id окна
      */
     record FormFront(String windowId) implements WebEffect {
+        /** @return идентификатор {@code form.front} для вывода окна формы на передний план */
         @Override
         public String type() {
             return "form.front";
@@ -123,6 +128,7 @@ public sealed interface WebEffect permits WebEffect.Screen, WebEffect.FormOpen, 
     record AlertOpen(String alertId, AlertSpec spec, Placement placement) implements WebEffect {
         /** Сохраняет прежний контракт для сообщений без заданного положения. */
         public AlertOpen(String alertId, AlertSpec spec) { this(alertId, spec, null); }
+        /** @return идентификатор {@code alert.open} для открытия сообщения с описанием и положением */
         @Override
         public String type() {
             return "alert.open";
@@ -136,6 +142,7 @@ public sealed interface WebEffect permits WebEffect.Screen, WebEffect.FormOpen, 
      * @param spec    новое описание
      */
     record AlertUpdate(String alertId, AlertSpec spec) implements WebEffect {
+        /** @return идентификатор {@code alert.update} для обновления описания открытого сообщения */
         @Override
         public String type() {
             return "alert.update";
@@ -148,6 +155,7 @@ public sealed interface WebEffect permits WebEffect.Screen, WebEffect.FormOpen, 
      * @param alertId id сообщения
      */
     record AlertClose(String alertId) implements WebEffect {
+        /** @return идентификатор {@code alert.close} для закрытия сообщения, в том числе в остальных вкладках */
         @Override
         public String type() {
             return "alert.close";
@@ -171,6 +179,7 @@ public sealed interface WebEffect permits WebEffect.Screen, WebEffect.FormOpen, 
             items = List.copyOf(Objects.requireNonNull(items, "items"));
         }
 
+        /** @return идентификатор {@code contextMenu} для показа контекстного меню в указанной вкладке */
         @Override
         public String type() {
             return "contextMenu";
@@ -189,6 +198,7 @@ public sealed interface WebEffect permits WebEffect.Screen, WebEffect.FormOpen, 
             tab = Objects.requireNonNullElse(tab, "");
         }
 
+        /** @return идентификатор {@code reload} для перезагрузки вкладки, приславшей ошибку JavaScript */
         @Override
         public String type() {
             return "reload";
@@ -201,6 +211,7 @@ public sealed interface WebEffect permits WebEffect.Screen, WebEffect.FormOpen, 
      * @param target цель
      */
     record Focus(FocusTarget target) implements WebEffect {
+        /** @return идентификатор {@code focus} для перевода фокуса в указанную область */
         @Override
         public String type() {
             return "focus";
@@ -214,6 +225,7 @@ public sealed interface WebEffect permits WebEffect.Screen, WebEffect.FormOpen, 
      * @param mode  режим
      */
     record Reveal(String rowId, RevealMode mode) implements WebEffect {
+        /** @return идентификатор {@code reveal} для прокрутки или выделения указанной строки таблицы */
         @Override
         public String type() {
             return "reveal";
@@ -226,6 +238,7 @@ public sealed interface WebEffect permits WebEffect.Screen, WebEffect.FormOpen, 
      * @param text текст
      */
     record Clipboard(String text) implements WebEffect {
+        /** @return идентификатор {@code clipboard} для копирования готового текста в буфер обмена */
         @Override
         public String type() {
             return "clipboard";
@@ -238,6 +251,7 @@ public sealed interface WebEffect permits WebEffect.Screen, WebEffect.FormOpen, 
      * @param value неактивна ли
      */
     record Inert(boolean value) implements WebEffect {
+        /** @return идентификатор {@code inert} для изменения неактивности страницы */
         @Override
         public String type() {
             return "inert";
@@ -252,6 +266,7 @@ public sealed interface WebEffect permits WebEffect.Screen, WebEffect.FormOpen, 
      * @param text  текст экрана
      */
     record Exit(ExitKind kind, String title, String text) implements WebEffect {
+        /** @return идентификатор {@code exit} для показа экрана завершения с готовыми заголовком и текстом */
         @Override
         public String type() {
             return "exit";
@@ -265,6 +280,7 @@ public sealed interface WebEffect permits WebEffect.Screen, WebEffect.FormOpen, 
      * @param command строка команды сценария
      */
     record TestStep(int n, String command) implements WebEffect {
+        /** @return идентификатор {@code test.step} для передачи шага сценария тестовому драйверу вкладки */
         @Override
         public String type() {
             return "test.step";

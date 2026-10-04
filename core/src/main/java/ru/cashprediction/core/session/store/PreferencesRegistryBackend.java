@@ -67,6 +67,11 @@ public final class PreferencesRegistryBackend implements RegistryBackend {
         return nodePath;
     }
 
+    /**
+     * Читает значение узла; при удалённом узле или запрете доступа запоминает недоступность.
+     * @param key ключ значения
+     * @return значение или {@code null} при отсутствии ключа либо недоступности бэкенда
+     */
     @Override
     public String get(String key) {
         if (!isAvailable()) {
@@ -80,6 +85,14 @@ public final class PreferencesRegistryBackend implements RegistryBackend {
         }
     }
 
+    /**
+     * Передаёт запись значения в {@link Preferences}; недоступный бэкенд пропускает запись.
+     * Удалённый узел и запрет доступа переводят бэкенд в недоступное состояние без исключения.
+     * Метод не подтверждает сохранение обратным чтением и не объединяет записи в транзакцию.
+     * @param key ключ значения
+     * @param value записываемое значение
+     * @throws IllegalArgumentException если доступный узел отвергает длину ключа или значения
+     */
     @Override
     public void put(String key, String value) {
         if (!isAvailable()) {
@@ -92,6 +105,12 @@ public final class PreferencesRegistryBackend implements RegistryBackend {
         }
     }
 
+    /**
+     * Удаляет ключ, если бэкенд доступен; отсутствие ключа допустимо.
+     * Удалённый узел или запрет доступа запоминаются как недоступность без исключения;
+     * подтверждения удаления и отката нет.
+     * @param key удаляемый ключ
+     */
     @Override
     public void remove(String key) {
         if (!isAvailable()) {
@@ -104,6 +123,11 @@ public final class PreferencesRegistryBackend implements RegistryBackend {
         }
     }
 
+    /**
+     * Получает список ключей узла; ошибку хранилища, удалённый узел или запрет доступа
+     * запоминает как недоступность бэкенда.
+     * @return ключи без гарантии порядка или пустой список при пустом либо недоступном узле
+     */
     @Override
     public List<String> keys() {
         if (!isAvailable()) {
@@ -117,6 +141,12 @@ public final class PreferencesRegistryBackend implements RegistryBackend {
         }
     }
 
+    /**
+     * Вызывает сброс узла через {@link Preferences#flush()}, не создавая транзакции
+     * и не откатывая предшествующие записи при отказе. Ошибка сброса запоминается
+     * как недоступность; последующие обращения этого экземпляра к узлу прекращаются.
+     * @throws SessionStoreException если бэкенд уже недоступен или сброс не удался
+     */
     @Override
     public void flush() throws SessionStoreException {
         if (!isAvailable()) {
@@ -130,11 +160,20 @@ public final class PreferencesRegistryBackend implements RegistryBackend {
         }
     }
 
+    /**
+     * Проверяет отсутствие запомненной ошибки, не обращаясь к реестру.
+     * После ошибки этот экземпляр не восстанавливает доступность автоматически.
+     * @return {@code true}, если создание и предыдущие операции не зафиксировали отказ
+     */
     @Override
     public boolean isAvailable() {
         return failure == null;
     }
 
+    /**
+     * Возвращает запомненное описание отказа из общей локализации.
+     * @return причина недоступности или пустая строка, если ошибка не зафиксирована
+     */
     @Override
     public String unavailableReason() {
         String reason = failure;

@@ -9,8 +9,10 @@ import ru.cashprediction.core.ui.command.CommandId;
  * с меню рисуется самим элементом и в текст не входит.
  *
  * <ul>
- *   <li>{@link SplitButton} — JavaFX {@code SplitMenuButton} → Swing {@code SwingSplitMenuButton} → Web пара кнопок;</li>
- *   <li>{@link MenuButton} — {@code MenuButton} → {@code SwingMenuButton} → кнопка с выпадающим меню;</li>
+ *   <li>{@link SplitButton} — JavaFX {@code SplitMenuButton} → Swing {@code JPanel} с основной {@code JButton}
+ *       и {@code JButton}-стрелкой с {@code JPopupMenu} → Web пара кнопок с выпадающим меню;</li>
+ *   <li>{@link MenuButton} — JavaFX {@code MenuButton} → Swing {@code JButton} с {@code JPopupMenu}
+ *       → Web кнопка с выпадающим меню;</li>
  *   <li>{@link Toggle} — {@code ToggleButton} + {@code ToggleGroup} → {@code JToggleButton} + {@code ButtonGroup}
  *       → {@code button[aria-pressed]};</li>
  *   <li>{@link FilterField} — {@code TextField} → {@code JTextField} → {@code input};</li>

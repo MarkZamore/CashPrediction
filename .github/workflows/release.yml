@@ -17,6 +17,8 @@ permissions:
 
 jobs:
   release:
+    # Ручной запуск из другой ветки не получает права выполнять релизные шаги.
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
     runs-on: windows-latest
 
     steps:
@@ -38,9 +40,11 @@ jobs:
       - name: Prepare
         shell: pwsh
         run: |
+          if ($env:GITHUB_REF -cne 'refs/heads/main') { throw 'RELEASE_MAIN_ONLY' }
           # Версия называется номером коммита: «Версия 12» в отчёте пользователя
           # указывает ровно на одну строку истории.
           $releaseNumber = [int](git rev-list --count HEAD)
+          if ($LASTEXITCODE -ne 0) { throw 'RELEASE_GIT_COUNT_FAILED' }
           if ($releaseNumber -lt 1) { throw "Не удалось определить число коммитов." }
 
           # История изменений ведётся вручную. Сборку без записи о своей версии не публикуем:
@@ -66,6 +70,16 @@ jobs:
           if (@($repositoryReactor.project.modules.module) -notcontains 'repository-doc-audits') {
             throw 'Обязательный модуль repository-doc-audits отсутствует в reactor.'
           }
+          # Ошибки границ очистки и ложный успех XML блокируют публикацию до GUI-прогонов.
+          & .github/scripts/Test-PortableSafety.ps1
+          & .github/scripts/Test-GateOutcomePayload.ps1
+          & .github/scripts/Test-GateReportExport.ps1
+          & .github/scripts/Test-ReleaseSafety.ps1
+          & .github/scripts/Test-ReleaseIdentityGuard.ps1
+          & .github/scripts/Test-S7Release.ps1
+          # Общий каталог иконок проверяется до GUI: ошибки источников не маскируются дампами.
+          & dist/scripts/Test-Icon-Source.ps1
+          & dist/scripts/Test-Icon-SourceFixtures.ps1
           # Модули и все тесты, затем портативная папка: jlink + jpackage + zip.
           # Номер релиза и коммит попадают в окно «О программе» и в свойства exe.
           $common = @('-B', '-ntp', "-Dapp.release=$env:RELEASE_NUMBER", "-Dapp.commit=${{ github.sha }}")
@@ -74,7 +88,40 @@ jobs:
           & mvn @common -Pdist -pl dist package
           if ($LASTEXITCODE -ne 0) { throw "Портативная сборка не собралась." }
 
+      - name: Actual UI gates (S4, blocking)
+        timeout-minutes: 90
+        shell: pwsh
+        run: |
+          & .github/scripts/Invoke-UiGates.ps1 -Mode UI
+
+      - name: Actual recovery gates (S4, blocking)
+        timeout-minutes: 60
+        shell: pwsh
+        run: |
+          & .github/scripts/Invoke-UiGates.ps1 -Mode E2E
+
+      - name: Complete UI and E2E profile lifecycles
+        timeout-minutes: 30
+        shell: pwsh
+        run: |
+          # Полный lifecycle не подменяет реальные UI/E2E-доказательства предыдущих шагов.
+          # Каждый step запускается в новом процессе: параметры версии задаются здесь заново.
+          $common = @('-B', '-ntp', "-Dapp.release=$env:RELEASE_NUMBER", "-Dapp.commit=${{ github.sha }}")
+          foreach ($profile in 'ui-tests', 'e2e') {
+            & mvn @common "-P$profile" verify
+            if ($LASTEXITCODE -ne 0) { throw "Lifecycle $profile не прошёл." }
+          }
+
+      - name: Actual UI and recovery evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-s4-gate-evidence
+          path: ui-parity/target/gates/**/upload/**
+          if-no-files-found: error
+
       - name: Verify portable build
+        timeout-minutes: 30
         shell: pwsh
         run: |
           # Запускаем готовые exe из копии папки с пробелами и кириллицей в пути:
@@ -82,8 +129,18 @@ jobs:
           & "$env:GITHUB_WORKSPACE\.github\scripts\Test-Portable.ps1" `
             -PortableDir "$env:GITHUB_WORKSPACE\dist\target\dist\CashPrediction" `
             -WorkDir "$env:RUNNER_TEMP\portable test" `
+            -EvidenceRoot "$env:RUNNER_TEMP\safe-portable-evidence" `
+            -Parity `
             -CleanRegistry
           if ($LASTEXITCODE -ne 0) { throw "Проверка портативной сборки не прошла." }
+
+      - name: Portable launch evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-portable-launch-evidence
+          path: ${{ runner.temp }}/safe-portable-evidence/**
+          if-no-files-found: ignore
 
       - name: Package release
         shell: pwsh
@@ -122,12 +179,166 @@ jobs:
           $stray = $names | Where-Object { $_ -match '(?i)/CashMemory/' }
           if ($stray) { throw "В архив попали данные запуска: $($stray -join ', ')" }
 
+      - name: Prepare S7 update payloads
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          # Инструмент W4 собирается общим reactor один раз, без сборки внутри delta jobs.
+          $toolJars = @(Get-ChildItem update-tool/target -Filter '*.jar' -File |
+            Where-Object { $_.Name -notmatch '-(sources|javadoc|tests)\.jar$' })
+          $coreJars = @(Get-ChildItem core/target -Filter '*.jar' -File |
+            Where-Object { $_.Name -notmatch '-(sources|javadoc|tests)\.jar$' })
+          if ($toolJars.Count -ne 1 -or $coreJars.Count -ne 1) { throw 'S7_TOOL_BUILD_MISSING' }
+          $commandFile = Join-Path $env:RUNNER_TEMP 's7-tool-command.json'
+          & .github/scripts/S7-ToolCommand.ps1 -Java "$env:JAVA_HOME/bin/java.exe" `
+            -ToolJar $toolJars[0].FullName -CoreJar $coreJars[0].FullName -Out $commandFile
+          & .github/scripts/Test-S7Pipeline.ps1 -ToolCommandFile $commandFile
+          $stateFile = Join-Path $env:RUNNER_TEMP 's7-state.json'
+          & .github/scripts/S7-Capture.ps1 -ReleaseNumber ([int]$env:RELEASE_NUMBER) `
+            -CommitSha '${{ github.sha }}' -Repository $env:GH_REPO `
+            -WorkDirectory (Join-Path $env:RUNNER_TEMP 's7-capture') `
+            -StateFile $stateFile -ToolCommandFile $commandFile
+          & .github/scripts/S7-Prepare.ps1 `
+            -ImageRoot (Join-Path $env:GITHUB_WORKSPACE 'dist/target/dist/CashPrediction') `
+            -StateFile $stateFile -ArtifactDirectory (Join-Path $env:GITHUB_WORKSPACE 's7-artifacts') `
+            -WorkDirectory (Join-Path $env:RUNNER_TEMP 's7-prepare') -Note $env:RELEASE_NOTE
+
+      - name: S7 release acceptance gate
+        shell: pwsh
+        env:
+          S7_APPROVED_SHA: ${{ vars.S7_APPROVED_SHA }}
+        run: |
+          # Ведущий связывает разрешение публикации с SHA полной принятой матрицы S4-S7.
+          if ($env:S7_APPROVED_SHA -cne '${{ github.sha }}') { throw 'S7_RELEASE_MATRIX_NOT_APPROVED' }
+
+      - name: Verify release Git and embedded AppInfo
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          # Проверяет настоящий коммит и его историю без fetch и изменения Git.
+          function Assert-ReleaseGitIdentity {
+            param([string]$Repository, [string]$Sha, [string]$ReleaseNumber)
+            if ($env:GITHUB_REF -cne 'refs/heads/main' -or
+                $env:GITHUB_EVENT_NAME -cnotin @('push', 'workflow_dispatch')) { throw 'RELEASE_MAIN_ONLY' }
+            if ($Sha -cnotmatch '^[0-9a-f]{40}$' -or $ReleaseNumber -cnotmatch '^[1-9][0-9]*$') {
+              throw 'RELEASE_IDENTITY_FORMAT'
+            }
+            $shallow = & git -C $Repository rev-parse --is-shallow-repository
+            if ($LASTEXITCODE -ne 0 -or $shallow -cne 'false') { throw 'RELEASE_SHALLOW_HISTORY' }
+            $commit = & git -C $Repository rev-parse --verify "$Sha^{commit}"
+            if ($LASTEXITCODE -ne 0 -or $commit -cne $Sha) { throw 'RELEASE_COMMIT_MISSING' }
+            $head = & git -C $Repository rev-parse --verify HEAD
+            if ($LASTEXITCODE -ne 0 -or $head -cne $Sha) { throw 'RELEASE_HEAD_MISMATCH' }
+            & git -C $Repository merge-base --is-ancestor $Sha refs/remotes/origin/main
+            if ($LASTEXITCODE -ne 0) { throw 'RELEASE_NOT_MAIN_ANCESTOR' }
+            $count = & git -C $Repository rev-list --count $Sha
+            if ($LASTEXITCODE -ne 0 -or $count -cne $ReleaseNumber) { throw 'RELEASE_COUNT_MISMATCH' }
+          }
+          # Отвергает traversal, Windows-алиасы и дубликаты до выбора записи ZIP/JAR.
+          function Assert-ReleaseArchivePaths {
+            param([IO.Compression.ZipArchive]$Archive)
+            $seen = [Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+            foreach ($entry in $Archive.Entries) {
+              $name = $entry.FullName.TrimEnd('/')
+              if (-not $name -or $name -match '[\\:\x00-\x1f\x7f]' -or $name.StartsWith('/')) {
+                throw 'RELEASE_ARCHIVE_PATH'
+              }
+              foreach ($part in $name.Split('/')) {
+                if (-not $part -or $part -in @('.', '..') -or $part.EndsWith('.') -or $part.EndsWith(' ') -or
+                    $part -match '^(?i:CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])(?:\.|$)') { throw 'RELEASE_ARCHIVE_PATH' }
+              }
+              if (-not $seen.Add($name.Normalize([Text.NormalizationForm]::FormC))) { throw 'RELEASE_ARCHIVE_DUPLICATE' }
+              if ((($entry.ExternalAttributes -shr 16) -band 0xf000) -eq 0xa000 -or
+                  ($entry.ExternalAttributes -band 0x400) -ne 0) { throw 'RELEASE_ARCHIVE_LINK' }
+            }
+          }
+          # Читает именно ресурс AppInfo из core JAR; неоднозначные свойства запрещены.
+          function Assert-ReleaseJarIdentity {
+            param([byte[]]$Bytes, [string]$Sha, [string]$ReleaseNumber)
+            $stream = [IO.MemoryStream]::new($Bytes, $false)
+            $jar = [IO.Compression.ZipArchive]::new($stream, [IO.Compression.ZipArchiveMode]::Read)
+            try {
+              Assert-ReleaseArchivePaths $jar
+              $entries = @($jar.Entries | Where-Object { $_.FullName -ceq 'ru/cashprediction/core/app.properties' })
+              $classes = @($jar.Entries | Where-Object { $_.FullName -ceq 'ru/cashprediction/core/io/AppInfo.class' })
+              if ($entries.Count -ne 1 -or $classes.Count -ne 1 -or $entries[0].Length -gt 4096) {
+                throw 'RELEASE_APPINFO_RESOURCE'
+              }
+              $reader = [IO.StreamReader]::new($entries[0].Open(), [Text.UTF8Encoding]::new($false, $true), $false)
+              try { $text = $reader.ReadToEnd() } finally { $reader.Dispose() }
+              $values = @{}
+              # Java Properties завершает строку также одиночным CR, в том числе после комментария.
+              foreach ($line in [regex]::Split($text, '\r\n|\r|\n')) {
+                if ($line -match '^[ \t\f]*(?:[#!].*)?$') { continue }
+                if ($line -cnotmatch '^(release|commit)=([^\r\n\\\x00\ufeff]+)$') { throw 'RELEASE_APPINFO_FORMAT' }
+                $key = $Matches[1]; $value = $Matches[2]
+                if ($values.ContainsKey($key)) { throw 'RELEASE_APPINFO_DUPLICATE' }
+                $values[$key] = $value
+              }
+              if ($values.Count -ne 2 -or $values.release -cne $ReleaseNumber -or $values.commit -cne $Sha) {
+                throw 'RELEASE_APPINFO_MISMATCH'
+              }
+            } finally { $jar.Dispose(); $stream.Dispose() }
+          }
+          Assert-ReleaseGitIdentity $env:GITHUB_WORKSPACE $env:GITHUB_SHA $env:RELEASE_NUMBER
+          # Замораживаем идентичность подготовленного S7 пакета перед первым publish.
+          $artifactRoot = Join-Path $env:GITHUB_WORKSPACE 's7-artifacts'
+          foreach ($name in 'release.json', 'update.json') {
+            $identity = Get-Content -LiteralPath (Join-Path $artifactRoot $name) -Raw | ConvertFrom-Json
+            if ($identity.commitSha -cne $env:GITHUB_SHA -or
+                [string]$identity.releaseNumber -cne $env:RELEASE_NUMBER) { throw 'RELEASE_MANIFEST_IDENTITY' }
+          }
+          $appRoot = Join-Path $env:GITHUB_WORKSPACE 'dist/target/dist/CashPrediction/app'
+          $coreJars = @(Get-ChildItem -LiteralPath $appRoot -File -Filter 'cashprediction-core-*.jar' |
+            Where-Object { $_.Name -notmatch '-(sources|javadoc|tests)\.jar$' })
+          if ($coreJars.Count -ne 1) { throw 'RELEASE_CORE_JAR_COUNT' }
+          $coreBytes = [IO.File]::ReadAllBytes($coreJars[0].FullName)
+          Assert-ReleaseJarIdentity $coreBytes $env:GITHUB_SHA $env:RELEASE_NUMBER
+          # Проверяем JAR внутри публикуемого ZIP, а не только соседнюю app-image.
+          $zip = [IO.Compression.ZipFile]::OpenRead((Join-Path $artifactRoot 'CashPrediction-portable.zip'))
+          try {
+            Assert-ReleaseArchivePaths $zip
+            $entries = @($zip.Entries | Where-Object {
+              $_.FullName -cmatch '^CashPrediction/app/cashprediction-core-[^/]+\.jar$' -and
+              $_.FullName -notmatch '-(sources|javadoc|tests)\.jar$'
+            })
+            if ($entries.Count -ne 1 -or $entries[0].FullName -cne ('CashPrediction/app/' + $coreJars[0].Name) -or
+                $entries[0].Length -ne $coreBytes.Length) { throw 'RELEASE_ZIP_CORE_JAR' }
+            $packed = [IO.MemoryStream]::new()
+            $input = $entries[0].Open()
+            try { $input.CopyTo($packed); $packedBytes = $packed.ToArray() }
+            finally { $input.Dispose(); $packed.Dispose() }
+            Assert-ReleaseJarIdentity $packedBytes $env:GITHUB_SHA $env:RELEASE_NUMBER
+            if ([Convert]::ToHexString([Security.Cryptography.SHA256]::HashData($packedBytes)) -cne
+                [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData($coreBytes))) {
+              throw 'RELEASE_ZIP_CORE_BYTES'
+            }
+          } finally { $zip.Dispose() }
+
       - name: Publish latest release
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          CASH_PREDICTION_S7_PIPELINE: '1'
+          S7_APPROVED_SHA: ${{ vars.S7_APPROVED_SHA }}
         run: |
           . "$env:GITHUB_WORKSPACE/.github/scripts/GhRetry.ps1"
+
+          # Рабочий S7 путь. Нижний блок сохраняет существующую локальную проверку
+          # Test-ReleaseSafety до её переноса ведущим; CI всегда выбирает S7.
+          if ($env:CASH_PREDICTION_S7_PIPELINE -eq '1') {
+            & "$env:GITHUB_WORKSPACE/.github/scripts/S7-Publish.ps1" `
+              -StateFile (Join-Path $env:RUNNER_TEMP 's7-state.json') `
+              -ArtifactDirectory (Join-Path $env:GITHUB_WORKSPACE 's7-artifacts') `
+              -WorkDirectory (Join-Path $env:RUNNER_TEMP 's7-publish') `
+              -Title "CashPrediction, версия $env:RELEASE_NUMBER" `
+              -Notes "$env:RELEASE_NOTE`n`nCashPrediction-portable.zip`n${{ github.sha }}" `
+              -ApprovedCommitSha $env:S7_APPROVED_SHA
+            return
+          }
 
           $out = Join-Path $env:GITHUB_WORKSPACE 'artifacts'
           $zip = Join-Path $out 'CashPrediction-portable.zip'
@@ -143,13 +354,17 @@ jobs:
 
           # Релиз обновляется на месте и никогда не удаляется заранее: ссылка на скачивание
           # из README ведёт на latest, и неудачное пересоздание оставило бы её пустой.
-          $exists = $false
-          Invoke-Gh release view latest *> $null
-          if ($LASTEXITCODE -eq 0) { $exists = $true }
+          $repo = $env:GH_REPO
+          if ($repo -notmatch '^[^/\s]+/[^/\s]+$') { throw 'Не задан полный owner/repo для публикации.' }
+          $exists = Test-GhApiResourceExists "repos/$repo/releases/tags/latest"
 
           if (-not $exists) {
-            if (git ls-remote --exit-code --tags origin refs/tags/latest 2>$null) {
-              git push origin --delete latest
+            # Оставшийся без релиза тег переносим на месте. Ошибка чтения не
+            # считается отсутствием и не разрешает создание или изменение тега.
+            if (Test-GhApiResourceExists "repos/$repo/git/ref/tags/latest") {
+              Invoke-Gh api "repos/$repo/git/refs/tags/latest" --method PATCH `
+                --raw-field "sha=${{ github.sha }}" --field force=true
+              if ($LASTEXITCODE -ne 0) { throw 'Не удалось перенести оставшийся тег latest.' }
             }
             Invoke-Gh release create latest $zip $manifest `
               --target "${{ github.sha }}" `
@@ -167,7 +382,9 @@ jobs:
             if ($LASTEXITCODE -ne 0) { throw "Не удалось загрузить манифест." }
 
             $keep = @('CashPrediction-portable.zip', 'release.json')
-            $stale = (Invoke-Gh release view latest --json assets | ConvertFrom-Json).assets |
+            $assetJson = Invoke-Gh release view latest --json assets
+            if ($LASTEXITCODE -ne 0) { throw 'Не удалось получить список файлов релиза.' }
+            $stale = ($assetJson | ConvertFrom-Json).assets |
               Where-Object { $_.name -notin $keep }
             foreach ($asset in $stale) {
               Invoke-Gh release delete-asset latest $asset.name --yes
@@ -175,8 +392,8 @@ jobs:
             }
 
             # Тег переносится на новый коммит, чтобы исходники релиза совпадали с архивом.
-            git tag -f latest "${{ github.sha }}"
-            git push -f origin refs/tags/latest
+            Invoke-Gh api "repos/$repo/git/refs/tags/latest" --method PATCH `
+              --raw-field "sha=${{ github.sha }}" --field force=true
             if ($LASTEXITCODE -ne 0) { throw "Не удалось перенести тег latest." }
 
             Invoke-Gh release edit latest `

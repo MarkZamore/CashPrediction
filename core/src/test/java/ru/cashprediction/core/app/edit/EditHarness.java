@@ -13,6 +13,8 @@ import ru.cashprediction.core.app.flow.*;
 import ru.cashprediction.core.document.*;
 import ru.cashprediction.core.forecast.Forecast;
 import ru.cashprediction.core.model.*;
+import ru.cashprediction.core.service.plan.LocalPlanCommands;
+import ru.cashprediction.core.service.plan.PlanCommands;
 import ru.cashprediction.core.session.*;
 import ru.cashprediction.core.ui.alert.AlertSpec;
 import ru.cashprediction.core.ui.form.*;
@@ -23,6 +25,8 @@ import ru.cashprediction.core.ui.view.status.StatusLevel;
 final class EditHarness {
     static final LocalDate TODAY = LocalDate.of(2026, 10, 5);
     final PlanDocument document;
+    /** Единственная служба команд и ревизий этого документа. */
+    final PlanCommands planCommands;
     final FlowContext context;
     final EditFlow edits;
     final ToolsFlow tools;
@@ -50,6 +54,7 @@ final class EditHarness {
 
     EditHarness(Plan plan) {
         document = new PlanDocument(plan, null, () -> TODAY);
+        planCommands = new LocalPlanCommands(document);
         Scheduler scheduler = proxy(Scheduler.class, (p, m, a) -> {
             if (m.getName().equals("schedule")) {
                 Pending pending = new Pending((Runnable) a[0], elapsed + ((Duration) a[1]).toMillis());
@@ -71,6 +76,7 @@ final class EditHarness {
             return switch (m.getName()) {
                 case "port" -> port;
                 case "document" -> document;
+                case "planCommands" -> planCommands;
                 case "state" -> state();
                 case "edits" -> edits();
                 case "tools" -> tools();

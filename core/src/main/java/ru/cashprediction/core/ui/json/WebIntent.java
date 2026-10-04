@@ -40,6 +40,7 @@ public sealed interface WebIntent permits WebIntent.Command, WebIntent.Key, WebI
             Objects.requireNonNull(source, "source");
         }
 
+        /** @return идентификатор {@code command} для вызова команды с её аргументами и источником */
         @Override
         public String type() {
             return "command";
@@ -60,6 +61,7 @@ public sealed interface WebIntent permits WebIntent.Command, WebIntent.Key, WebI
             focusId = Objects.requireNonNullElse(focusId, "");
         }
 
+        /** @return идентификатор {@code key} для передачи сочетания клавиш и области фокуса */
         @Override
         public String type() {
             return "key";
@@ -72,6 +74,7 @@ public sealed interface WebIntent permits WebIntent.Command, WebIntent.Key, WebI
      * @param rowId id строки
      */
     record SelectRow(String rowId) implements WebIntent {
+        /** @return идентификатор {@code selectRow} для выбора строки таблицы */
         @Override
         public String type() {
             return "selectRow";
@@ -86,6 +89,7 @@ public sealed interface WebIntent permits WebIntent.Command, WebIntent.Key, WebI
      * @param how      щелчок
      */
     record ActivateRow(String rowId, String columnId, Activation how) implements WebIntent {
+        /** @return идентификатор {@code activateRow} для активации ячейки строки указанным жестом */
         @Override
         public String type() {
             return "activateRow";
@@ -98,6 +102,7 @@ public sealed interface WebIntent permits WebIntent.Command, WebIntent.Key, WebI
      * @param text текст фильтра
      */
     record FilterText(String text) implements WebIntent {
+        /** @return идентификатор {@code filterText} для изменения текста фильтра */
         @Override
         public String type() {
             return "filterText";
@@ -111,6 +116,7 @@ public sealed interface WebIntent permits WebIntent.Command, WebIntent.Key, WebI
      * @param value  значение
      */
     record SliderCommit(String itemId, int value) implements WebIntent {
+        /** @return идентификатор {@code sliderCommit} для подтверждения значения ползунка меню */
         @Override
         public String type() {
             return "sliderCommit";
@@ -124,6 +130,7 @@ public sealed interface WebIntent permits WebIntent.Command, WebIntent.Key, WebI
      * @param value  значение
      */
     record SpinnerCommit(String itemId, long value) implements WebIntent {
+        /** @return идентификатор {@code spinnerCommit} для подтверждения значения числового поля меню */
         @Override
         public String type() {
             return "spinnerCommit";
@@ -137,6 +144,7 @@ public sealed interface WebIntent permits WebIntent.Command, WebIntent.Key, WebI
      * @param maximized развёрнуто ли
      */
     record MainGeometry(WindowBounds bounds, boolean maximized) implements WebIntent {
+        /** @return идентификатор {@code mainGeometry} для передачи границ и развёрнутости главного окна */
         @Override
         public String type() {
             return "mainGeometry";
@@ -149,6 +157,7 @@ public sealed interface WebIntent permits WebIntent.Command, WebIntent.Key, WebI
      * @param itemId id узла или {@code null}
      */
     record MenuHover(String itemId) implements WebIntent {
+        /** @return идентификатор {@code menuHover} для передачи пункта под указателем или ухода с меню */
         @Override
         public String type() {
             return "menuHover";
@@ -157,6 +166,7 @@ public sealed interface WebIntent permits WebIntent.Command, WebIntent.Key, WebI
 
     /** {@code closeMain} → {@code UiIntents.closeMainRequested}. */
     record CloseMain() implements WebIntent {
+        /** @return идентификатор {@code closeMain} для запроса закрытия главного окна */
         @Override
         public String type() {
             return "closeMain";
@@ -173,6 +183,7 @@ public sealed interface WebIntent permits WebIntent.Command, WebIntent.Key, WebI
      * @param clientRev номер правки вкладки
      */
     record FormField(String windowId, String fieldId, String raw, boolean committed, long clientRev) implements WebIntent {
+        /** @return идентификатор {@code formField} для передачи правки поля формы и номера правки вкладки */
         @Override
         public String type() {
             return "formField";
@@ -186,6 +197,7 @@ public sealed interface WebIntent permits WebIntent.Command, WebIntent.Key, WebI
      * @param buttonId id кнопки
      */
     record FormButton(String windowId, String buttonId) implements WebIntent {
+        /** @return идентификатор {@code formButton} для нажатия кнопки формы */
         @Override
         public String type() {
             return "formButton";
@@ -200,6 +212,7 @@ public sealed interface WebIntent permits WebIntent.Command, WebIntent.Key, WebI
      * @param activated двойной щелчок или пункт меню
      */
     record FormPreview(String windowId, int index, boolean activated) implements WebIntent {
+        /** @return идентификатор {@code formPreview} для выбора или активации элемента предпросмотра формы */
         @Override
         public String type() {
             return "formPreview";
@@ -215,6 +228,7 @@ public sealed interface WebIntent permits WebIntent.Command, WebIntent.Key, WebI
      * @param index    номер элемента
      */
     record FormActivate(String windowId, String fieldId, int index) implements WebIntent {
+        /** @return идентификатор {@code formActivate} для активации элемента списка в форме */
         @Override
         public String type() {
             return "formActivate";
@@ -230,6 +244,7 @@ public sealed interface WebIntent permits WebIntent.Command, WebIntent.Key, WebI
      * @param fieldId  id поля
      */
     record FormSubmit(String windowId, String fieldId) implements WebIntent {
+        /** @return идентификатор {@code formSubmit} для подтверждения однострочного поля формы клавишей Enter */
         @Override
         public String type() {
             return "formSubmit";
@@ -243,6 +258,7 @@ public sealed interface WebIntent permits WebIntent.Command, WebIntent.Key, WebI
      * @param bounds   границы
      */
     record FormBounds(String windowId, WindowBounds bounds) implements WebIntent {
+        /** @return идентификатор {@code formBounds} для передачи границ окна формы */
         @Override
         public String type() {
             return "formBounds";
@@ -255,6 +271,7 @@ public sealed interface WebIntent permits WebIntent.Command, WebIntent.Key, WebI
      * @param windowId id окна
      */
     record FormShown(String windowId) implements WebIntent {
+        /** @return идентификатор {@code formShown} для подтверждения показа окна формы */
         @Override
         public String type() {
             return "formShown";
@@ -267,6 +284,7 @@ public sealed interface WebIntent permits WebIntent.Command, WebIntent.Key, WebI
      * @param windowId id окна
      */
     record FormClose(String windowId) implements WebIntent {
+        /** @return идентификатор {@code formClose} для запроса закрытия формы крестиком или клавишей Esc */
         @Override
         public String type() {
             return "formClose";
@@ -295,6 +313,7 @@ public sealed interface WebIntent permits WebIntent.Command, WebIntent.Key, WebI
      * @param buttonId id кнопки
      */
     record AlertAnswer(String alertId, String buttonId) implements WebIntent {
+        /** @return идентификатор {@code alertButton} для передачи ответа выбранной кнопкой сообщения */
         @Override
         public String type() {
             return "alertButton";
@@ -308,6 +327,7 @@ public sealed interface WebIntent permits WebIntent.Command, WebIntent.Key, WebI
      * @param stack   стек браузера
      */
     record ClientError(String message, String stack) implements WebIntent {
+        /** @return идентификатор {@code clientError} для передачи сообщения и стека ошибки JavaScript */
         @Override
         public String type() {
             return "clientError";

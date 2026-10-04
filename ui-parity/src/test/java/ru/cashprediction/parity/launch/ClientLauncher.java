@@ -25,7 +25,7 @@ import ru.cashprediction.core.app.LaunchOptions;
  * java -Dglass.win.uiScale=1 -Dsun.java2d.uiScale=1 -Duser.language=ru -XX:-UsePerfData
  *      [опции клиента] [опции запроса] -Dcashprediction.home=H [-Dcashprediction.registry.node=N]
  *      --module-path a.jar;b.jar [--add-modules X] --module модуль/класс
- *      --home H --registry-node N --today 2026-09-13 --selftest S --selftest-out O [--ui M]
+ *      --home H --registry-node N --today 2026-09-13 --selftest S --selftest-out O
  *      [аргументы запроса] [аргументы клиента]
  * </pre>
  */
@@ -39,8 +39,6 @@ public final class ClientLauncher {
     public static final String ARG_REGISTRY = "--registry";
     /** Аргумент даты «сегодня» (§3.8). */
     public static final String ARG_TODAY = "--today";
-    /** Аргумент выбора интерфейса {@code core|legacy} (§3.8). */
-    public static final String ARG_UI = "--ui";
     /** Аргумент сценария самотеста (§3.8). */
     public static final String ARG_SELFTEST = "--selftest";
     /** Аргумент папки результатов самотеста (§3.8). */
@@ -64,17 +62,13 @@ public final class ClientLauncher {
             "-Dglass.win.uiScale=1", "-Dsun.java2d.uiScale=1", "-Duser.language=ru", "-XX:-UsePerfData",
             "-Dstdout.encoding=UTF-8", "-Dstderr.encoding=UTF-8");
 
-    /** Системное свойство папки приложения, которое читают и прежние клиенты ({@code AppPaths}). */
+    /** Системное свойство папки приложения, для ранней инициализации клиента. */
     public static final String PROP_HOME = LaunchOptions.PROP_HOME;
-    /** Системное свойство префикса узла реестра, которое читает и прежний {@code RegistrySessionStore.forClient(client)}. */
+    /** Системное свойство префикса узла реестра, для ранней инициализации хранилища. */
     public static final String PROP_REGISTRY_NODE = LaunchOptions.PROP_REGISTRY_NODE;
 
-    /**
-     * Клиенты, у которых до этапа S4 есть прежний интерфейс. Он не разбирает аргументы {@code --home} и
-     * {@code --registry-node}, поэтому изоляцию ему дают только системные свойства, а {@code --registry memory} он не
-     * понимает вовсе.
-     */
-    private static final Set<String> LEGACY_CAPABLE_CLIENTS = Set.of("fx", "swing", "web");
+    /** Настоящие клиенты запускаются только с тестовым узлом либо реестром в памяти. */
+    private static final Set<String> ISOLATED_CLIENTS = Set.of("fx", "swing", "web");
 
     /**
      * Переменные окружения, через которые JVM подмешивает опции к любой командной строке.
@@ -89,23 +83,20 @@ public final class ClientLauncher {
      * Собирает полную командную строку без запуска (для проверки и журнала).
      *
      * <p><b>Изоляция (решение L12).</b> Папка приложения и префикс узла реестра передаются дважды: аргументами
-     * {@code --home}/{@code --registry-node} для интерфейса ядра и системными свойствами {@value #PROP_HOME} /
-     * {@value #PROP_REGISTRY_NODE} для прежнего интерфейса, который аргументы не разбирает. Свойства стоят последними
-     * опциями JVM, чтобы опции запроса не могли их перекрыть. Прежний интерфейс без тестового узла реестра писал бы в
-     * настоящий общий узел, поэтому такой запуск клиентов fx, swing и web отклоняется, если не выбран
-     * {@code --ui core}.</p>
+     * {@code --home}/{@code --registry-node} и системными свойствами {@value #PROP_HOME} /
+     * {@value #PROP_REGISTRY_NODE}. Свойства стоят последними опциями JVM, чтобы опции запроса
+     * не могли их перекрыть. Без тестового узла требуется явный {@code --registry memory}.</p>
      *
      * @param target  что запускать
      * @param request параметры запуска
      * @return команда, первый элемент — исполняемый файл java текущего JDK
-     * @throws IllegalArgumentException если клиент с прежним интерфейсом запускается без тестового узла реестра
+     * @throws IllegalArgumentException если настоящий клиент запускается без изоляции реестра
      */
     public static List<String> command(ClientTarget target, LaunchRequest request) {
-        if (LEGACY_CAPABLE_CLIENTS.contains(target.client()) && request.registryNodePrefix() == null
-                && !"core".equalsIgnoreCase(request.ui())) {
-            throw new IllegalArgumentException("Client " + target.client() + " may start its legacy UI, which ignores"
-                    + " --registry memory and would write the real session node; pass a selftest registry node prefix"
-                    + " or --ui core");
+        if (ISOLATED_CLIENTS.contains(target.client()) && request.registryNodePrefix() == null
+                && !LaunchOptions.parse(applicationArguments(target, request), new java.util.Properties()).registryMemory()) {
+            throw new IllegalArgumentException("Client " + target.client()
+                    + " requires a selftest registry node prefix or --registry memory");
         }
         List<String> command = new ArrayList<>();
         command.add(javaExecutable().toString());
@@ -126,7 +117,7 @@ public final class ClientLauncher {
     }
 
     /**
-     * Системные свойства изоляции для прежнего интерфейса: папка приложения всегда, префикс узла реестра — если задан.
+     * Системные свойства ранней изоляции: папка приложения всегда, префикс узла реестра — если задан.
      *
      * @param request параметры запуска
      * @return опции {@code -D…}
@@ -166,10 +157,6 @@ public final class ClientLauncher {
         if (request.selftestOut() != null) {
             args.add(ARG_SELFTEST_OUT);
             args.add(request.selftestOut().toString());
-        }
-        if (request.ui() != null) {
-            args.add(ARG_UI);
-            args.add(request.ui().toLowerCase(Locale.ROOT));
         }
         args.addAll(request.extraArguments());
         args.addAll(target.arguments());

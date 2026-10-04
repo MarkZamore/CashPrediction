@@ -1,5 +1,7 @@
 package ru.cashprediction.web;
 
+import ru.cashprediction.core.text.Texts;
+
 import com.sun.net.httpserver.HttpServer;
 import java.io.IOException;
 import java.net.BindException;
@@ -42,9 +44,9 @@ public final class PortFinder {
             return HttpServer.create(new InetSocketAddress(host, preferred), 0);
         } catch (BindException e) {
             if (strict || preferred == 0) {
-                throw new BindException("Порт " + preferred + " занят: " + e.getMessage());
+                throw new BindException(Texts.get("app.web.portBusy", preferred, e.getMessage()));
             }
-            log.info("Порт " + preferred + " занят другим процессом, выбирается свободный порт");
+            log.info(Texts.get("app.web.portFallback", preferred));
             return HttpServer.create(new InetSocketAddress(host, 0), 0);
         }
     }
@@ -67,7 +69,7 @@ public final class PortFinder {
             }
             return port;
         } catch (NumberFormatException e) {
-            throw new IllegalArgumentException("Некорректный порт в свойстве " + PORT_PROPERTY + ": «" + text + "»");
+            throw new IllegalArgumentException(Texts.get("app.web.invalidPort", PORT_PROPERTY, text));
         }
     }
 

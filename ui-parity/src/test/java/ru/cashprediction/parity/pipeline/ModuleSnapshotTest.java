@@ -55,7 +55,7 @@ class ModuleSnapshotTest {
         Path dependency = root.resolve("maven/dependency.jar");
         for (Path file : List.of(one, two, dependency)) { Files.createDirectories(file.getParent()); Files.writeString(file, file.toString()); }
         var target = new ClientTarget("fx", List.of(one, two, dependency), "core", "Main", List.of("javafx.controls"),
-                List.of("-Dprobe=true"), List.of("--ui", "core"));
+                List.of("-Dprobe=true"), List.of("--registry", "memory"));
         var snapshot = ModuleSnapshot.capture(target, root.resolve("snapshot"), project);
         assertEquals(dependency, snapshot.modulePath().get(2));
         assertNotEquals(snapshot.modulePath().get(0), snapshot.modulePath().get(1));

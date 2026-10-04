@@ -18,6 +18,10 @@
   <artifactId>cashprediction-ui-swing</artifactId>
   <name>CashPrediction Swing</name>
 
+  <properties>
+    <parity.reports.directory>${project.build.directory}/surefire-reports</parity.reports.directory>
+  </properties>
+
   <dependencies>
     <dependency>
       <groupId>ru.cashprediction</groupId>
@@ -33,6 +37,14 @@
 
   <build>
     <plugins>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-surefire-plugin</artifactId>
+        <configuration>
+          <!-- Native rescue gate сохраняет свежий XML отдельно от обычного install. -->
+          <reportsDirectory>${parity.reports.directory}</reportsDirectory>
+        </configuration>
+      </plugin>
       <plugin>
         <groupId>org.codehaus.mojo</groupId>
         <artifactId>exec-maven-plugin</artifactId>

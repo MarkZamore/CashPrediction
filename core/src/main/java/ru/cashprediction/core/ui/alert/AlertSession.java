@@ -72,21 +72,38 @@ public final class AlertSession implements StatefulWindow {
         this.host = Objects.requireNonNull(host, "host");
     }
 
+    /**
+     * Возвращает идентификатор сообщения, заданный при создании сеанса.
+     * @return идентификатор окна для записи и восстановления сессии
+     */
     @Override
     public String windowId() {
         return windowId;
     }
 
+    /**
+     * Возвращает тип восстанавливаемого сообщения из общего словаря окон.
+     * @return {@link WindowType#ALERT}
+     */
     @Override
     public WindowType windowType() {
         return WindowType.ALERT;
     }
 
+    /**
+     * Сообщает о модальности окна сообщения относительно его владельца.
+     * @return {@code true}
+     */
     @Override
     public boolean modal() {
         return true;
     }
 
+    /**
+     * Возвращает владельца сообщения; пустой или отсутствующий владелец при создании
+     * заменяется идентификатором главного окна.
+     * @return идентификатор окна-владельца
+     */
     @Override
     public String ownerId() {
         return ownerId;
@@ -100,6 +117,11 @@ public final class AlertSession implements StatefulWindow {
     /** @return контроллер сеанса */
     public Host host() {
         return host;
+    }
+
+    /** @return границы исходного снимка для первого показа, либо {@code null} для нового сообщения */
+    public WindowBounds restoredBounds() {
+        return bounds;
     }
 
     /**
@@ -146,6 +168,12 @@ public final class AlertSession implements StatefulWindow {
         }
     }
 
+    /**
+     * Собирает снимок модального сообщения с назначением и идентификатором цели из спецификации.
+     * Использует границы привязанного окна, если они доступны, иначе сохранённые границы.
+     * Значений полей у сообщения нет. Вызывается в потоке контроллера.
+     * @return состояние окна для записи сессии
+     */
     @Override
     public WindowState captureState() {
         WindowBounds current = handle == null || handle.bounds() == null ? bounds : handle.bounds();
@@ -153,6 +181,13 @@ public final class AlertSession implements StatefulWindow {
                 Map.of(WindowType.CONTEXT_PURPOSE, spec.purpose(), WindowType.CONTEXT_TARGET_ID, spec.targetId()), Map.of());
     }
 
+    /**
+     * Запоминает границы из снимка для первого показа, не меняя идентификаторы и спецификацию.
+     * Назначение и цель сообщения восстанавливает фабрика до создания этого сеанса.
+     * Вызывается в потоке контроллера.
+     * @param state снимок сообщения, не {@code null}; тип может отсутствовать
+     * @throws IllegalArgumentException если указан тип, отличный от {@link WindowType#ALERT}
+     */
     @Override
     public void applyState(WindowState state) {
         Objects.requireNonNull(state, "state");

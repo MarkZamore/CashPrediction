@@ -20,9 +20,16 @@ public final class SwingChart extends JComponent {
     ru.cashprediction.core.ui.dump.UiDump.Chart drawn;
     private ChartHover hover;
     private final SwingUiPort port;
+    private final SwingPaintContext paintContext;
 
     /** Создаёт область графика с наведением и контекстным меню. */
     public SwingChart(SwingUiPort port) {
+        this(port, null);
+    }
+
+    /** Привязывает настоящий chart callback; полный census примитивов остаётся неподдержанным. */
+    SwingChart(SwingUiPort port, SwingPaintContext paintContext) {
+        this.paintContext = paintContext;
         this.port = port; setFocusable(true); SwingLook.id(this, "chart");
         // JavaFX: Tooltip → Swing: ToolTipManager → Web: div.tooltip
         ToolTipManager.sharedInstance().registerComponent(this);
@@ -51,6 +58,11 @@ public final class SwingChart extends JComponent {
             }
         };
         addMouseListener(mouse); addMouseMotionListener(mouse);
+    }
+
+    /** Наблюдает полный paint графика, включая прежний dormant offscreen путь без screen certification. */
+    @Override public void paint(Graphics graphics) {
+        if (paintContext == null) super.paint(graphics); else paintContext.paint(this, graphics, super::paint);
     }
 
     /** Применяет новую модель сцены. */

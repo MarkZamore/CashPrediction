@@ -83,6 +83,12 @@ public static class LauncherManifest {
 $element = '<ws2019:activeCodePage xmlns:ws2019="http://schemas.microsoft.com/SMI/2019/WindowsSettings">UTF-8</ws2019:activeCodePage>'
 $launchers = @(Get-ChildItem -LiteralPath $ImageDir -Filter '*.exe' -File)
 if ($launchers.Count -eq 0) { throw "В $ImageDir нет exe-лаунчеров." }
+# Проверочный стенд использует именно bundled Java, которая также должна запускаться из Unicode-пути.
+# Меняется только runtime app-image, не установленный JDK разработчика.
+foreach ($name in 'java.exe','javaw.exe') {
+    $bundled = Join-Path $ImageDir ('runtime/bin/' + $name)
+    if (Test-Path -LiteralPath $bundled -PathType Leaf) { $launchers += Get-Item -LiteralPath $bundled }
+}
 
 foreach ($exe in $launchers) {
     # jpackage делает лаунчеры доступными только для чтения; на время записи атрибут снимается.
@@ -92,6 +98,7 @@ foreach ($exe in $launchers) {
         $language = [uint16]0
         $manifest = [LauncherManifest]::Read($exe.FullName, [ref]$language)
         if ($manifest -match 'activeCodePage') {
+            if ($manifest -notmatch 'activeCodePage[^>]*>UTF-8<') { throw "$($exe.Name): существующая кодовая страница не UTF-8." }
             Write-Host "$($exe.Name): UTF-8 уже включён."
             continue
         }

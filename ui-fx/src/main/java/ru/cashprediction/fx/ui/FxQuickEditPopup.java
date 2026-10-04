@@ -79,6 +79,7 @@ public final class FxQuickEditPopup implements WindowHandle {
         header.setText(view.header()); FxStyles.text(header, ColorToken.TEXT_PRIMARY, FontToken.BASE);
         header.setFont(javafx.scene.text.Font.font(FontToken.BASE.primaryFamily(), javafx.scene.text.FontWeight.BOLD, FontToken.BASE.sizePx()));
         problem.setText(view.problem().display()); FxStyles.text(problem, view.problem().color(), ru.cashprediction.core.ui.token.FontToken.SMALL);
+        FxIcons.decorate(problem);
         problem.setVisible(!problem.getText().isEmpty()); problem.setManaged(problem.isVisible());
         fields.forEach((id, f) -> f.update(view.fields().get(id), view));
     }

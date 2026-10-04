@@ -33,10 +33,38 @@ public final class TextInputForms {
     public static final String PURPOSE_CUSTOM_MONTHS = "customMonths";
     public static final String PURPOSE_CUSTOM_CURRENCY = "customCurrency";
     private TextInputForms() { }
+    /**
+     * Создаёт форму ввода имени плана с проверкой допустимости имени.
+     *
+     * @return новая логика переименования, возвращающая строку имени
+     */
     public static FormLogic rename() { return new Single(PURPOSE_RENAME); }
+    /**
+     * Создаёт форму сверки фактического остатка на текущую дату.
+     *
+     * @return новая логика ввода суммы, возвращающая {@link Money}
+     */
     public static FormLogic reconcile() { return new Single(PURPOSE_RECONCILE); }
+    /**
+     * Создаёт форму ввода целого числа месяцев в диапазоне от 1 до 600.
+     *
+     * @return новая логика выбора периода, возвращающая {@link Integer}
+     */
     public static FormLogic customMonths() { return new Single(PURPOSE_CUSTOM_MONTHS); }
+    /**
+     * Создаёт форму собственного обозначения валюты с проверкой длины и запрещённых символов.
+     *
+     * @return новая логика ввода валюты, возвращающая строку обозначения
+     */
     public static FormLogic customCurrency() { return new Single(PURPOSE_CUSTOM_CURRENCY); }
+    /**
+     * Выбирает логику одно-полевой формы по сохранённому назначению при восстановлении окна.
+     *
+     * @param purpose одно из назначений переименования, сверки, ввода месяцев или валюты
+     * @return новый экземпляр соответствующей логики
+     * @throws IllegalArgumentException если назначение неизвестно или равно {@code null};
+     *                                  сообщение содержит ключ {@code restore.warn.unknownPurpose}
+     */
     public static FormLogic forPurpose(String purpose) {
         return switch (purpose == null ? "" : purpose) {
             case PURPOSE_RENAME -> rename(); case PURPOSE_RECONCILE -> reconcile(); case PURPOSE_CUSTOM_MONTHS -> customMonths(); case PURPOSE_CUSTOM_CURRENCY -> customCurrency();
@@ -48,10 +76,24 @@ public final class TextInputForms {
     private static final class Single implements FormLogic {
         private final String purpose;
         private Single(String purpose) { this.purpose = purpose; }
+        /**
+         * Описывает одно поле и кнопки согласно назначению формы, сохраняя назначение в спецификации.
+         * Поле получает начальный фокус, подтверждение назначается кнопкой Enter.
+         *
+         * @param context контекст для заголовка и типа поля
+         * @return спецификация ввода имени, суммы, месяцев или обозначения валюты
+         */
         @Override public FormSpec spec(FormContext context) {
             return new FormSpec(purpose, WindowType.TEXT_INPUT, purpose, Presentation.TEXT_INPUT, title(context), "", 460, true, false, true,
                     List.of(new FormPage("main", List.of(new FormRow.Field(FieldSpecs.focused(field(context)))))), buttons(), okId());
         }
+        /**
+         * Заполняет поле текущим именем или валютой плана, прогнозным остатком на сегодня
+         * либо числом 12 для месяцев. При недоступном прогнозе сумма остаётся пустой.
+         *
+         * @param context контекст с планом, прогнозом и текущей датой
+         * @return неизменяемая карта с начальным значением {@code value}
+         */
         @Override public Map<String, String> defaults(FormContext context) {
             return Map.of("value", switch (purpose) {
                 case PURPOSE_RENAME -> context.app().document().plan().name();
@@ -61,10 +103,30 @@ public final class TextInputForms {
                 default -> "";
             });
         }
+        /**
+         * Проверяет значение согласно назначению: имя плана, денежную сумму, диапазон месяцев
+         * или непустую валюту длиной до 10 кодовых точек без вертикальной черты и переводов строк.
+         * Форматирует отображаемое поле и блокирует подтверждение при ошибке.
+         *
+         * @param state текущее значение поля
+         * @param context контекст для пояснения и типа поля
+         * @return представление с локализованной ошибкой либо без проблемы
+         */
         @Override public FormView evaluate(FormState state, FormContext context) {
             Optional<String> error = validation(state.value("value"));
             return new FormView(0, 0, header(context), Map.of("value", FieldView.of(FieldCodec.display(field(context).kind(), state.value("value")))), error.map(Problem::error).orElse(Problem.NONE), Map.of(okId(), error.isEmpty() ? ru.cashprediction.core.ui.form.ButtonView.ENABLED : ru.cashprediction.core.ui.form.ButtonView.DISABLED), List.of(), List.of(), "", false);
         }
+        /**
+         * При отмене закрывает форму без результата; для любой другой кнопки повторно проверяет значение.
+         * Ошибка оставляет форму открытой с пояснением. Корректное значение возвращает как сумму,
+         * целое число месяцев или строку имени/валюты с удалёнными краевыми пробелами.
+         * Изменение плана по результату выполняет вызывающий код.
+         *
+         * @param buttonId идентификатор нажатой кнопки
+         * @param state текущее значение поля
+         * @param context контекст формы
+         * @return закрытие с типизированным результатом или {@code null}, либо сохранение формы с ошибкой
+         */
         @Override public FormOutcome onButton(String buttonId, FormState state, FormContext context) {
             if (ButtonSpecs.CANCEL.equals(buttonId)) return new FormOutcome.Close(null);
             Optional<String> error = validation(state.value("value"));

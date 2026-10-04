@@ -50,22 +50,19 @@ public final class SwingFieldWidgets {
             input = switch (spec.kind()) {
                 case CHECK -> new JCheckBox(spec.label());
                 case CHOICE, EDITABLE_CHOICE -> {
-                    JComboBox<Option> combo = new JComboBox<>(); combo.setEditable(spec.kind() == FieldKind.EDITABLE_CHOICE);
+                    JComboBox<Option> combo = new JComboBox<>(); SwingIcons.arrows(combo); combo.setEditable(spec.kind() == FieldKind.EDITABLE_CHOICE);
                     if (combo.isEditable()) combo.setEditor(new javax.swing.plaf.basic.BasicComboBoxEditor() {
                         /** Показывает текст варианта, а не технический record.toString. */
                         @Override public void setItem(Object item) { super.setItem(item instanceof Option option ? option.text() : item); }
                     });
-                    combo.setRenderer(new OptionRenderer()); yield combo;
+                    combo.setRenderer(new OptionRenderer(false)); yield combo;
                 }
-                case LIST, PREVIEW -> { JList<Option> list = new JList<>(); list.setVisibleRowCount(Math.max(2, spec.textRows())); list.setSelectionMode(ListSelectionModel.SINGLE_SELECTION); list.setCellRenderer(new OptionRenderer()); yield list; }
+                case LIST, PREVIEW -> { JList<Option> list = new JList<>(); list.setVisibleRowCount(Math.max(2, spec.textRows())); list.setSelectionMode(ListSelectionModel.SINGLE_SELECTION); list.setCellRenderer(new OptionRenderer(spec.kind() == FieldKind.PREVIEW)); yield list; }
                 case RADIO -> new JPanel();
                 case MULTILINE -> { JTextArea text = new JTextArea(Math.max(2, spec.textRows()), Math.max(16, spec.columns())); text.setLineWrap(true); text.setWrapStyleWord(true); yield text; }
                 case RESULT_LINES -> new JPanel();
                 case BUTTON -> new JButton(spec.label());
-                case SPINNER -> {
-                    JSpinner spinner = new JSpinner(new SpinnerNumberModel(spec.min(), spec.min(), spec.max(), Math.max(1, spec.step())));
-                    spinner.setEditor(new JSpinner.NumberEditor(spinner, "0")); yield spinner;
-                }
+                case SPINNER -> spinner(spec);
                 default -> { JTextField text = new JTextField(Math.max(8, spec.columns())); if (spec.kind() == FieldKind.MONEY) text.setHorizontalAlignment(SwingConstants.RIGHT); yield text; }
             };
             if (!(input instanceof JTextArea || input instanceof JList<?> || input instanceof JPanel)) {
@@ -78,7 +75,7 @@ public final class SwingFieldWidgets {
             wrapper.add(controlWithWidth(control, spec.widthPx()), BorderLayout.CENTER);
             if (!spec.suffix().isEmpty()) wrapper.add(new JLabel(spec.suffix()), BorderLayout.EAST);
             if (spec.kind() == FieldKind.DATE) {
-                JButton calendar = new JButton("▦"); SwingLook.tooltip(calendar, UiText.get("calendar.button.tip"));
+                JButton calendar = new JButton("▦"); SwingIcons.decorate(calendar); SwingLook.tooltip(calendar, UiText.get("calendar.button.tip"));
                 calendar.addActionListener(e -> {
                     LocalDate selected = FieldCodec.parseDate(raw()).orElse(null);
                     // JavaFX: Popup → Swing: SwingCalendarPopup → Web: div календаря
@@ -139,7 +136,11 @@ public final class SwingFieldWidgets {
             }
             if (view.options() != null && !options.equals(view.options())) options(view.options());
             if (input instanceof JSpinner spinner && spinner.getModel() instanceof SpinnerNumberModel range) {
+                // Изменение границ тоже уведомляет NumberEditor: возвращаем исходный текст до применения эха ядра.
+                JTextField editor = ((JSpinner.DefaultEditor) spinner.getEditor()).getTextField();
+                String raw = editor.getText();
                 range.setMinimum(view.min() == null ? spec.min() : view.min()); range.setMaximum(view.max() == null ? spec.max() : view.max());
+                if (!editor.getText().equals(raw)) editor.setText(raw);
             }
             if (view.tooltip() != null) SwingLook.tooltip(input, view.tooltip());
             if (view.value() != null && !pendingText && (sent == null || raw().equals(sent))) {
@@ -222,7 +223,14 @@ public final class SwingFieldWidgets {
             }
             if (input instanceof JCheckBox check) check.addActionListener(e -> send(true));
             if (input instanceof JComboBox<?> combo) combo.addActionListener(e -> send(true));
-            if (input instanceof JSpinner spinner) spinner.addChangeListener(e -> send(true));
+            if (input instanceof JSpinner spinner) spinner.addChangeListener(e -> {
+                if (applying || form.applying || form.closed) return;
+                // Слушатели модели вызываются в обратном порядке: редактор должен обновиться до отправки стрелки ядру.
+                boolean before = applying; applying = true;
+                try { ((JSpinner.DefaultEditor) spinner.getEditor()).stateChanged(e); }
+                finally { applying = before; }
+                send(true);
+            });
             if (input instanceof JButton button) button.addActionListener(e -> form.session.buttonPressed(spec.id()));
             if (input instanceof JList<?> list) {
                 list.addListSelectionListener(e -> { if (!applying && !e.getValueIsAdjusting()) { if (spec.kind() == FieldKind.PREVIEW) form.session.previewSelected(list.getSelectedIndex(), false); else send(true); } });
@@ -267,6 +275,20 @@ public final class SwingFieldWidgets {
     /** Создаёт виджет для описанного поля. */
     public static Binding create(FieldSpec spec, SwingFormDialog form) { return new Binding(spec, form); }
 
+    /** Создаёт числовое поле, сохраняя некорректный текст при потере фокуса для валидации и снимка ядра. */
+    static JSpinner spinner(FieldSpec spec) {
+        // Явные Long выбирают объектный конструктор: примитивный long иначе расширяется до double,
+        // и NumberEditor меняет тип числа при commit, вызывая лишнее эхо старого значения.
+        JSpinner spinner = new JSpinner(new SpinnerNumberModel(Long.valueOf(spec.min()),
+                Long.valueOf(spec.min()), Long.valueOf(spec.max()), Long.valueOf(Math.max(1, spec.step()))));
+        SwingIcons.arrows(spinner);
+        JSpinner.NumberEditor editor = new JSpinner.NumberEditor(spinner, "0");
+        // COMMIT сохраняет ошибочный ввод, а корректное число по-прежнему попадает в модель и работает со стрелками.
+        editor.getTextField().setFocusLostBehavior(JFormattedTextField.COMMIT);
+        spinner.setEditor(editor);
+        return spinner;
+    }
+
     /** Ограничивает настоящий контрол общей пиксельной шириной, не растягивая его вместе с колонкой формы. */
     static JComponent controlWithWidth(JComponent control, int widthPx) {
         if (widthPx == 0) return control;
@@ -289,14 +311,18 @@ public final class SwingFieldWidgets {
     }
 
     /** Рендерер выбора не показывает техническое значение Option.value. */
-    private static final class OptionRenderer extends DefaultListCellRenderer {
+    static final class OptionRenderer extends DefaultListCellRenderer {
+        private final boolean preview;
+        /** Только системный предпросмотр дат содержит декоративные символы; названия вариантов остаются текстом. */
+        OptionRenderer(boolean preview) { this.preview = preview; SwingIcons.decorate(this); }
         /** Показывает локализованный текст варианта. */
         @Override public Component getListCellRendererComponent(JList<?> list, Object value, int index, boolean selected, boolean focused) {
             Option option = value instanceof Option o ? o : null;
             super.getListCellRendererComponent(list, option == null ? value : option.text(), index, selected, focused);
+            putClientProperty("cp.decorative", preview);
             if (option != null && option.bold()) setFont(getFont().deriveFont(Font.BOLD));
             // JavaFX: Tooltip → Swing: JToolTip → Web: div.tooltip
-            if (option != null) SwingLook.tooltip(this, option.detail()); return this;
+            SwingLook.tooltip(this, option == null ? "" : option.detail()); return this;
         }
     }
 }

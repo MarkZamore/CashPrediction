@@ -39,9 +39,40 @@ jobs:
           if (@($repositoryReactor.project.modules.module) -notcontains 'repository-doc-audits') {
             throw 'Обязательный модуль repository-doc-audits отсутствует в reactor.'
           }
+          # Постоянные негативные проверки выполняются до дорогих GUI/portable-прогонов.
+          & .github/scripts/Test-PortableSafety.ps1
+          & .github/scripts/Test-GateOutcomePayload.ps1
+          & .github/scripts/Test-GateReportExport.ps1
+          & .github/scripts/Test-ReleaseSafety.ps1
+          # Общий каталог иконок проверяется до GUI: ошибки источников не маскируются дампами.
+          & dist/scripts/Test-Icon-Source.ps1
+          & dist/scripts/Test-Icon-SourceFixtures.ps1
           # Все тесты приложения и документов; потеря любого обязательного документа ломает сборку.
           & mvn -B -ntp install
           if ($LASTEXITCODE -ne 0) { throw "Сборка или тесты не прошли." }
+
+      - name: Actual UI gates (S4, blocking)
+        timeout-minutes: 90
+        shell: pwsh
+        run: |
+          & .github/scripts/Invoke-UiGates.ps1 -Mode UI
+
+      - name: Actual recovery gates (S4, blocking)
+        timeout-minutes: 60
+        shell: pwsh
+        run: |
+          & .github/scripts/Invoke-UiGates.ps1 -Mode E2E
+
+      - name: Complete UI and E2E profile lifecycles
+        timeout-minutes: 30
+        shell: pwsh
+        run: |
+          # Проверяем полный reactor/lifecycle дополнительно к строгим реальным gates выше.
+          # Пропуски opt-in в обычном профиле не заменяют их обязательное выполнение в gates.
+          foreach ($profile in 'ui-tests', 'e2e') {
+            & mvn -B -ntp "-P$profile" verify
+            if ($LASTEXITCODE -ne 0) { throw "Lifecycle $profile не прошёл." }
+          }
 
       - name: Portable build
         shell: pwsh
@@ -51,19 +82,55 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "Портативная сборка не собралась." }
 
       - name: Verify portable build
-        timeout-minutes: 20
+        timeout-minutes: 30
         shell: pwsh
         run: |
           & "$env:GITHUB_WORKSPACE\.github\scripts\Test-Portable.ps1" `
             -PortableDir "$env:GITHUB_WORKSPACE\dist\target\dist\CashPrediction" `
             -WorkDir "$env:RUNNER_TEMP\portable test" `
+            -EvidenceRoot "$env:RUNNER_TEMP\safe-portable-evidence" `
+            -Parity `
             -CleanRegistry
           if ($LASTEXITCODE -ne 0) { throw "Проверка портативной сборки не прошла." }
 
+      - name: Portable launch evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: portable-launch-evidence
+          path: ${{ runner.temp }}/safe-portable-evidence/**
+          if-no-files-found: ignore
+
+      - name: Sanitize default test reports
+        if: always()
+        shell: pwsh
+        run: |
+          # Исходные Surefire XML/TXT могут содержать секрет в сообщении исключения.
+          . .github/scripts/Protect-GateText.ps1
+          $safeReports = Join-Path $env:RUNNER_TEMP 'safe-test-reports'
+          New-Item -ItemType Directory -Force -Path $safeReports | Out-Null
+          foreach ($file in Get-ChildItem -LiteralPath $env:GITHUB_WORKSPACE -Recurse -File |
+              Where-Object { $_.Directory.Name -eq 'surefire-reports' -and
+                ($_.Extension -eq '.txt' -or $_.Name -like 'TEST-*.xml') }) {
+            $relative = [IO.Path]::GetRelativePath($env:GITHUB_WORKSPACE, $file.FullName)
+            $destination = Join-Path $safeReports $relative
+            New-Item -ItemType Directory -Force -Path (Split-Path $destination) | Out-Null
+            Protect-GateText (Get-Content -LiteralPath $file.FullName -Raw -Encoding utf8) |
+              Set-Content -LiteralPath $destination -Encoding utf8
+          }
+
       - name: Test reports
-        if: failure()
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: surefire-reports
-          path: '**/target/surefire-reports/*.txt'
+          path: ${{ runner.temp }}/safe-test-reports/**
           if-no-files-found: ignore
+
+      - name: Actual UI and recovery evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: s4-gate-evidence
+          path: ui-parity/target/gates/**/upload/**
+          if-no-files-found: error

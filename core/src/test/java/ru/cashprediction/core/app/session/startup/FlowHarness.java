@@ -18,6 +18,8 @@ import java.util.function.UnaryOperator;
 import ru.cashprediction.core.app.*;
 import ru.cashprediction.core.document.*;
 import ru.cashprediction.core.model.Plan;
+import ru.cashprediction.core.service.plan.LocalPlanCommands;
+import ru.cashprediction.core.service.plan.PlanCommands;
 import ru.cashprediction.core.session.*;
 import ru.cashprediction.core.ui.alert.AlertSpec;
 
@@ -32,6 +34,8 @@ final class FlowHarness {
     final List<Runnable> scheduled = new ArrayList<>();
     final AppEnvironment environment;
     final PlanDocument document = new PlanDocument(Plan.empty("seed", TODAY), null, () -> TODAY);
+    /** Единственная служба команд и ревизий этого документа. */
+    final PlanCommands planCommands = new LocalPlanCommands(document);
     final ExternalChangeGuard externalChanges = new ExternalChangeGuard();
     final FlowContext context;
     final UiPort port;
@@ -56,7 +60,7 @@ final class FlowHarness {
     }
 
     FlowHarness(Path home, LaunchOptions.RecoveryAnswer answer) {
-        LaunchOptions options = new LaunchOptions(home, null, true, TODAY, LaunchOptions.UiMode.CORE,
+        LaunchOptions options = new LaunchOptions(home, null, true, TODAY,
                 null, null, answer, false, true, true, List.of());
         environment = new AppEnvironment(options, home, home.resolve("CashMemory"),
                 AppClock.of(Clock.fixed(NOW, ZoneOffset.UTC), TODAY));
@@ -109,6 +113,8 @@ final class FlowHarness {
             case "port" -> port;
             case "environment" -> environment;
             case "document" -> document;
+            case "planCommands" -> planCommands;
+            case "planStorage" -> externalChanges.storage();
             case "externalChanges" -> externalChanges;
             case "state" -> new AppState(1, profile, TODAY, environment.cashMemory(), null,
                     new DocumentView(document.plan(), document.file().orElse(null), document.isDirty(),

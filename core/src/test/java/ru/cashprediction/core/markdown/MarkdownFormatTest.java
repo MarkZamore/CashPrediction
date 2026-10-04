@@ -52,7 +52,7 @@ class MarkdownFormatTest {
     @Test
     void unparsedMarkAndFormatValue() {
         assertEquals("(не разобрано, строка 27: | r9 | x |)", MarkdownFormat.unparsedMark(27, "  | r9 | x |  "));
-        assertEquals("CashPrediction 1", MarkdownFormat.formatValue());
+        assertEquals("CashPrediction 2", MarkdownFormat.formatValue());
         assertEquals("ID", MarkdownFormat.COL_ID);
     }
 

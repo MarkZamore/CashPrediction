@@ -273,6 +273,22 @@ public final class SessionRecorder {
     }
 
     /**
+     * Тихо сохраняет последний захваченный снимок при завершении JVM.
+     * Не обращается к UI и не вызывает слушателей статусов, которые могут ставить задачи в остановленную очередь.
+     * Не меняет маркер на closed; до старта, после чистого выхода и при отключённой записи ничего не делает.
+     * Ограничено ожидание блокировки рекордера, но не время дискового IO самих хранилищ.
+     */
+    public void saveShutdownSnapshot() {
+        try {
+            if (!started || closed || !enabled) return;
+            Captured captured = lastCaptured;
+            if (captured != null) write(captured, true, true, false);
+        } catch (Throwable ignored) {
+            // Вторичный сбой записи не должен мешать завершению JVM.
+        }
+    }
+
+    /**
      * Корректное завершение по явному выходу пользователя: таймеры выключаются, снимок пишется,
      * маркер становится {@code closed}, дальнейшие записи отбрасываются, планировщик останавливается.
      */
@@ -550,6 +566,11 @@ public final class SessionRecorder {
      * @param bounded  ждать блокировку не дольше {@link #SAVE_NOW_WAIT} (для {@link #saveNow()})
      */
     private void write(Captured captured, boolean force, boolean bounded) {
+        write(captured, force, bounded, true);
+    }
+
+    /** Общая запись; shutdown-путь не уведомляет UI-слушателей после сохранения данных. */
+    private void write(Captured captured, boolean force, boolean bounded, boolean notifyListeners) {
         List<StoreStatus> statuses = new ArrayList<>();
         boolean locked = false;
         try {
@@ -596,7 +617,7 @@ public final class SessionRecorder {
             }
         }
         // Слушатели — вне блокировки, чтобы медленный слушатель не задерживал saveNow().
-        fire(statuses);
+        if (notifyListeners) fire(statuses);
     }
 
     private void writeMarker() {

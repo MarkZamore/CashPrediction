@@ -20,7 +20,7 @@ class SwingTableFocusTest {
         SwingUiPort[] ports = new SwingUiPort[1]; AppController[] apps = new AppController[1];
         SwingUtilities.invokeAndWait(() -> {
             SwingLook.install();
-            var env = AppEnvironment.from(LaunchOptions.parse("--home", directory.toString(), "--registry", "memory", "--today", "2026-09-13", "--selftest", "s13-undo-redo", "--ui", "core"));
+            var env = AppEnvironment.from(LaunchOptions.parse("--home", directory.toString(), "--registry", "memory", "--today", "2026-09-13", "--selftest", "s13-undo-redo"));
             ports[0] = new SwingUiPort(env); apps[0] = new AppController(ports[0], env); ports[0].bind(apps[0]); apps[0].start();
         });
         try {

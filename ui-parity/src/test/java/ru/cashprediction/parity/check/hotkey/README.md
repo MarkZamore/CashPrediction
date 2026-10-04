@@ -254,7 +254,7 @@ dump after
 
 Пример показывает принцип; сочетание в каждом опыте своё. Каждый запуск
 получает свежую папку CashMemory, UUID узла `ru/cashprediction/selftest/...`,
-фиксированную дату 2026-09-13 и `--ui core`. `ScenarioFixtures`,
+фиксированную дату 2026-09-13; интерфейс ядра используется по умолчанию. `ScenarioFixtures`,
 `ClientLauncher`, `WebScenarioSession`, `CdpTestApi`, `UiTestDriver` и
 `TestApiBridge` переиспользуются без изменений. Процесс и потомки закрываются,
 тестовый узел удаляется, реальные session/fx и session/swing сравниваются

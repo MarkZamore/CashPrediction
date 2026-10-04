@@ -10,6 +10,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.function.Predicate;
 import ru.cashprediction.core.app.AppState;
 import ru.cashprediction.core.app.DocumentView;
 import ru.cashprediction.core.app.StatusMessages;
@@ -172,9 +173,10 @@ public final class StatusBuilder {
         long count = 0;
         if (forecast != null) {
             LocalDate end = state.view().periodEnd(forecast.plan(), forecast.anchor());
+            Predicate<ForecastRow> rowFilter = state.view().rowFilter();
             for (ForecastRow row : forecast.rows()) {
                 boolean inPeriod = row.origin() == Origin.START || !row.date().isAfter(end);
-                if (inPeriod && state.view().accepts(row)) {
+                if (inPeriod && rowFilter.test(row)) {
                     count++;
                 }
             }

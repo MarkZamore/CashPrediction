@@ -30,7 +30,7 @@ public final class VisualRun {
         String node = RegistryNodeCleaner.newSelftestNode();
         var sessions = RegistryNodeCleaner.snapshotRealSessionNodes();
         LaunchRequest request = new LaunchRequest(client, checkpoint.scenario(), run.resolve("home"), node,
-                LaunchRequest.PARITY_TODAY, script.toString(), run.resolve("out"), "core", List.of(), List.of());
+                LaunchRequest.PARITY_TODAY, script.toString(), run.resolve("out"), List.of(), List.of());
         var failures = new ArrayList<String>();
         Path log = request.selftestOut().resolve("selftest.log");
         Path png = request.selftestOut().resolve(checkpoint.script().name()).resolve(checkpoint.step() + ".png");

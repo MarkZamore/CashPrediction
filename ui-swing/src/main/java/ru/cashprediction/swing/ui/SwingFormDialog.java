@@ -40,8 +40,9 @@ public class SwingFormDialog implements WindowHandle {
     /** Создаёт каркас, не подтверждая показ раньше реального события окна. */
     public SwingFormDialog(SwingUiPort port, FormSession session, FormSpec spec, FormView initial, Placement placement) {
         this.port = port; this.session = session; this.spec = spec; this.placement = placement;
-        // JavaFX: Dialog<R> → Swing: JDialog → Web: dialog
+        // JavaFX: Dialog<R> → Swing: SwingFormDialog (JDialog) → Web: dialog
         dialog = new JDialog(port.owner(placement.ownerId()), spec.windowTitle(), spec.modal() ? Dialog.ModalityType.APPLICATION_MODAL : Dialog.ModalityType.MODELESS);
+        dialog.setIconImage(SwingIcons.application());
         dialog.setDefaultCloseOperation(WindowConstants.DO_NOTHING_ON_CLOSE); dialog.setResizable(spec.resizable());
         // §5.6.1: всплывающая форма имеет рамку, отступ 10 и промежутки 6; диалоги сохраняют §6.
         int padding = spec.presentation() == Presentation.POPUP ? 10 : 16;
@@ -55,17 +56,13 @@ public class SwingFormDialog implements WindowHandle {
         }
         // В форме без кнопок фокус может перейти с поля на настоящее содержимое всплывающего окна.
         content.setFocusable(spec.buttons().isEmpty());
-        JPanel top = new JPanel(new BorderLayout(10, 0)); top.setOpaque(false);
-        glyph.setText(spec.glyph()); glyph.setFont(SwingLook.font(FontToken.HEADER).deriveFont(26f)); glyph.setForeground(SwingLook.color(ColorToken.ACCENT));
-        header.setFont(SwingLook.font(FontToken.HEADER)); top.add(glyph, BorderLayout.WEST); top.add(header);
-        top.setBorder(BorderFactory.createMatteBorder(0, 0, 1, 0, SwingLook.color(ColorToken.BORDER)));
-        if (spec.presentation() == Presentation.POPUP) {
-            top.setBorder(null); glyph.setVisible(!spec.glyph().isEmpty());
-        }
+        SwingIcons.header(glyph, spec.glyph(), "");
+        JPanel top = heading(glyph, header, spec.presentation());
         content.add(top, BorderLayout.NORTH); content.add(body);
         JPanel bottom = new JPanel(); bottom.setLayout(new BoxLayout(bottom, BoxLayout.Y_AXIS)); bottom.setOpaque(false);
         problem.setPreferredSize(new Dimension(spec.width() - 2 * padding, 32)); bottom.add(problem);
         details.setEditable(false); details.setFont(SwingLook.font(FontToken.MONO));
+        SwingIcons.decorate(detailsLink);
         detailsLink.addActionListener(e -> { detailsExpanded = !detailsExpanded; updateDetails(); dialog.pack(); });
         detailsLink.setAlignmentX(0); detailsScroll.setAlignmentX(0); detailsScroll.setPreferredSize(new Dimension(spec.width() - 2 * padding, 230));
         bottom.add(detailsLink); bottom.add(detailsScroll);
@@ -108,7 +105,8 @@ public class SwingFormDialog implements WindowHandle {
         header.setText(SwingLook.html(view.header(), spec.presentation() == Presentation.POPUP ? innerContentWidth() : Math.max(200, spec.width() - 80))); header.putClientProperty("cp.text", view.header());
         view.fields().forEach((id, state) -> fields.getOrDefault(id, List.of()).forEach(binding -> binding.apply(state)));
         fields.values().forEach(list -> list.forEach(binding -> binding.preview(view.preview())));
-        problem.setText(SwingLook.html(view.problem().display(), spec.presentation() == Presentation.POPUP ? innerContentWidth() : spec.width() - 32)); problem.putClientProperty("cp.text", view.problem().display()); problem.setForeground(SwingLook.color(view.problem().color()));
+        problem.setForeground(SwingLook.color(view.problem().color()));
+        SwingIcons.problem(problem, view.problem().display(), spec.presentation() == Presentation.POPUP ? innerContentWidth() : spec.width() - 32);
         if (spec.presentation() == Presentation.POPUP) { problem.setPreferredSize(null); problem.setVisible(!view.problem().display().isEmpty()); }
         JButton defaultButton = null;
         for (Map.Entry<String, JButton> entry : buttons.entrySet()) {
@@ -180,6 +178,18 @@ public class SwingFormDialog implements WindowHandle {
 
     private SwingFieldWidgets.Binding field(FieldSpec field) {
         SwingFieldWidgets.Binding binding = SwingFieldWidgets.create(field, this); fields.computeIfAbsent(field.id(), unused -> new ArrayList<>()).add(binding); return binding;
+    }
+    /** Измеряет шапку по настоящему PNG и тексту, без отступов прежнего шрифтового глифа. */
+    static JPanel heading(JLabel glyph, JLabel header, Presentation presentation) {
+        JPanel top = new JPanel(new BorderLayout(DesignTokens.FORM_HGAP, 0)); top.setOpaque(false);
+        header.setFont(SwingLook.font(FontToken.HEADER)); top.add(glyph, BorderLayout.WEST); top.add(header);
+        boolean popup = presentation == Presentation.POPUP;
+        // Как в FxFormHeading: PNG определяет естественную высоту, внешние отступы принадлежат форме.
+        glyph.setBorder(BorderFactory.createEmptyBorder());
+        glyph.setVerticalAlignment(SwingConstants.CENTER);
+        if (popup) glyph.setVisible(glyph.getIcon() != null);
+        else top.setBorder(BorderFactory.createMatteBorder(0, 0, 1, 0, SwingLook.color(ColorToken.BORDER)));
+        return top;
     }
     /** Возвращает ширину текста внутри настоящей рамки и отступов содержимого. */
     private int innerContentWidth() {

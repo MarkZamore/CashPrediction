@@ -16,7 +16,8 @@ import java.util.regex.Pattern;
  * </ul>
  *
  * <p>Символ «|» внутри ячейки записывается как {@code \|} и при чтении превращается обратно в «|».
- * Перевод строки внутри ячейки невозможен (он разорвал бы таблицу), поэтому при выводе заменяется пробелом.</p>
+ * Перевод LF записывается как {@code <br>}, CR как {@code &#13;}: одна логическая ячейка остаётся
+ * на одной физической строке. Буквальные амперсанд и угловые скобки экранируются до кодирования переносов.</p>
  *
  * <p>При чтении порядок и выравнивание не важны: лишние пробелы вокруг ячеек отбрасываются,
  * ведущий и завершающий «|» необязательны для последней ячейки.</p>
@@ -24,6 +25,14 @@ import java.util.regex.Pattern;
  * <p>Класс без состояния, потокобезопасен.</p>
  */
 public final class MarkdownTable {
+
+    /** Явная версия текста ячеек; версия снимка сессии от неё не зависит. */
+    public enum CellCodec {
+        /** Старые ячейки: сущности и теги являются буквальным текстом. */
+        LITERAL_V1,
+        /** Ячейки формата 2 с однопроходным декодированием переносов и сущностей. */
+        ENCODED_V2
+    }
 
     /** Ячейка строки-разделителя: дефисы с необязательными двоеточиями выравнивания ({@code :---:}). */
     private static final Pattern SEPARATOR_CELL = Pattern.compile(":?-+:?");
@@ -51,7 +60,18 @@ public final class MarkdownTable {
      * @return список ячеек без обрамляющих «|», например {@code [r1, Зарплата, доход]}
      */
     public static List<String> parseRow(String line) {
+        return parseRow(line, CellCodec.ENCODED_V2);
+    }
+
+    /**
+     * Разбирает строку с явно выбранным кодеком плана; экранирование трубы одинаково в обеих версиях.
+     * @param line физическая строка таблицы
+     * @param codec версия ячеек, определённая до разбора таблиц
+     * @return значения ячеек без рамки и выравнивающих пробелов
+     */
+    public static List<String> parseRow(String line, CellCodec codec) {
         Objects.requireNonNull(line, "line");
+        Objects.requireNonNull(codec, "codec");
         String t = line.strip();
         List<String> cells = new ArrayList<>();
         StringBuilder cell = new StringBuilder();
@@ -65,7 +85,7 @@ public final class MarkdownTable {
                 i++;
                 endedWithPipe = false;
             } else if (c == '|') {
-                cells.add(cell.toString().strip());
+                cells.add(readCell(cell.toString().strip(), codec));
                 cell.setLength(0);
                 endedWithPipe = true;
             } else {
@@ -75,7 +95,7 @@ public final class MarkdownTable {
         }
         // Текст после последнего «|» — последняя ячейка строки, у которой забыли закрывающую рамку.
         if (!endedWithPipe) {
-            cells.add(cell.toString().strip());
+            cells.add(readCell(cell.toString().strip(), codec));
         }
         return cells;
     }
@@ -103,7 +123,7 @@ public final class MarkdownTable {
     }
 
     /**
-     * Готовит значение к записи в ячейку: экранирует «|» и заменяет переводы строк пробелами.
+     * Готовит значение к записи на одной физической строке без потери LF, CR и CRLF.
      *
      * @param value исходное значение, {@code null} считается пустым
      * @return текст ячейки
@@ -112,7 +132,27 @@ public final class MarkdownTable {
         if (value == null) {
             return "";
         }
-        return value.replace("\r\n", " ").replace('\r', ' ').replace('\n', ' ').replace("|", "\\|");
+        return value.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+                .replace("\r", "&#13;").replace("\n", "<br>").replace("|", "\\|");
+    }
+
+    /** Декодирует только токены формата за один проход; полученный текст не обрабатывается как HTML. */
+    private static String decodeCell(String encoded) {
+        StringBuilder decoded = new StringBuilder(encoded.length());
+        for (int index = 0; index < encoded.length();) {
+            if (encoded.startsWith("&amp;", index)) { decoded.append('&'); index += 5; }
+            else if (encoded.startsWith("&lt;", index)) { decoded.append('<'); index += 4; }
+            else if (encoded.startsWith("&gt;", index)) { decoded.append('>'); index += 4; }
+            else if (encoded.startsWith("&#13;", index)) { decoded.append('\r'); index += 5; }
+            else if (encoded.startsWith("<br>", index)) { decoded.append('\n'); index += 4; }
+            else decoded.append(encoded.charAt(index++));
+        }
+        return decoded.toString();
+    }
+
+    /** Старые литералы не проходят декодер нового протокола. */
+    private static String readCell(String text, CellCodec codec) {
+        return codec == CellCodec.ENCODED_V2 ? decodeCell(text) : text;
     }
 
     /**

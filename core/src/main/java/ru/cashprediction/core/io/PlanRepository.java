@@ -92,7 +92,8 @@ public final class PlanRepository {
                     continue;
                 }
                 String name = PlanMarkdownReader.nameWithoutExtension(file);
-                if (CashMemoryLayout.isReservedPlanName(name)) {
+                if (CashMemoryLayout.isReservedPlanName(name)
+                        || CashMemoryLayout.isProtectedUserPath(dir, file)) {
                     continue;
                 }
                 try {
@@ -120,6 +121,7 @@ public final class PlanRepository {
      * @throws ru.cashprediction.core.markdown.MarkdownParseException если файл не является планом
      */
     public ReadResult load(Path file, LocalDate today) throws IOException {
+        requireUserPath(file);
         ReadResult result = PlanMarkdownReader.read(file, today);
         String fileBase = PlanMarkdownReader.nameWithoutExtension(file);
         Plan plan = result.plan();
@@ -139,6 +141,7 @@ public final class PlanRepository {
      * @throws IOException если запись не удалась (прежнее содержимое файла в этом случае не изменено)
      */
     public void save(Plan plan, Path file) throws IOException {
+        requireUserPath(file);
         AtomicFiles.writeString(file, PlanMarkdownWriter.write(plan));
     }
 
@@ -146,7 +149,8 @@ public final class PlanRepository {
      * Путь к файлу для плана с данным именем в этой папке.
      *
      * @param planName имя плана
-     * @return {@code dir/<очищенное имя>.md}; к зарезервированному имени добавляется «_» ({@code settings_.md})
+     * @return {@code dir/<очищенное имя>.md}; зарезервированное имя отделяется «_»
+     * ({@code settings_.md}, для служебного префикса символ ставится в начале)
      */
     public Path pathFor(String planName) {
         return dir.resolve(fileBaseName(planName) + EXTENSION);
@@ -154,14 +158,18 @@ public final class PlanRepository {
 
     /**
      * Имя файла (без расширения) для имени плана: {@link #sanitizeFileName(String)} плюс «_» к именам
-     * служебных файлов, чтобы план «settings» не затёр настройки.
+     * служебных файлов, чтобы план «settings» не затёр настройки. Зарезервированный префикс
+     * отделяется начальным «_», иначе такой план оставался бы скрытым в списке файлов.
      *
      * @param planName имя плана
      * @return безопасное имя файла без расширения
      */
     public static String fileBaseName(String planName) {
         String base = sanitizeFileName(planName);
-        return CashMemoryLayout.isReservedPlanName(base) ? base + "_" : base;
+        if (!CashMemoryLayout.isReservedPlanName(base)) return base;
+        String escaped = base + "_";
+        // Для зарезервированного префикса суффикс не помогает: такое имя всё ещё скрывалось бы при чтении.
+        return CashMemoryLayout.isReservedPlanName(escaped) ? "_" + base : escaped;
     }
 
     /**
@@ -223,9 +231,11 @@ public final class PlanRepository {
      * @throws IOException                если чтение или запись не удались
      */
     public Path rename(Path from, String newName) throws IOException {
+        requireUserPath(from);
         String title = newName == null || newName.isBlank() ? DEFAULT_FILE_NAME
                 : newName.replace("\r\n", " ").replace('\r', ' ').replace('\n', ' ').strip();
         Path target = from.toAbsolutePath().normalize().resolveSibling(fileBaseName(title) + EXTENSION);
+        requireUserPath(target);
         String text = AtomicFiles.readString(from);
         String updated = replaceTitle(text, title);
 
@@ -240,15 +250,34 @@ public final class PlanRepository {
             if (!currentName.equals(target.getFileName().toString())) {
                 // Меняется только регистр букв: Windows считает это тем же файлом, поэтому переименовываем
                 // через промежуточное имя.
-                Path intermediate = target.resolveSibling(fileBaseName(title) + ".renaming-" + System.nanoTime() + EXTENSION);
+                // Отдельный суффикс исключает очистку: после сбоя здесь может быть единственная копия плана.
+                Path intermediate = AtomicFiles.temporaryPath(target, "rename.md");
                 Files.move(from, intermediate);
-                Files.move(intermediate, target);
+                try {
+                    Files.move(intermediate, target);
+                } catch (IOException failure) {
+                    try {
+                        Files.move(intermediate, from);
+                    } catch (IOException rollbackFailure) {
+                        failure.addSuppressed(rollbackFailure);
+                    }
+                    throw failure;
+                }
             }
             return target;
         }
         AtomicFiles.writeString(target, updated);
         Files.delete(from);
         return target;
+    }
+
+    /** Не допускает служебный файл или его реальный алиас; сообщение не читает и не раскрывает содержимое. */
+    private void requireUserPath(Path candidate) throws IOException {
+        Objects.requireNonNull(candidate, "candidate");
+        if (CashMemoryLayout.isProtectedUserPath(dir, candidate)) {
+            Path name = candidate.getFileName();
+            throw new IOException(Texts.get("diagnostic.name.reservedByApp", name == null ? "" : name.toString()));
+        }
     }
 
     /**

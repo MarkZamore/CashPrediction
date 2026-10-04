@@ -8,6 +8,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.function.Predicate;
 import ru.cashprediction.core.app.AppState;
 import ru.cashprediction.core.app.DocumentView;
 import ru.cashprediction.core.document.ViewState;
@@ -223,13 +224,14 @@ record ChartData(LocalDate from, LocalDate to, String emptyText, ColorToken empt
     private static boolean collectMarkers(Forecast forecast, ViewState view, LocalDate from, LocalDate to,
                                           String currency, List<DayMarker> out) {
         Map<LocalDate, List<ForecastRow>> byDay = new LinkedHashMap<>();
+        Predicate<ForecastRow> rowFilter = view.rowFilter();
         for (ForecastRow row : forecast.rows()) {
             // Строки прогноза упорядочены по дате (ForecastEngine), поэтому после конца диапазона искать нечего.
             if (row.date().isAfter(to)) {
                 break;
             }
             if (row.date().isBefore(from) || row.origin() == Origin.START || row.flags().skipped()
-                    || !view.accepts(row)) {
+                    || !rowFilter.test(row)) {
                 continue;
             }
             List<ForecastRow> dayRows = byDay.get(row.date());

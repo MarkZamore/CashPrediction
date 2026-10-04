@@ -1,0 +1,34 @@
+diff --git a/update-tool/pom.xml b/update-tool/pom.xml
+new file mode 100644
+--- /dev/null
++++ b/update-tool/pom.xml
+@@ -0,0 +1,25 @@
++<?xml version="1.0" encoding="UTF-8"?>
++<!-- Сборочный модуль S7, не включается в портативный образ или список лаунчеров. -->
++<project xmlns="http://maven.apache.org/POM/4.0.0"
++         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
++         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
++  <modelVersion>4.0.0</modelVersion>
++  <parent>
++    <groupId>ru.cashprediction</groupId>
++    <artifactId>cashprediction-parent</artifactId>
++    <version>1.0.0</version>
++  </parent>
++  <artifactId>cashprediction-update-tool</artifactId>
++  <name>CashPrediction Update Tool</name>
++  <dependencies>
++    <dependency>
++      <groupId>ru.cashprediction</groupId>
++      <artifactId>cashprediction-core</artifactId>
++    </dependency>
++    <dependency>
++      <groupId>org.junit.jupiter</groupId>
++      <artifactId>junit-jupiter</artifactId>
++      <scope>test</scope>
++    </dependency>
++  </dependencies>
++</project>
+
+# Для интегратора: добавить <module>update-tool</module> в reactor root pom.xml;
+# core module-info.java должен экспортировать ru.cashprediction.core.update.model
+# и ru.cashprediction.core.update.tree. Все pom.xml и module-info.java меняет ведущий.

@@ -56,7 +56,7 @@ public final class DirectoryChooserProbe {
         Files.createDirectories(home.resolve("CashMemory"));
         Files.createDirectories(out);
         var request = new LaunchRequest("fx", script.name(), home, node, LaunchRequest.PARITY_TODAY,
-                source.toAbsolutePath().toString(), out, "core", List.of(), List.of());
+                source.toAbsolutePath().toString(), out, List.of(), List.of());
         try {
             try (var client = ClientLauncher.launch(target, request)) {
                 Path log = out.resolve("selftest.log");

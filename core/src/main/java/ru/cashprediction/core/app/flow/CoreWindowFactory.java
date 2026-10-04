@@ -16,7 +16,9 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import ru.cashprediction.core.ui.forms.simple.ConfirmForms;
 import ru.cashprediction.core.text.Texts;
 import ru.cashprediction.core.app.FileChooserSpec;
-import ru.cashprediction.core.document.PlanDocument;
+import ru.cashprediction.core.service.plan.PlanCommand;
+import ru.cashprediction.core.service.plan.PlanCommandRequest;
+import java.util.UUID;
 import ru.cashprediction.core.forecast.WhatIf;
 import ru.cashprediction.core.model.*;
 import ru.cashprediction.core.io.PlanRepository;
@@ -38,7 +40,7 @@ import ru.cashprediction.core.ui.view.status.StatusLevel;
 /**
  * Открытие восстановленных окон тем же путём, что и из меню (архитектура §3.8).
  *
- * <p><b>Порядок:</b> 1) {@code FormCatalog.forRestore(state, app)} строит {@link FormRequest} (с
+ * <p><b>Порядок:</b> 1) {@code FormCatalog.forRestore(state, app, commands, storage)} строит {@link FormRequest} (с
  * {@code restored = state}) или сообщает {@code restore.warn.*} через {@code onFailed}; 2)
  * {@code context.openForm(request, Placement.restored(ownerId, state.bounds()), onResult)} — тот же путь, что у меню:
  * он сам вызывает {@code FormSession.applyState(state)} и {@code port.openForm}; 3) {@code onShown} — когда клиент
@@ -74,7 +76,7 @@ public final class CoreWindowFactory implements WindowFactory {
         WindowState prepared = state.withIds(state.id(), ownerId);
         FormRequest request;
         try {
-            request = FormCatalog.forRestore(prepared, context.state());
+            request = FormCatalog.forRestore(prepared, context.state(), context.planCommands(), context.planStorage());
         } catch (RuntimeException e) {
             onFailed.accept(reason(e));
             return;
@@ -84,10 +86,17 @@ public final class CoreWindowFactory implements WindowFactory {
             return;
         }
         FormSession session;
+        long[] expectedRevision = {context.planCommands().snapshot().revision()};
         try {
             // JavaFX: Dialog → Swing: JDialog → Web: dialog
             session = context.openForm(request, Placement.restored(prepared.ownerId(), prepared.bounds()),
-                    result -> context.edits().formResult(() -> applyResult(prepared, result)));
+                    result -> {
+                        try {
+                            context.edits().formResult(expectedRevision[0], () -> applyResult(prepared, result, expectedRevision[0]));
+                        } finally {
+                            expectedRevision[0] = context.planCommands().snapshot().revision();
+                        }
+                    });
         } catch (RuntimeException e) {
             onFailed.accept(reason(e));
             return;
@@ -104,6 +113,7 @@ public final class CoreWindowFactory implements WindowFactory {
         AtomicBoolean answered = new AtomicBoolean();
         WhatIf whatIf = context.state().view().whatIf();
         var today = context.state().today();
+        long expectedRevision = context.planCommands().snapshot().revision();
         try {
             // JavaFX: Alert → Swing: JOptionPane → Web: dialog
             context.showRestoredAlert(confirmation.spec(), state, window -> {
@@ -114,35 +124,28 @@ public final class CoreWindowFactory implements WindowFactory {
                     case "deleteRule" -> {
                         RuleId id = new RuleId(confirmation.spec().targetId());
                         context.document().plan().findRule(id).ifPresent(rule -> {
-                            if (context.edits().edit(UiText.get("undo.ruleDelete", rule.title()), "", plan -> plan.withRuleRemoved(id)))
+                            if (context.edits().execute(request(expectedRevision, UiText.get("undo.ruleDelete", rule.title()),
+                                    new PlanCommand.RemoveRule(id)), "").changed())
                                 context.status(StatusLevel.INFO, "status.msg.ruleDeleted", rule.title());
                         });
                     }
                     case "deleteOneTime" -> {
                         TxId id = new TxId(confirmation.spec().targetId());
                         context.document().plan().findOneTime(id).ifPresent(tx -> {
-                            if (context.edits().edit(UiText.get("undo.oneTimeDelete", tx.title()), "", plan -> plan.withOneTimeRemoved(id)))
+                            if (context.edits().execute(request(expectedRevision, UiText.get("undo.oneTimeDelete", tx.title()),
+                                    new PlanCommand.RemoveOneTime(id)), "").changed())
                                 context.status(StatusLevel.INFO, "status.msg.oneTimeDeleted", tx.title());
                         });
                     }
-                    case "actualize" -> context.edits().edit(Texts.get("document.edit.actualize", UiFormats.date(today)),
-                            "status.msg.actualized", plan -> {
-                                PlanDocument draft = new PlanDocument(plan, null, () -> today);
-                                draft.actualize(today, null);
-                                return draft.plan();
-                            });
+                    case "actualize" -> context.edits().execute(request(expectedRevision,
+                            Texts.get("document.edit.actualize", UiFormats.date(today)), new PlanCommand.Actualize(today, null)),
+                            "status.msg.actualized");
                     case "applyWhatIf" -> {
                         if (whatIf.isNone()) return; // Старый снимок не позволяет восстановить отсутствующие коэффициенты.
-                        boolean[] computed = {false};
-                        context.edits().edit(Texts.get("document.edit.applyWhatIf"), "", plan -> {
-                            PlanDocument draft = new PlanDocument(plan, null, () -> today);
-                            draft.setViewState(context.state().view().withWhatIf(whatIf));
-                            draft.applyWhatIfToPlan();
-                            computed[0] = true;
-                            return draft.plan();
-                        });
+                        var applied = context.edits().execute(request(expectedRevision,
+                                Texts.get("document.edit.applyWhatIf"), new PlanCommand.ApplyWhatIf(whatIf, today)), "");
                         // Равный план не создаёт историю, но успешно применённый сценарий всё равно выключается.
-                        if (computed[0]) {
+                        if (applied.accepted()) {
                             context.updateView(view -> view.withWhatIf(WhatIf.NONE));
                             context.status(StatusLevel.INFO, "status.msg.whatIfApplied");
                         }
@@ -169,7 +172,7 @@ public final class CoreWindowFactory implements WindowFactory {
     }
 
     /** Применяет результат восстановленного редактора; отмена ничего не меняет. */
-    private void applyResult(WindowState state, Object value) {
+    private void applyResult(WindowState state, Object value, long expectedRevision) {
         if (value == null) return;
         switch (state.type()) {
             case RULE_EDITOR -> {
@@ -177,22 +180,14 @@ public final class CoreWindowFactory implements WindowFactory {
                 boolean edit = WindowType.MODE_EDIT.equals(state.contextValue(WindowType.CONTEXT_MODE));
                 context.edits().edit(UiText.get(edit ? "undo.ruleEdit" : "undo.ruleAdd", rule.title()),
                         edit ? "status.msg.ruleChanged" : "status.msg.ruleAdded",
-                        plan -> {
-                            if (edit && plan.findRule(rule.id()).isEmpty())
-                                throw new IllegalArgumentException(UiText.get("err.notFound.content", rule.id()));
-                            return edit ? plan.withRuleReplaced(rule) : plan.withRuleAdded(rule);
-                        });
+                        edit ? new PlanCommand.ReplaceRule(rule) : new PlanCommand.AddRule(rule));
             }
             case ONE_TIME_EDITOR -> {
                 OneTimeTransaction tx = (OneTimeTransaction) value;
                 boolean edit = WindowType.MODE_EDIT.equals(state.contextValue(WindowType.CONTEXT_MODE));
                 context.edits().edit(UiText.get(edit ? "undo.oneTimeEdit" : "undo.oneTimeAdd", tx.title()),
                         edit ? "status.msg.oneTimeChanged" : "status.msg.oneTimeAdded",
-                        plan -> {
-                            if (edit && plan.findOneTime(tx.id()).isEmpty())
-                                throw new IllegalArgumentException(UiText.get("err.notFound.content", tx.id()));
-                            return edit ? plan.withOneTimeReplaced(tx) : plan.withOneTimeAdded(tx);
-                        });
+                        edit ? new PlanCommand.ReplaceOneTime(tx) : new PlanCommand.AddOneTime(tx));
             }
             case ADJUSTMENT_EDITOR, QUICK_EDIT_POPUP -> {
                 AdjustmentForm.Result result = (AdjustmentForm.Result) value;
@@ -204,19 +199,17 @@ public final class CoreWindowFactory implements WindowFactory {
                         : UiText.get(result.adjustment() == null ? "undo.adjustReset" : "undo.adjust", title, date);
                 context.edits().edit(undo, quick ? "status.msg.quickAmount"
                                 : result.adjustment() == null ? "status.msg.adjustReset" : "status.msg.adjustSaved",
-                        plan -> result.adjustment() == null ? plan.withAdjustmentRemoved(result.key())
-                                : plan.withAdjustmentPut(result.adjustment()));
+                        result.adjustment() == null ? new PlanCommand.RemoveAdjustment(result.key())
+                                : new PlanCommand.PutAdjustment(result.adjustment()));
             }
             case PLAN_SETTINGS -> {
                 Plan changed = (Plan) value;
-                context.edits().edit(UiText.get("undo.planSettings"), "status.msg.settings", plan ->
-                        new Plan(changed.name(), changed.note(), changed.currency(), changed.startDate(), changed.startBalance(),
-                                changed.horizon(), changed.cushion(), changed.goal(), plan.rules(), plan.oneTimes(),
-                                plan.adjustments(), plan.rawBlocks()));
+                context.edits().edit(UiText.get("undo.planSettings"), "status.msg.settings",
+                        new PlanCommand.UpdateSettings(PlanCommand.Settings.from(changed)));
             }
             case GOAL_CALCULATOR -> {
                 if (value instanceof GoalCalculatorForm.SaveGoal goal)
-                    context.edits().edit(UiText.get("undo.goal", goal.goal().title()), "status.msg.goalSaved", plan -> plan.withGoal(goal.goal()));
+                    context.edits().edit(UiText.get("undo.goal", goal.goal().title()), "status.msg.goalSaved", new PlanCommand.SetGoal(goal.goal()));
                 else if (value instanceof GoalCalculatorForm.AddWhatIfExtra extra)
                     context.updateView(view -> view.withWhatIf(view.whatIf().withExtraMonthlySaving(
                             view.whatIf().extraMonthlySaving().plus(extra.amount()))));
@@ -234,19 +227,24 @@ public final class CoreWindowFactory implements WindowFactory {
                     });
                 }
             }
-            case TEXT_INPUT -> textResult(state.contextValue(WindowType.CONTEXT_PURPOSE), value);
+            case TEXT_INPUT -> textResult(state.contextValue(WindowType.CONTEXT_PURPOSE), value, expectedRevision);
             case CHOICE -> {
                 if (OpenPlanForm.PURPOSE.equals(state.contextValue(WindowType.CONTEXT_PURPOSE))) {
                     if (OpenPlanForm.FROM_FILE.equals(value)) context.files().openFile();
                     else context.files().openRecent(((Path) value).toString());
                 } else if (ChoiceForms.CUSTOM.equals(value)) {
+                    long[] childRevision = {context.planCommands().snapshot().revision()};
                     // JavaFX: TextInputDialog → Swing: JDialog → Web: dialog
                     context.openForm(FormRequest.fresh(TextInputForms.customCurrency(), WindowType.TEXT_INPUT, true,
                             Map.of(WindowType.CONTEXT_PURPOSE, TextInputForms.PURPOSE_CUSTOM_CURRENCY)), null,
-                            result -> context.edits().formResult(() -> {
-                                if (result != null) textResult(TextInputForms.PURPOSE_CUSTOM_CURRENCY, result);
-                            }));
-                } else textResult(TextInputForms.PURPOSE_CUSTOM_CURRENCY, value);
+                            result -> {
+                                try {
+                                    context.edits().formResult(childRevision[0], () -> {
+                                        if (result != null) textResult(TextInputForms.PURPOSE_CUSTOM_CURRENCY, result, childRevision[0]);
+                                    });
+                                } finally { childRevision[0] = context.planCommands().snapshot().revision(); }
+                            });
+                } else textResult(TextInputForms.PURPOSE_CUSTOM_CURRENCY, value, expectedRevision);
             }
             case CSV_EXPORT -> exportCsv((CsvExportForm.Choice) value);
             case ALERT -> throw new IllegalStateException("ALERT result uses onButton");
@@ -254,27 +252,27 @@ public final class CoreWindowFactory implements WindowFactory {
     }
 
     /** Применяет назначения однополевых форм, не открывая второй редактор. */
-    private void textResult(String purpose, Object value) {
+    private void textResult(String purpose, Object value, long expectedRevision) {
         switch (purpose) {
             case TextInputForms.PURPOSE_CUSTOM_CURRENCY -> context.edits().edit(UiText.get("undo.currency", value), "",
-                    plan -> plan.withCurrency((String) value));
+                    new PlanCommand.SetCurrency((String) value));
             case TextInputForms.PURPOSE_CUSTOM_MONTHS -> context.views().changeMonths((Integer) value);
             case TextInputForms.PURPOSE_RECONCILE -> {
                 var today = context.state().today();
-                Money[] difference = {Money.ZERO};
-                if (context.edits().edit(Texts.get("document.reconcile.title"), "", plan -> {
-                    // Сверяется настоящий баланс: черновик намеренно не получает сценарий what-if из вида.
-                    PlanDocument draft = new PlanDocument(plan, null, () -> today);
-                    difference[0] = ((Money) value).minus(draft.forecast().balanceAt(today));
-                    draft.reconcile(today, (Money) value);
-                    return draft.plan();
-                }))
+                var reconciled = context.edits().execute(request(expectedRevision, Texts.get("document.reconcile.title"),
+                        new PlanCommand.Reconcile(today, (Money) value)), "");
+                if (reconciled.changed())
                     context.status(StatusLevel.INFO, "status.msg.reconciled",
-                            difference[0].formatSigned() + " " + context.document().plan().currency());
+                            reconciled.effect().reconciliationDifference().formatSigned() + " " + context.document().plan().currency());
             }
             case TextInputForms.PURPOSE_RENAME -> context.files().renameTo((String) value);
             default -> throw new IllegalArgumentException(UiText.get("restore.warn.unknownPurpose", purpose));
         }
+    }
+
+    /** Формирует команду по ревизии, зафиксированной до открытия восстановленного окна. */
+    private static PlanCommandRequest request(long revision, String description, PlanCommand command) {
+        return new PlanCommandRequest(UUID.randomUUID(), revision, description, command);
     }
 
     /** Продолжает экспорт из уже выбранных настроек CSV. */

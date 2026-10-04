@@ -56,6 +56,12 @@ public final class FxFieldWidgets {
             }
             case LIST, PREVIEW -> {
                 ListView<String> list = new ListView<>(); list.setPrefHeight(Math.max(2, spec.textRows()) * 28);
+                if (spec.kind() == FieldKind.PREVIEW && spec.id().equals("dates")) list.setCellFactory(v -> new ListCell<>() {
+                    /** Рисует отметки сдвига и корректировки из общих PNG, сохраняя текст строки. */
+                    @Override protected void updateItem(String value, boolean empty) {
+                        super.updateItem(value, empty); setText(empty ? "" : value); FxIcons.preview(this);
+                    }
+                });
                 list.getSelectionModel().selectedIndexProperty().addListener((o, a, b) -> {
                     if (updating || b.intValue() < 0) return;
                     if (spec.kind() == FieldKind.PREVIEW) session.previewSelected(b.intValue(), false);
@@ -94,6 +100,8 @@ public final class FxFieldWidgets {
             }
         };
         FxStyles.id(control, spec.id());
+        if (control instanceof Control c) FxIcons.skin(c);
+        if (control instanceof Button b) FxIcons.decorate(b);
         if (control instanceof TextArea area) {
             // Высота строк берётся из реального шрифта, рамка занимает по пикселю с каждой стороны.
             var sample = new javafx.scene.text.Text("Ag");
@@ -120,6 +128,7 @@ public final class FxFieldWidgets {
         root.getChildren().add(control); HBox.setHgrow(control, spec.widthPx() > 0 ? Priority.NEVER : Priority.ALWAYS);
         if (spec.kind() == FieldKind.DATE) {
             Button calendar = new Button("\u25a6"); calendar.setTooltip(FxStyles.tip(ru.cashprediction.core.ui.text.UiText.get("calendar.button.tip"), probe));
+            FxIcons.icon(calendar, calendar.getText(), ru.cashprediction.core.ui.token.DesignTokens.INLINE_ICON_SIZE);
             calendar.setMinHeight(ru.cashprediction.core.ui.token.DesignTokens.CONTROL_HEIGHT);
             calendar.setPrefHeight(ru.cashprediction.core.ui.token.DesignTokens.CONTROL_HEIGHT);
             calendar.setMaxHeight(ru.cashprediction.core.ui.token.DesignTokens.CONTROL_HEIGHT);
@@ -138,6 +147,7 @@ public final class FxFieldWidgets {
         pane.getChildren().clear(); ToggleGroup group = radioGroup;
         for (Option option : entries) {
             RadioButton b = new RadioButton(option.text()); b.setUserData(option.value()); b.setToggleGroup(group);
+            FxIcons.skin(b);
             // Каждая строка радио-группы имеет общую высоту контрола; вертикальная группа не удваивает промежутки.
             b.setMinHeight(ru.cashprediction.core.ui.token.DesignTokens.CONTROL_HEIGHT);
             b.setPrefHeight(ru.cashprediction.core.ui.token.DesignTokens.CONTROL_HEIGHT);

@@ -46,7 +46,7 @@ final class ControlledSnapshotFixture implements AutoCloseable {
         Process holder = null;
         try {
             var env = AppEnvironment.from(LaunchOptions.parse("--home", home.toString(), "--registry-node", node,
-                    "--today", LaunchRequest.PARITY_TODAY.toString(), "--ui", "core"));
+                    "--today", LaunchRequest.PARITY_TODAY.toString()));
             Files.createDirectories(env.cashMemory());
             var plan = SamplePlan.create(LaunchRequest.PARITY_TODAY);
             Path file = env.cashMemory().resolve(plan.name() + ".md");

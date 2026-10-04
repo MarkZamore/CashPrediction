@@ -53,11 +53,15 @@ public final class TokenCss {
         variable(sb, "--cp-row-height", px(DesignTokens.ROW_HEIGHT));
         variable(sb, "--cp-header-height", px(DesignTokens.HEADER_HEIGHT));
         variable(sb, "--cp-control-height", px(DesignTokens.CONTROL_HEIGHT));
+        variable(sb, "--cp-inline-icon-size", px(DesignTokens.INLINE_ICON_SIZE));
+        variable(sb, "--cp-dialog-icon-size", px(DesignTokens.DIALOG_ICON_SIZE));
+        variable(sb, "--cp-alert-icon-size", px(DesignTokens.ALERT_ICON_SIZE));
         variable(sb, "--cp-toolbar-height", px(DesignTokens.TOOLBAR_HEIGHT));
         variable(sb, "--cp-status-height", px(DesignTokens.STATUS_HEIGHT));
         variable(sb, "--cp-button-min-width", px(DesignTokens.BUTTON_MIN_WIDTH));
         variable(sb, "--cp-radius", px(DesignTokens.RADIUS));
         variable(sb, "--cp-card-min-width", px(DesignTokens.CARD_MIN_WIDTH));
+        variable(sb, "--cp-card-gap", px(DesignTokens.CARD_GAP));
         variable(sb, "--cp-card-title-line-height", px(DesignTokens.CARD_TITLE_LINE_HEIGHT));
         variable(sb, "--cp-card-value-line-height", px(DesignTokens.CARD_VALUE_LINE_HEIGHT));
         variable(sb, "--cp-card-caption-line-height", px(DesignTokens.CARD_CAPTION_LINE_HEIGHT));

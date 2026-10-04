@@ -16,6 +16,7 @@ import ru.cashprediction.core.ui.token.*;
 public final class SwingToolbar extends JPanel {
     private final UiIntents intents;
     private final SwingMenus menus;
+    private final SwingPaintContext paintContext;
     private JTextField filter;
     private Timer filterDelay;
     private boolean applying;
@@ -23,6 +24,12 @@ public final class SwingToolbar extends JPanel {
 
     /** Создаёт пустую панель действий. */
     public SwingToolbar(UiIntents intents) {
+        this(intents, null);
+    }
+
+    /** Получает context уже созданного content root до первоначального decode своих значков. */
+    SwingToolbar(UiIntents intents, SwingPaintContext paintContext) {
+        this.paintContext = paintContext;
         this.intents = intents; menus = new SwingMenus(intents);
         setLayout(new BoxLayout(this, BoxLayout.X_AXIS) {
             /** Размещает компоненты тем же точным алгоритмом и при автоматической валидации контейнера. */
@@ -31,6 +38,11 @@ public final class SwingToolbar extends JPanel {
         setBackground(SwingLook.color(ColorToken.BG_WINDOW));
         setBorder(BorderFactory.createEmptyBorder(DesignTokens.SPACING, 0, DesignTokens.SPACING, 0));
         SwingLook.id(this, "toolbar");
+    }
+
+    /** Наблюдает полный paint toolbar, сохраняя непокрытый delegate census явным отказом. */
+    @Override public void paint(Graphics graphics) {
+        if (paintContext == null) super.paint(graphics); else paintContext.paint(this, graphics, super::paint);
     }
 
     /** Применяет готовые узлы, сохраняя фокус и текущий ввод фильтра. */
@@ -45,7 +57,7 @@ public final class SwingToolbar extends JPanel {
             JComponent widget = switch (node) {
                 case ToolbarNode.SplitButton n -> {
                     // JavaFX: SplitMenuButton → Swing: JPanel с основной кнопкой и стрелкой → Web: пара button
-                    JPanel panel = new JPanel(new BorderLayout()); panel.setOpaque(false);
+                    JPanel panel = ownerPanel(new BorderLayout()); panel.setOpaque(false);
                     JButton main = button(n.text(), n.tooltip());
                     main.setEnabled(n.main().enabled());
                     main.addActionListener(e -> intents.command(n.main().command(), n.main().args(), InvokeSource.TOOLBAR));
@@ -56,11 +68,11 @@ public final class SwingToolbar extends JPanel {
                     yield panel;
                 }
                 case ToolbarNode.MenuButton n -> {
-                    // JavaFX: MenuButton → Swing: JButton с нарисованной стрелкой → Web: button + div[role=menu]
+                    // JavaFX: MenuButton → Swing: JButton со стрелкой PNG → Web: button + div[role=menu]
                     JButton button = menuButton(n.text(), n.tooltip(), n.items()); emphasis(button, n.emphasis()); yield button;
                 }
                 case ToolbarNode.Toggle n -> {
-                    JToggleButton button = new JToggleButton(n.text(), n.selected()); button.setFocusable(false);
+                    JToggleButton button = paintContext == null ? new JToggleButton(n.text(), n.selected()) : paintContext.toggle(n.text(), n.selected()); button.setFocusable(false);
                     groups.computeIfAbsent(n.group(), unused -> new ButtonGroup()).add(button);
                     SwingLook.tooltip(button, n.tooltip());
                     button.addActionListener(e -> intents.command(n.command(), CommandArgs.NONE, InvokeSource.TOOLBAR));
@@ -68,6 +80,8 @@ public final class SwingToolbar extends JPanel {
                 }
                 case ToolbarNode.Button n -> {
                     JButton button = button(n.glyphOrText(), n.tooltip());
+                    if (n.command() == CommandId.EDIT_UNDO || n.command() == CommandId.EDIT_REDO)
+                        SwingIcons.standalone(button, n.glyphOrText(), paintContext);
                     button.setEnabled(n.enabled()); emphasis(button, n.emphasis());
                     button.addActionListener(e -> intents.command(n.command(), CommandArgs.NONE, InvokeSource.TOOLBAR)); yield button;
                 }
@@ -118,9 +132,11 @@ public final class SwingToolbar extends JPanel {
     public JComponent widget(String id) { return widgets.get(id); }
 
     private JPanel filter(ToolbarNode.FilterField n) {
-        JPanel panel = new JPanel(new BorderLayout(4, 0)); panel.setOpaque(false);
-        filter = SwingLook.id(new JTextField(n.text()), n.id() + ".input");
+        JPanel panel = ownerPanel(new BorderLayout(4, 0)); panel.setOpaque(false);
+        filter = SwingLook.id(new FilterInput(n.text(), paintContext), n.id() + ".input");
         filter.putClientProperty("cp.prompt", n.prompt());
+        filter.getAccessibleContext().setAccessibleName(n.prompt());
+        filter.getAccessibleContext().setAccessibleDescription(n.tooltip());
         filter.setPreferredSize(new Dimension(n.widthPx(), 28)); SwingLook.tooltip(filter, n.tooltip());
         JTextField current = filter;
         filterDelay = new Timer(n.debounceMs(), e -> intents.filterText(current.getText())); filterDelay.setRepeats(false);
@@ -134,7 +150,8 @@ public final class SwingToolbar extends JPanel {
             private void changed() { if (!applying) filterDelay.restart(); }
         });
         current.addActionListener(e -> { filterDelay.stop(); intents.filterText(current.getText()); intents.command(CommandId.FILTER_FOCUS_TABLE, CommandArgs.NONE, InvokeSource.MAIN); });
-        JButton clear = button("✕", n.clearTooltip()); clear.setVisible(n.clearVisible());
+        JButton clear = button("✕", n.clearTooltip());
+        SwingIcons.standalone(clear, "✕", paintContext); fit(clear); clear.setVisible(n.clearVisible());
         clear.addActionListener(e -> { filterDelay.stop(); intents.filterText(""); });
         SwingLook.id(clear, n.id() + ".clear");
         panel.add(current); panel.add(clear, BorderLayout.EAST);
@@ -152,14 +169,52 @@ public final class SwingToolbar extends JPanel {
         return panel;
     }
 
+    /** Рисует локализованную подсказку модели поверх пустого поля, не меняя документ. */
+    private static final class FilterInput extends JTextField {
+        private final SwingPaintContext context;
+        /** Создаёт поле только с настоящим значением фильтра. */
+        FilterInput(String text, SwingPaintContext context) { super(text); this.context = context; }
+
+        /** Наблюдает полный paint поля, включая подсказку, border и UI delegate. */
+        @Override public void paint(Graphics graphics) {
+            if (context == null) super.paint(graphics); else context.paint(this, graphics, super::paint);
+        }
+
+        /** Показывает подсказку только при пустом документе внутри доступной области текста. */
+        @Override protected void paintComponent(Graphics graphics) {
+            super.paintComponent(graphics);
+            if (getDocument().getLength() != 0) return;
+            Object value = getClientProperty("cp.prompt");
+            if (!(value instanceof String prompt) || prompt.isEmpty()) return;
+            Insets insets = getInsets();
+            Graphics2D copy = (Graphics2D) graphics.create();
+            try {
+                copy.clipRect(insets.left, insets.top,
+                        Math.max(0, getWidth() - insets.left - insets.right),
+                        Math.max(0, getHeight() - insets.top - insets.bottom));
+                copy.setFont(getFont()); copy.setColor(SwingLook.color(ColorToken.TEXT_MUTED));
+                FontMetrics metrics = copy.getFontMetrics();
+                int baseline = insets.top
+                        + (getHeight() - insets.top - insets.bottom - metrics.getHeight()) / 2 + metrics.getAscent();
+                copy.drawString(prompt, insets.left, baseline);
+            } finally { copy.dispose(); }
+        }
+    }
+
     private JButton button(String text, String tooltip) {
-        JButton button = new JButton(text); button.setFocusable(false); fit(button);
+        JButton button = paintContext == null ? new JButton(text) : paintContext.button(text);
+        SwingIcons.decorate(button, paintContext); button.setFocusable(false); fit(button);
         SwingLook.tooltip(button, tooltip); return button;
     }
 
     private JButton menuButton(String text, String tooltip, java.util.List<MenuNode> nodes) {
         // JavaFX: MenuButton → Swing: JButton + JPopupMenu → Web: button + div[role=menu]
-        JButton button = button(text, tooltip); button.setIcon(new Arrow()); button.setIconTextGap(0); button.setHorizontalTextPosition(SwingConstants.LEFT); fit(button);
+        JButton button = button(text, tooltip); button.setIcon(SwingIcons.icon("▾", null, DesignTokens.INLINE_ICON_SIZE, paintContext));
+        button.setDisabledIcon(SwingIcons.icon("▾", ColorToken.TEXT_MUTED, DesignTokens.INLINE_ICON_SIZE, paintContext));
+        // PNG занимает 16 px внутри общей области стрелки 20 px, как в JavaFX и Web.
+        button.setIconTextGap(DesignTokens.CONTROL_HEIGHT - 2 * DesignTokens.SPACING
+                - DesignTokens.INLINE_ICON_SIZE);
+        button.setHorizontalTextPosition(SwingConstants.LEFT); fit(button);
         // JavaFX: ContextMenu → Swing: JPopupMenu → Web: div[role=menu]
         JPopupMenu popup = menus.popup(nodes, InvokeSource.TOOLBAR); button.putClientProperty("cp.popup", popup);
         button.addActionListener(e -> popup.show(button, 0, button.getHeight())); return button;
@@ -171,11 +226,19 @@ public final class SwingToolbar extends JPanel {
         button.setBackground(SwingLook.color(ColorToken.BG_WINDOW));
         if (!button.getFont().isBold()) button.setFont(SwingLook.font(FontToken.BASE));
         button.setMargin(new Insets(0, 0, 0, 0));
+        if (button.getClientProperty("cp.text") instanceof String && button.getIcon() != null) {
+            int inset = (DesignTokens.CONTROL_HEIGHT - DesignTokens.INLINE_ICON_SIZE) / 2;
+            button.setBorder(BorderFactory.createCompoundBorder(
+                    BorderFactory.createLineBorder(SwingLook.color(ColorToken.BORDER)),
+                    BorderFactory.createEmptyBorder(inset - 1, inset - 1, inset - 1, inset - 1)));
+            size(button, DesignTokens.CONTROL_HEIGHT);
+            return;
+        }
         button.setBorder(BorderFactory.createCompoundBorder(BorderFactory.createLineBorder(SwingLook.color(ColorToken.BORDER)),
                 BorderFactory.createEmptyBorder(DesignTokens.TOOLBAR_BUTTON_PAD_V - 1, DesignTokens.TOOLBAR_BUTTON_PAD_H - 1,
                         DesignTokens.TOOLBAR_BUTTON_PAD_V - 1, DesignTokens.TOOLBAR_BUTTON_PAD_H - 1)));
-        int width = button.getFontMetrics(button.getFont()).stringWidth(button.getText()) + 2 * DesignTokens.TOOLBAR_BUTTON_PAD_H;
-        if (button.getIcon() != null) width += button.getIcon().getIconWidth();
+        int width = SwingIcons.textWidth(button.getText(), button.getFontMetrics(button.getFont())) + 2 * DesignTokens.TOOLBAR_BUTTON_PAD_H;
+        if (button.getIcon() != null) width += button.getIcon().getIconWidth() + button.getIconTextGap();
         if (button.getIcon() == null && button.getText().codePointCount(0, button.getText().length()) == 1) width = DesignTokens.CONTROL_HEIGHT;
         size(button, width);
     }
@@ -190,16 +253,9 @@ public final class SwingToolbar extends JPanel {
         }
     }
 
-    /** Векторная стрелка не меняет текст модели кнопки. */
-    private static final class Arrow implements Icon {
-        /** Возвращает ширину стрелки. */
-        @Override public int getIconWidth() { return DesignTokens.CONTROL_HEIGHT - 2 * DesignTokens.SPACING; }
-        /** Возвращает высоту стрелки. */
-        @Override public int getIconHeight() { return 9; }
-        /** Рисует встроенную стрелку списка. */
-        @Override public void paintIcon(Component c, Graphics g, int x, int y) {
-            x += (getIconWidth() - 8) / 2;
-            g.setColor(c.getForeground()); g.fillPolygon(new int[]{x, x + 8, x + 4}, new int[]{y + 2, y + 2, y + 6}, 3);
-        }
+    /** Выбирает явно привязанный owner только при наличии selftest context корня. */
+    private JPanel ownerPanel(LayoutManager layout) {
+        return paintContext == null ? new JPanel(layout) : paintContext.panel(layout);
     }
+
 }

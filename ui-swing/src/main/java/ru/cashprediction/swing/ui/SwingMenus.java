@@ -179,6 +179,7 @@ public final class SwingMenus {
         // JavaFX: CustomMenuItem → Swing: JPanel + JSpinner → Web: input[type=number]
         JPanel panel = new JPanel(new BorderLayout(8, 0));
         JSpinner spinner = SwingLook.id(new JSpinner(new SpinnerNumberModel(n.value(), n.min(), n.max(), n.step())), n.id() + ".value");
+        SwingIcons.arrows(spinner);
         spinner.setEditor(new JSpinner.NumberEditor(spinner, "0"));
         spinner.setPreferredSize(new Dimension(n.fieldWidthPx(), 28));
         // ToolsFlow уже откладывает применение на общие 600 мс; второй таймер удваивал задержку.

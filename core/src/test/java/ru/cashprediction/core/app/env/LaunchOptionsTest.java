@@ -15,7 +15,6 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import ru.cashprediction.core.app.LaunchOptions;
 import ru.cashprediction.core.app.LaunchOptions.RecoveryAnswer;
-import ru.cashprediction.core.app.LaunchOptions.UiMode;
 
 /**
  * Параметры запуска трёх exe (архитектура §3.8): аргументы и свойства, приоритет аргументов, неизвестные аргументы как
@@ -35,7 +34,6 @@ class LaunchOptionsTest {
         assertNull(options.registryNode());
         assertFalse(options.registryMemory());
         assertNull(options.today());
-        assertEquals(UiMode.LEGACY, options.ui(), "прежний интерфейс по умолчанию до паритета (R4)");
         assertFalse(options.isSelftest());
         assertEquals(List.of(), options.warnings());
     }
@@ -44,13 +42,12 @@ class LaunchOptionsTest {
     void everyArgumentOfTheDesignTable() {
         LaunchOptions options = parse(new Properties(),
                 "--home", "C:\\Temp\\cp home", "--registry-node", "ru/cashprediction/selftest/1b2c", "--registry", "memory",
-                "--today", "2026-09-13", "--ui", "core", "--selftest", "s02-sample-table", "--selftest-out", "out",
+                "--today", "2026-09-13", "--selftest", "s02-sample-table", "--selftest-out", "out",
                 "--selftest-recovery", "already-ok", "--test-api", "--no-browser", "--no-window");
         assertEquals(Path.of("C:\\Temp\\cp home"), options.home());
         assertEquals("ru/cashprediction/selftest/1b2c", options.registryNode());
         assertTrue(options.registryMemory());
         assertEquals(LocalDate.of(2026, 9, 13), options.today());
-        assertEquals(UiMode.CORE, options.ui());
         assertEquals("s02-sample-table", options.selftest());
         assertEquals(Path.of("out"), options.selftestOut());
         assertEquals(RecoveryAnswer.ALREADY_OK, options.selftestRecovery());
@@ -61,11 +58,10 @@ class LaunchOptionsTest {
 
     @Test
     void inlineValuesAndRussianDates() {
-        LaunchOptions options = parse(new Properties(), "--home=D:\\x", "--today=13.09.2026", "--ui=LEGACY",
+        LaunchOptions options = parse(new Properties(), "--home=D:\\x", "--today=13.09.2026",
                 "--selftest-recovery=XML", "--registry=memory");
         assertEquals(Path.of("D:\\x"), options.home());
         assertEquals(LocalDate.of(2026, 9, 13), options.today());
-        assertEquals(UiMode.LEGACY, options.ui());
         assertEquals(RecoveryAnswer.XML, options.selftestRecovery());
         assertTrue(options.registryMemory());
     }
@@ -76,7 +72,6 @@ class LaunchOptionsTest {
         properties.setProperty("cashprediction.home", "from-property");
         properties.setProperty("cashprediction.registry.node", "ru/cashprediction/selftest/prop/");
         properties.setProperty("cashprediction.today", "2026-01-31");
-        properties.setProperty("cashprediction.ui", "core");
         properties.setProperty("cashprediction.selftest", "script.txt");
         properties.setProperty("cashprediction.selftest.log", "run.log");
         properties.setProperty("cashprediction.selftest.recovery", "registry");
@@ -85,14 +80,12 @@ class LaunchOptionsTest {
         assertEquals(Path.of("from-property"), fromProperties.home());
         assertEquals("ru/cashprediction/selftest/prop", fromProperties.registryNode(), "завершающая косая черта снимается");
         assertEquals(LocalDate.of(2026, 1, 31), fromProperties.today());
-        assertEquals(UiMode.CORE, fromProperties.ui());
         assertEquals("script.txt", fromProperties.selftest());
         assertEquals(Path.of("run.log"), fromProperties.selftestOut());
         assertEquals(RecoveryAnswer.REGISTRY, fromProperties.selftestRecovery());
 
-        LaunchOptions overridden = parse(properties, "--home", "from-arg", "--ui", "legacy", "--selftest-recovery", "none");
+        LaunchOptions overridden = parse(properties, "--home", "from-arg", "--selftest-recovery", "none");
         assertEquals(Path.of("from-arg"), overridden.home());
-        assertEquals(UiMode.LEGACY, overridden.ui());
         assertEquals(RecoveryAnswer.NONE, overridden.selftestRecovery());
         assertEquals("ru/cashprediction/selftest/prop", overridden.registryNode());
     }
@@ -106,6 +99,22 @@ class LaunchOptionsTest {
                 "Неизвестный аргумент «file.md» пропущен",
                 "У флага --test-api не бывает значения: «=yes» пропущено"), options.warnings());
         assertTrue(options.testApi());
+    }
+
+    @Test
+    void updaterGuardIsNotUiStateOrVisibleWarning() {
+        String sha = "0123456789abcdef0123456789abcdef01234567";
+        for (List<String> args : List.of(List.of("--updated-from", sha),
+                List.of("--updated-from=" + sha), List.of("--updated-from", "damaged"),
+                List.of("--updated-from=damaged"), List.of("--updated-from"))) {
+            LaunchOptions options = LaunchOptions.parse(args, new Properties());
+            assertEquals(LaunchOptions.defaults(), options, args.toString());
+            assertTrue(options.toArguments().isEmpty());
+        }
+        LaunchOptions options = parse(new Properties(), "--updated-from", "--no-browser", "--no-window");
+        assertTrue(options.noBrowser() && options.noWindow());
+        assertTrue(options.warnings().isEmpty());
+        assertEquals(List.of("--no-browser", "--no-window"), options.toArguments());
     }
 
     @ParameterizedTest
@@ -127,11 +136,9 @@ class LaunchOptionsTest {
         assertEquals("У аргумента --home нет значения",
                 assertThrows(IllegalArgumentException.class, () -> parse(new Properties(), "--home")).getMessage());
         assertEquals("У аргумента --today нет значения",
-                assertThrows(IllegalArgumentException.class, () -> parse(new Properties(), "--today", "--ui", "core")).getMessage());
+                assertThrows(IllegalArgumentException.class, () -> parse(new Properties(), "--today", "--test-api")).getMessage());
         assertEquals("Аргумент --registry: поддерживается только значение memory, а не «disk»",
                 assertThrows(IllegalArgumentException.class, () -> parse(new Properties(), "--registry", "disk")).getMessage());
-        assertEquals("--ui: ожидалось core или legacy, а не «web»",
-                assertThrows(IllegalArgumentException.class, () -> parse(new Properties(), "--ui", "web")).getMessage());
         assertEquals("--selftest-recovery: ожидалось registry, xml, none или already-ok, а не «maybe»",
                 assertThrows(IllegalArgumentException.class,
                         () -> parse(new Properties(), "--selftest-recovery", "maybe")).getMessage());
@@ -144,14 +151,45 @@ class LaunchOptionsTest {
     @Test
     void canonicalArgumentsRoundTrip() {
         LaunchOptions options = parse(new Properties(), "--home", "h", "--registry-node", "ru/cashprediction/selftest/u",
-                "--today", "13.09.2026", "--ui", "core", "--selftest", "s01-first-run", "--selftest-out", "o",
+                "--today", "13.09.2026", "--selftest", "s01-first-run", "--selftest-out", "o",
                 "--selftest-recovery", "xml", "--test-api", "--no-browser", "--no-window", "--registry", "memory", "--junk");
         List<String> arguments = options.toArguments();
         assertTrue(arguments.containsAll(List.of("--today", "2026-09-13")), "дата пишется ISO: это аргумент, не интерфейс");
         LaunchOptions again = LaunchOptions.parse(arguments, new Properties());
         assertEquals(new LaunchOptions(options.home(), options.registryNode(), options.registryMemory(), options.today(),
-                options.ui(), options.selftest(), options.selftestOut(), options.selftestRecovery(), options.testApi(),
+                options.selftest(), options.selftestOut(), options.selftestRecovery(), options.testApi(),
                 options.noBrowser(), options.noWindow(), List.of()), again);
-        assertEquals(List.of("--ui", "legacy"), LaunchOptions.defaults().toArguments());
+        assertEquals(List.of(), LaunchOptions.defaults().toArguments());
+        assertFalse(arguments.stream().anyMatch(value -> value.equals("--ui") || value.startsWith("--ui=")));
+    }
+
+    /** Удалённый переключатель обрабатывается как любой неизвестный аргумент, без выбора старого UI. */
+    @ParameterizedTest
+    @ValueSource(strings = {"core", "legacy", "web"})
+    void removedUiArgumentIsUnknown(String mode) {
+        LaunchOptions options = parse(new Properties(), "--ui", mode, "--test-api");
+        assertEquals(List.of("Неизвестный аргумент «--ui» пропущен",
+                "Неизвестный аргумент «" + mode + "» пропущен"), options.warnings());
+        assertTrue(options.testApi());
+        assertEquals(List.of("--test-api"), options.toArguments());
+    }
+
+    /** Значение через равенство также не включает прежний интерфейс и не переносится в дочерний запуск. */
+    @Test
+    void removedInlineUiArgumentIsUnknown() {
+        LaunchOptions options = parse(new Properties(), "--ui=legacy", "--registry", "memory");
+        assertEquals(List.of("Неизвестный аргумент «--ui=legacy» пропущен"), options.warnings());
+        assertTrue(options.registryMemory());
+        assertEquals(List.of("--registry", "memory"), options.toArguments());
+    }
+
+    /** Старое системное свойство полностью игнорируется, даже если раньше его значение было ошибкой. */
+    @ParameterizedTest
+    @ValueSource(strings = {"core", "legacy", "web", ""})
+    void removedUiPropertyIsIgnored(String mode) {
+        Properties properties = new Properties();
+        properties.setProperty("cashprediction.ui", mode);
+        assertEquals(LaunchOptions.defaults(), parse(properties));
+        assertEquals(List.of(), parse(properties).toArguments());
     }
 }

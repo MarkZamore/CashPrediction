@@ -74,6 +74,22 @@ public final class SwingTable extends JPanel {
         for (int i = 0; i < model.columns().size(); i++) {
             ColumnSpec column = model.columns().get(i); TableColumn widget = table.getColumnModel().getColumn(i);
             widget.setIdentifier(column.id()); widget.setHeaderValue(column.title()); widget.setPreferredWidth(column.widthPx());
+            // Заголовки используют обычный шрифт и выравнивание общей колонки;
+            // жирность модели относится к ячейкам, а не к заголовку.
+            var delegate = table.getTableHeader().getDefaultRenderer();
+            widget.setHeaderRenderer((owner, value, selectedHeader, focusedHeader, row, index) -> {
+                var component = delegate.getTableCellRendererComponent(owner, value, selectedHeader, focusedHeader, row, index);
+                component.setFont(SwingLook.font(FontToken.BASE));
+                if (component instanceof JLabel label) {
+                    label.setHorizontalAlignment(switch (column.align()) {
+                        case LEFT -> SwingConstants.LEFT;
+                        case CENTER -> SwingConstants.CENTER;
+                        case RIGHT -> SwingConstants.RIGHT;
+                    });
+                    label.setToolTipText(column.headerTooltip());
+                }
+                return component;
+            });
             if (!column.grows()) { widget.setMinWidth(column.widthPx()); widget.setMaxWidth(column.widthPx()); }
         }
         int selected = model.indexOf(model.selectedRowId());
@@ -139,7 +155,9 @@ public final class SwingTable extends JPanel {
             int row = rowAtPoint(e.getPoint()), col = columnAtPoint(e.getPoint());
             if (row < 0 || col < 0) return null;
             // JavaFX: Tooltip → Swing: JToolTip → Web: div.tooltip
-            return SwingLook.tooltipHtml(port.intents().tableTooltip(adapter.source().revision(), row, adapter.source().columns().get(col).id()));
+            var tooltip = port.intents().decoratedTableTooltip(adapter.source().revision(), row, adapter.source().columns().get(col).id());
+            putClientProperty("cp.tooltip", tooltip.text());
+            return SwingLook.tableTooltipHtml(tooltip);
         }
         /** Закрашивает объединённую область поверх стандартных ячеек JTable. */
         @Override protected void paintComponent(Graphics g) {
@@ -158,10 +176,13 @@ public final class SwingTable extends JPanel {
 
     /** Оформление ячейки берётся из готовых токенов строки и исключений ячейки. */
     private final class Cells extends DefaultTableCellRenderer {
+        /** Назначает общие изображения только декоративным ячейкам повторно используемого рендерера. */
+        Cells() { SwingIcons.decorate(this); }
         /** Рисует цвет, начертание и зачёркивание без финансовых вычислений. */
         @Override public Component getTableCellRendererComponent(JTable table, Object value, boolean selected, boolean focused, int row, int col) {
             super.getTableCellRendererComponent(table, value, selected, focused, row, col);
             TableRowView item = adapter.source().row(row); ColumnSpec column = adapter.source().columns().get(col);
+            putClientProperty("cp.decorative", column.id().equals(LazyTableModel.COLUMN_MARKS) || item.kind() == RowKind.PAST_HEADER);
             RowStyle style = item.rowStyle(); CellStyle cell = item.cellStyles().get(column.id());
             ColorToken color = cell == null || cell.text() == null ? style.text() : cell.text();
             boolean bold = column.bold() || (cell == null ? style.bold() : cell.bold());

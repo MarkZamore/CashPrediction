@@ -77,8 +77,11 @@ public final class WebAllowanceTest {
                         run.execute(new SelfTestCommand.Save());
                         Path file;
                         try (var files = Files.list(run.output.resolve("home/CashMemory"))) {
-                            var plans = files.filter(p -> p.toString().endsWith(".md") && !p.getFileName().toString().equals("settings.md")
-                                    && !p.getFileName().toString().startsWith("web-session")).toList();
+                            // Служебные reconnect-файлы не являются планами, как и в штатном каталоге.
+                            var plans = files.filter(p -> Files.isRegularFile(p)
+                                    && p.getFileName().toString().endsWith(".md")
+                                    && !ru.cashprediction.core.io.CashMemoryLayout.isServiceFileName(
+                                            p.getFileName().toString())).toList();
                             assertEquals(1, plans.size(), "Expected one saved plan fixture");
                             file = plans.getFirst();
                         }

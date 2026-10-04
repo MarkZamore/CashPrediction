@@ -62,7 +62,7 @@ class WebContextShotIT {
         var sessions = RegistryNodeCleaner.snapshotRealSessionNodes();
         Path profile = Files.createTempDirectory("cp-context-shot-");
         var request = new LaunchRequest("web", NAME, run.resolve("home"), node,
-                LaunchRequest.PARITY_TODAY, script.toString(), run.resolve("out"), "core", List.of(), List.of());
+                LaunchRequest.PARITY_TODAY, script.toString(), run.resolve("out"), List.of(), List.of());
         Path log = request.selftestOut().resolve("selftest.log");
         try {
             var target = ModuleSnapshot.capture(ClientTarget.web(layout), run.resolve("module-snapshot"), layout.root());

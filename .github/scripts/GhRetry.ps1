@@ -25,8 +25,8 @@ function Test-GhTransientFailure {
     if ([string]::IsNullOrWhiteSpace($Text)) { return $false }
     # Both shapes gh reports a server error in: its own "HTTP 503: ..." and the
     # raw "non-200 OK status code: 503 ..." from an asset download.
-    if ($Text -match '(?im)^\s*(HTTP\s+)?(429|500|502|503|504)\b') { return $true }
-    if ($Text -match '(?i)(HTTP|status code:?)\s+(429|500|502|503|504)\b') { return $true }
+    if ($Text -match '(?im)^\s*(HTTP\s+)?(429|5[0-9]{2})\b') { return $true }
+    if ($Text -match '(?i)(HTTP|status code:?)\s+(429|5[0-9]{2})\b') { return $true }
     if ($Text -match '(?i)no server is currently available') { return $true }
     if ($Text -match '(?i)service unavailable|bad gateway|gateway time-?out|internal server error') { return $true }
     if ($Text -match '(?i)we couldn.t respond to your request in time') { return $true }
@@ -48,6 +48,9 @@ function Invoke-Gh {
     # every pwsh step - an unguarded stderr line would end the job on the first
     # 503, which is the one thing this function exists to survive.
     $callerPreference = $ErrorActionPreference
+    # В новых PowerShell ненулевой native exit не должен прерывать повторы.
+    $callerNativePreference = $PSNativeCommandUseErrorActionPreference
+    $PSNativeCommandUseErrorActionPreference = $false
     $ErrorActionPreference = 'Continue'
     try {
         for ($attempt = 1; ; $attempt++) {
@@ -59,7 +62,8 @@ function Invoke-Gh {
             if ($problem) { Write-Host $problem.TrimEnd() }
 
             if ($code -eq 0 -or $attempt -ge $attempts -or -not (Test-GhTransientFailure $problem)) {
-                # $LASTEXITCODE is still gh's: only cmdlets have run since.
+                # Возвращаем код последней попытки также из вложенных функций.
+                $global:LASTEXITCODE = $code
                 return $output
             }
 
@@ -71,6 +75,27 @@ function Invoke-Gh {
     }
     finally {
         $ErrorActionPreference = $callerPreference
+        $PSNativeCommandUseErrorActionPreference = $callerNativePreference
         Remove-Item -LiteralPath $stderrFile -Force -ErrorAction SilentlyContinue
     }
+}
+
+<#
+.SYNOPSIS
+Проверяет наличие API-ресурса: только явный HTTP 404 означает отсутствие.
+#>
+function Test-GhApiResourceExists {
+    param([Parameter(Mandatory)][string]$Endpoint)
+
+    # --include даёт статус HTTP отдельно от JSON и диагностического текста gh.
+    # Проверяем первую строку ответа последней попытки, а не слово 404 в теле.
+    $response = @(Invoke-Gh api $Endpoint --method GET --include)
+    $code = $LASTEXITCODE
+    $status = if ($response.Count -gt 0 -and
+        [string]$response[0] -match '^HTTP/\S+\s+(?<status>[0-9]{3})(?:\s|$)') {
+        [int]$Matches.status
+    } else { 0 }
+    if ($code -eq 0 -and $status -eq 200) { return $true }
+    if ($code -ne 0 -and $status -eq 404) { return $false }
+    throw "Не удалось проверить API-ресурс ${Endpoint}: exit=$code, HTTP=$status. Публикация остановлена."
 }

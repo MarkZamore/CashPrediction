@@ -22,10 +22,17 @@ import ru.cashprediction.core.ui.command.InvokeSource;
 import ru.cashprediction.core.ui.view.*;
 import ru.cashprediction.core.ui.view.chart.ChartScene;
 import ru.cashprediction.core.ui.dump.UiDump;
-import ru.cashprediction.swing.session.SwingUiExecutor;
 
 /** Тонкий порт Swing: реальные окна, EDT, события и общие UI-модели. */
 public final class SwingUiPort implements UiPort {
+    private Runnable updateReady = () -> { };
+    private Runnable updateClose = () -> { };
+
+    /** Подключает только события готовности и выхода к общему обновлятору. */
+    public void updateCallbacks(Runnable ready, Runnable close) {
+        updateReady = java.util.Objects.requireNonNull(ready);
+        updateClose = java.util.Objects.requireNonNull(close);
+    }
     final AppEnvironment environment;
     private UiIntents intents;
     private final UiExecutor executor = new SwingUiExecutor();
@@ -55,7 +62,7 @@ public final class SwingUiPort implements UiPort {
     /** Возвращает фоновый планировщик; задачи контроллера сами возвращаются в EDT. */
     @Override public Scheduler scheduler() { return scheduler; }
     /** Показывает главное окно впервые. */
-    @Override public void showMain(MainScreenModel model, MainWindowState restored) { if (frame != null) throw new IllegalStateException("Main shown twice"); frame = new MainFrameView(this); frame.show(model, restored); }
+    @Override public void showMain(MainScreenModel model, MainWindowState restored) { if (frame != null) throw new IllegalStateException("Main shown twice"); frame = new MainFrameView(this); frame.show(model, restored); updateReady.run(); }
     /** Обновляет указанные части показанного экрана. */
     @Override public void render(MainScreenModel model, EnumSet<ScreenPart> changed) { if (frame == null) throw new IllegalStateException("Main hidden"); frame.render(model, changed); }
     /** Возвращает живую геометрию главного окна. */
@@ -141,7 +148,7 @@ public final class SwingUiPort implements UiPort {
         if (environment.options().isSelftest()) { requestChooser(once(onResult)); return; }
         SwingUtilities.invokeLater(() -> {
             // JavaFX: FileChooser → Swing: JFileChooser → Web: FILE_BROWSER
-            JFileChooser chooser = new JFileChooser(spec.initialFolder().toFile()); chooser.setDialogTitle(spec.title());
+            JFileChooser chooser = new JFileChooser(spec.initialFolder().toFile()); SwingIcons.chooser(chooser); chooser.setDialogTitle(spec.title());
             chooser.setFileFilter(new FileNameExtensionFilter(spec.filterDescription(), spec.extensions().toArray(String[]::new)));
             if (!spec.initialName().isEmpty()) chooser.setSelectedFile(spec.initialFolder().resolve(spec.initialName()).toFile());
             int result = spec.mode() == FileChooserSpec.Mode.OPEN ? chooser.showOpenDialog(visibleOwner()) : chooser.showSaveDialog(visibleOwner());
@@ -154,7 +161,7 @@ public final class SwingUiPort implements UiPort {
         if (environment.options().isSelftest()) { requestChooser(once(onResult)); return; }
         SwingUtilities.invokeLater(() -> {
             // JavaFX: DirectoryChooser → Swing: JFileChooser(DIRECTORIES_ONLY) → Web: FILE_BROWSER
-            JFileChooser chooser = new JFileChooser(spec.initialFolder().toFile()); chooser.setDialogTitle(spec.title()); chooser.setFileSelectionMode(JFileChooser.DIRECTORIES_ONLY);
+            JFileChooser chooser = new JFileChooser(spec.initialFolder().toFile()); SwingIcons.chooser(chooser); chooser.setDialogTitle(spec.title()); chooser.setFileSelectionMode(JFileChooser.DIRECTORIES_ONLY);
             int result = chooser.showOpenDialog(visibleOwner()); onResult.accept(result == JFileChooser.APPROVE_OPTION ? Optional.of(chooser.getSelectedFile().toPath()) : Optional.empty());
         });
     }
@@ -201,7 +208,7 @@ public final class SwingUiPort implements UiPort {
     @Override public void copyToClipboard(String text) { Toolkit.getDefaultToolkit().getSystemClipboard().setContents(new StringSelection(text), null); }
     /** Освобождает окна и диспетчер, затем завершает процесс по запросу ядра. */
     @Override public void exit(ExitKind kind, int code) {
-        if (exited) return; exited = true; scheduler.shutdown(); if (keys != null) keys.close(); popups.hide();
+        if (exited) return; exited = true; updateClose.run(); scheduler.shutdown(); if (keys != null) keys.close(); popups.hide();
         new ArrayList<>(forms.values()).forEach(SwingFormDialog::close); new ArrayList<>(alerts.values()).forEach(SwingAlerts::close);
         if (frame != null) frame.dispose();
         if (kind == ExitKind.HALT) Runtime.getRuntime().halt(code); else if (!environment.options().isSelftest()) System.exit(code);

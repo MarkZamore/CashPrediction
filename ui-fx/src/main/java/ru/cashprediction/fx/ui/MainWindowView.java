@@ -20,7 +20,7 @@ import ru.cashprediction.core.document.ViewMode;
 public final class MainWindowView {
     final BorderPane root = new BorderPane();
     final VBox top = new VBox();
-    final FlowPane summary = new FlowPane(4, 4);
+    final FlowPane summary = new FlowPane(DesignTokens.CARD_GAP, DesignTokens.CARD_GAP);
     final HBox status = new HBox(8);
     final StackPane chartPane = new StackPane();
     final Canvas chart = new Canvas();
@@ -83,6 +83,9 @@ public final class MainWindowView {
                 // Сегмент файла не сжимается до многоточия при длинном сообщении или снимке.
                 label.setMinWidth(s.grow() ? 0 : Region.USE_PREF_SIZE);
                 FxStyles.text(label, s.color(), FontToken.SMALL); label.setTooltip(FxStyles.tip(s.tooltip(), port.probe)); if (s.grow()) HBox.setHgrow(label, Priority.ALWAYS);
+                if (java.util.Set.of(ru.cashprediction.core.ui.view.status.StatusModel.DIRTY,
+                        ru.cashprediction.core.ui.view.status.StatusModel.WHAT_IF,
+                        ru.cashprediction.core.ui.view.status.StatusModel.SESSION).contains(s.id())) FxIcons.decorate(label);
                 status.getChildren().add(label);
             }
         }
@@ -107,8 +110,10 @@ public final class MainWindowView {
             box.getProperties().put("cp.tooltip", card.explanation());
             javafx.scene.control.Tooltip.install(box, FxStyles.tip(card.explanation(), port.probe));
             box.getProperties().put("cp.scope", FocusScope.CARD); box.getProperties().put("cp.focusId", card.id());
-            box.setMinWidth(118); box.setPadding(new Insets(6, 10, 6, 10)); box.setStyle("-fx-background-color: #FFFFFF; -fx-border-color: #D0D7DE; -fx-border-radius: 6; -fx-background-radius: 6;");
-            box.prefWidthProperty().bind(javafx.beans.binding.Bindings.max(118, summary.widthProperty().subtract(16 + 8 * 4).divide(9)));
+            box.setMinWidth(DesignTokens.CARD_MIN_WIDTH); box.setPadding(new Insets(DesignTokens.CARD_PAD_V, DesignTokens.CARD_PAD_H, DesignTokens.CARD_PAD_V, DesignTokens.CARD_PAD_H)); box.setStyle("-fx-background-color: #FFFFFF; -fx-border-color: #D0D7DE; -fx-border-radius: 6; -fx-background-radius: 6;");
+            box.prefWidthProperty().bind(javafx.beans.binding.Bindings.createDoubleBinding(
+                    () -> summaryCardWidth(next.summary().cards().size()),
+                    summary.widthProperty(), summary.insetsProperty(), summary.hgapProperty()));
             box.maxWidthProperty().bind(box.prefWidthProperty());
             PauseTransition timer = new PauseTransition(Duration.millis(350)); timer.setOnFinished(e -> port.spark(box, card.id()));
             hoverTimers.add(timer);
@@ -121,6 +126,16 @@ public final class MainWindowView {
         }
     }
 
+    /** Все ряды используют ширину полной строки, включая последний неполный ряд. */
+    private double summaryCardWidth(int count) {
+        double available = Math.max(0, summary.getWidth() - summary.getInsets().getLeft() - summary.getInsets().getRight());
+        double gap = summary.getHgap();
+        int columns = Math.max(1, Math.min(count, (int) Math.floor(
+                (available + gap) / (DesignTokens.CARD_MIN_WIDTH + gap))));
+        // Целая ширина не даёт пиксельному округлению FlowPane вытеснить последнюю карточку строки.
+        return Math.max(DesignTokens.CARD_MIN_WIDTH, Math.floor((available - (columns - 1) * gap) / columns));
+    }
+
     private void redraw() {
         if (model == null) return;
         if (Boolean.getBoolean("fx.hover.metrics")) System.out.println("HOVER_FRAME revision=" + model.revision() + " mode=" + model.mode());
@@ -129,6 +144,7 @@ public final class MainWindowView {
         chartScene = port.intents.chartScene(width, height); FxChartCanvas.paint(chart, chartScene); clearHover();
         legend.getChildren().clear(); for (var item : chartScene.legend()) {
             Label label = FxStyles.id(new Label(item.text()), item.id()); FxStyles.text(label, ColorToken.TEXT_MUTED, FontToken.LEGEND);
+            if (item.swatch() == ru.cashprediction.core.ui.view.chart.LegendItem.Swatch.NONE) FxIcons.decorate(label);
             if (item.swatch() != ru.cashprediction.core.ui.view.chart.LegendItem.Swatch.NONE) {
                 label.setGraphic(FxChartCanvas.legendSample(item)); label.setGraphicTextGap(4);
             }

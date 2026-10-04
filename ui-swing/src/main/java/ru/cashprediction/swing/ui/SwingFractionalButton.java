@@ -10,7 +10,7 @@ final class SwingFractionalButton extends JButton {
     private FontMetrics measuredMetrics;
 
     /** Принимает готовую локализованную подпись общей модели. */
-    SwingFractionalButton(String text) { super(text); }
+    SwingFractionalButton(String text) { super(text); SwingIcons.decorate(this); }
 
     /** Измеряет тем же контекстом, который используется при настоящем рисовании кнопки. */
     @Override public FontMetrics getFontMetrics(Font font) {

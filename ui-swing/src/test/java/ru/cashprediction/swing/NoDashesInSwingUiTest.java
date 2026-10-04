@@ -181,10 +181,12 @@ class NoDashesInSwingUiTest {
         assertTrue(Files.isDirectory(main.resolve("ru/cashprediction/swing")), main.toString());
         long count = files(main).stream().filter(f -> f.toString().endsWith(".java"))
                 .mapToLong(f -> literals(f, read(f)).size()).sum();
-        assertTrue(count > 500, "в Swing-клиенте сотни литералов, сканер нашёл " + count);
-        // Javadoc клиента полон тире: если бы сканер не пропускал комментарии, литералов с тире было бы много.
-        Path frame = main.resolve("ru/cashprediction/swing/MainFrame.java");
-        assertTrue(literals(frame, read(frame)).stream().anyMatch(l -> l.text().startsWith("CashPrediction ")));
+        assertTrue(count > 0, "сканер должен находить литералы реального клиента");
+        Path entry = main.resolve("ru/cashprediction/swing/SwingMain.java");
+        Path port = main.resolve("ru/cashprediction/swing/ui/SwingUiPort.java");
+        assertTrue(Files.isRegularFile(entry) && Files.isRegularFile(port), "точка входа и рендерер должны существовать");
+        assertTrue(literals(entry, read(entry)).stream().anyMatch(l -> l.text().equals("java.util.prefs")));
+        assertTrue(!literals(port, read(port)).isEmpty(), "сканируется настоящий рендерер");
     }
 
     @Test

@@ -133,6 +133,22 @@
         <groupId>org.codehaus.mojo</groupId>
         <artifactId>exec-maven-plugin</artifactId>
         <executions>
+          <!-- Общие исходные иконки проверяются до загрузки jmods и создания артефактов. -->
+          <execution>
+            <id>shared-icon-source</id>
+            <phase>validate</phase>
+            <goals><goal>exec</goal></goals>
+            <configuration>
+              <executable>powershell.exe</executable>
+              <arguments>
+                <argument>-NoProfile</argument>
+                <argument>-ExecutionPolicy</argument><argument>Bypass</argument>
+                <argument>-File</argument>
+                <argument>${project.basedir}/scripts/Test-Icon-Source.ps1</argument>
+                <argument>-SourceRoot</argument><argument>${project.basedir}/..</argument>
+              </arguments>
+            </configuration>
+          </execution>
           <!--
             4. jlink: урезанная Java только с нужными модулями.
                Транзитивно войдут java.base, java.desktop, java.prefs, java.xml, jdk.httpserver,
@@ -151,9 +167,10 @@
               <executable>${java.home}/bin/jlink</executable>
               <arguments>
                 <argument>--module-path</argument>
-                <argument>${java.home}/jmods;${javafx.jmods};${project.build.directory}/mods</argument>
+                <argument>${java.home}/jmods;${javafx.jmods}</argument>
                 <argument>--add-modules</argument>
-                <argument>ru.cashprediction.fx,ru.cashprediction.swing,ru.cashprediction.web,jdk.localedata</argument>
+                <!-- Код приложения остаётся отдельными модулями в app: обновление JAR не пересобирает lib/modules. -->
+                <argument>javafx.controls,java.desktop,java.logging,java.prefs,java.xml,jdk.httpserver,jdk.localedata,java.net.http</argument>
                 <argument>--include-locales=ru,en</argument>
                 <argument>--strip-debug</argument>
                 <argument>--no-header-files</argument>
@@ -195,8 +212,9 @@
                 <argument>--vendor</argument><argument>CashPrediction</argument>
                 <argument>--description</argument><argument>CashPrediction budget forecast (JavaFX)</argument>
                 <argument>--runtime-image</argument><argument>${dist.runtime}</argument>
+                <argument>--module-path</argument><argument>${project.build.directory}/mods</argument>
                 <argument>--module</argument><argument>ru.cashprediction.fx/ru.cashprediction.fx.FxMain</argument>
-                <argument>--icon</argument><argument>icons/CashPrediction.ico</argument>
+                <argument>--icon</argument><argument>../core/src/main/resources/ru/cashprediction/core/ui/icons/application.ico</argument>
                 <argument>--java-options</argument><argument>--enable-native-access=javafx.graphics</argument>
                 <argument>--java-options</argument><argument>-XX:-UsePerfData</argument>
                 <argument>--java-options</argument><argument>-XX:-CreateCoredumpOnCrash</argument>
@@ -208,6 +226,21 @@
                 <argument>--add-launcher</argument><argument>CashPrediction-Swing=launchers/swing.properties</argument>
                 <argument>--add-launcher</argument><argument>CashPrediction-Web=launchers/web.properties</argument>
                 <argument>--dest</argument><argument>${dist.output}</argument>
+              </arguments>
+            </configuration>
+          </execution>
+
+          <!-- Модули размещаются прямо в app, без повторной копии в app/mods. -->
+          <execution>
+            <id>normalize-app-modules</id>
+            <phase>package</phase>
+            <goals><goal>exec</goal></goals>
+            <configuration>
+              <executable>powershell.exe</executable>
+              <arguments>
+                <argument>-NoProfile</argument><argument>-ExecutionPolicy</argument><argument>Bypass</argument>
+                <argument>-File</argument><argument>${project.basedir}/scripts/Normalize-AppModules.ps1</argument>
+                <argument>-ImageDir</argument><argument>${dist.output}/CashPrediction</argument>
               </arguments>
             </configuration>
           </execution>

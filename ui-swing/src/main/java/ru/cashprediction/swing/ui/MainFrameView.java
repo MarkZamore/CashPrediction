@@ -12,7 +12,8 @@ import ru.cashprediction.core.document.ViewMode;
 /** Главное окно - композиция представлений общих моделей ядра. */
 public final class MainFrameView extends JFrame {
     final SwingUiPort port;
-    final JPanel root = new JPanel(new BorderLayout()), north = new JPanel();
+    final SwingPaintRoot root;
+    final JPanel north = new JPanel();
     final JPanel center = new JPanel(new CardLayout());
     final SwingToolbar toolbar;
     final SwingSummaryPanel summary;
@@ -26,7 +27,9 @@ public final class MainFrameView extends JFrame {
     public MainFrameView(SwingUiPort port) {
         this.port = port; setDefaultCloseOperation(WindowConstants.DO_NOTHING_ON_CLOSE);
         setMinimumSize(new Dimension(900, 600));
-        toolbar = new SwingToolbar(port.intents()); summary = new SwingSummaryPanel(port); table = new SwingTable(port); chart = new SwingChart(port);
+        root = new SwingPaintRoot(port.environment.options().isSelftest());
+        toolbar = new SwingToolbar(port.intents(), root.context()); summary = new SwingSummaryPanel(port, root.context());
+        table = new SwingTable(port); chart = new SwingChart(port, root.context());
         north.setLayout(new BorderLayout()); north.setBackground(SwingLook.color(ColorToken.BG_WINDOW));
         JPanel controls = new JPanel(new BorderLayout()); controls.add(toolbar, BorderLayout.NORTH); controls.add(summary); north.add(controls);
         center.add(table, ViewMode.TABLE.name()); center.add(chart, ViewMode.CHART.name());
@@ -43,7 +46,7 @@ public final class MainFrameView extends JFrame {
             @Override public void componentResized(ComponentEvent e) { summary.revalidate(); geometry(); }
             private void geometry() { if (isShowing()) port.intents().mainGeometry(SwingUiPort.bounds(MainFrameView.this), (getExtendedState() & MAXIMIZED_BOTH) != 0); }
         });
-        var icon = MainFrameView.class.getResource("/ru/cashprediction/swing/icon.png"); if (icon != null) setIconImage(new ImageIcon(icon).getImage());
+        setIconImage(SwingIcons.application());
     }
 
     /** Показывает главное окно один раз, применяя восстановленную геометрию. */

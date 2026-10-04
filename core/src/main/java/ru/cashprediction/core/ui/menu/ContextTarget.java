@@ -25,6 +25,10 @@ public sealed interface ContextTarget
             Objects.requireNonNull(rowId, "rowId");
         }
 
+        /**
+         * Возвращает ключ цели меню для строки события в дампе и web-протоколе.
+         * @return {@code row}
+         */
         @Override
         public String kind() {
             return "row";
@@ -42,6 +46,10 @@ public sealed interface ContextTarget
             Objects.requireNonNull(rowId, "rowId");
         }
 
+        /**
+         * Возвращает ключ цели меню для строки месячного итога в дампе и web-протоколе.
+         * @return {@code total}
+         */
         @Override
         public String kind() {
             return "total";
@@ -59,6 +67,10 @@ public sealed interface ContextTarget
             Objects.requireNonNull(rowId, "rowId");
         }
 
+        /**
+         * Возвращает ключ цели меню для заголовка прошедших событий в дампе и web-протоколе.
+         * @return {@code pastHeader}
+         */
         @Override
         public String kind() {
             return "pastHeader";
@@ -76,6 +88,10 @@ public sealed interface ContextTarget
             Objects.requireNonNull(cardId, "cardId");
         }
 
+        /**
+         * Возвращает ключ цели меню для карточки сводки в дампе и web-протоколе.
+         * @return {@code card}
+         */
         @Override
         public String kind() {
             return "card";
@@ -92,6 +108,10 @@ public sealed interface ContextTarget
      * @param height высота области рисования
      */
     record Chart(double x, double y, double width, double height) implements ContextTarget {
+        /**
+         * Возвращает ключ цели меню для точки графика в дампе и web-протоколе.
+         * @return {@code chart}
+         */
         @Override
         public String kind() {
             return "chart";
@@ -110,6 +130,10 @@ public sealed interface ContextTarget
             Objects.requireNonNull(windowId, "windowId");
         }
 
+        /**
+         * Возвращает ключ цели меню для элемента предпросмотра дат в дампе и web-протоколе.
+         * @return {@code preview}
+         */
         @Override
         public String kind() {
             return "preview";

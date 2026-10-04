@@ -8,6 +8,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.function.Predicate;
 import ru.cashprediction.core.app.AppState;
 import ru.cashprediction.core.document.ViewState;
 import ru.cashprediction.core.forecast.ChartSeries;
@@ -77,12 +78,13 @@ public final class PopupBuilders {
                 : cushion.isPositive() && balance.isLessThan(cushion) ? ColorToken.WARN : ColorToken.TEXT_PRIMARY;
 
         ViewState view = state.view();
+        Predicate<ForecastRow> rowFilter = view.rowFilter();
         List<ForecastRow> rows = forecast.rows();
         List<DayCardModel.Line> lines = new ArrayList<>(DAY_CARD_MAX_LINES);
         int events = 0;
         for (int i = firstIndexOn(rows, date); i < rows.size() && rows.get(i).date().equals(date); i++) {
             ForecastRow row = rows.get(i);
-            if (row.origin() == Origin.START || !view.accepts(row)) {
+            if (row.origin() == Origin.START || !rowFilter.test(row)) {
                 continue;
             }
             events++;

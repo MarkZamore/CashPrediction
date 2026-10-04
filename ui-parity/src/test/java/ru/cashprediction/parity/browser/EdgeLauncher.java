@@ -112,11 +112,13 @@ public final class EdgeLauncher {
      *
      * <p>Почему не просто {@code --window-size}: в {@code --headless=new} под Windows браузер создаёт скрытое
      * настоящее окно, и размер окна включает невидимую рамку. На этой машине Edge 1200×800 даёт окно просмотра
-     * 1166×703, Chrome — 1174×700. Эмуляция размера ({@code Emulation.setDeviceMetricsOverride}) вне набора
-     * команд стадии S0, поэтому рамка измеряется через {@code Runtime.evaluate}: браузер запускается,
+     * 1166×703, Chrome — 1174×700. Рамка измеряется через {@code Runtime.evaluate}: браузер запускается,
      * {@code innerWidth/innerHeight} сравниваются с нужными, и при расхождении браузер перезапускается с окном,
      * увеличенным на измеренную рамку. Рамка запоминается для исполняемого файла, так что следующие запуски
-     * в той же JVM сразу берут верный размер.</p>
+     * в той же JVM сразу берут верный размер. Если второй запуск упирается в минимальный размер скрытого
+     * окна Windows, применяется {@code Emulation.setDeviceMetricsOverride} с масштабом 1 и без мобильного
+     * режима. Измерение viewport отдельным соединением обязательно до перехода к приложению; соединение,
+     * удерживающее override, живёт до завершения браузера.</p>
      *
      * @param browser     исполняемый файл
      * @param userDataDir папка профиля
@@ -129,6 +131,7 @@ public final class EdgeLauncher {
      */
     public static BrowserSession startWithViewport(Path browser, Path userDataDir, int width, int height, String url,
                                                    Duration timeout) {
+        if (width <= 0 || height <= 0) throw new IllegalArgumentException("viewport must be positive");
         int[] inset = FRAME_INSETS.getOrDefault(browser.toAbsolutePath().normalize(), new int[] {0, 0});
         for (int attempt = 0; attempt < 2; attempt++) {
             int windowWidth = width + inset[0];
@@ -147,6 +150,7 @@ public final class EdgeLauncher {
             if (viewport[0] == width && viewport[1] == height) {
                 FRAME_INSETS.put(browser.toAbsolutePath().normalize(), inset);
                 try (CdpClient cdp = CdpClient.connectToFirstPage(session.port(), timeout)) {
+                    validateViewport(cdp, width, height, timeout);
                     cdp.navigate(url);
                 } catch (RuntimeException error) {
                     session.closeQuietly();
@@ -154,15 +158,42 @@ public final class EdgeLauncher {
                 }
                 return session;
             }
+            if (attempt == 1) {
+                CdpClient sizing = null;
+                try {
+                    sizing = CdpClient.connectToFirstPage(session.port(), timeout);
+                    sizing.setViewport(width, height, timeout);
+                    // Независимый наблюдатель проверяет настоящие размеры, а не ответ команды эмуляции.
+                    try (CdpClient observed = CdpClient.connectToFirstPage(session.port(), timeout)) {
+                        long[] measured = validateViewport(observed, width, height, timeout);
+                        session.sized(windowWidth, windowHeight, (int) measured[0], (int) measured[1]);
+                        observed.navigate(url);
+                    }
+                    // Не записываем ограничение минимального окна в FRAME_INSETS: это не размер рамки.
+                    // sizing остаётся подключённым; setViewport освобождает транспорт после закрытия браузера.
+                    return session;
+                } catch (RuntimeException error) {
+                    if (sizing != null) sizing.close();
+                    session.closeQuietly();
+                    throw error;
+                }
+            }
             // Рамка = окно − окно просмотра; следующий запуск добавит её к нужному размеру.
             inset = new int[] {windowWidth - (int) viewport[0], windowHeight - (int) viewport[1]};
             session.close();
-            if (attempt == 1) {
-                throw new IllegalStateException("Browser viewport is " + viewport[0] + "x" + viewport[1] + " instead of "
-                        + width + "x" + height + " with --window-size=" + windowWidth + "," + windowHeight);
-            }
         }
         throw new IllegalStateException("unreachable");
+    }
+
+    /** Проверяет измеренные размеры и масштаб до перехода, не принимая успешный ответ override за доказательство. */
+    static long[] validateViewport(CdpClient observed, int width, int height, Duration timeout) {
+        observed.waitFor("window.innerWidth === " + width + " && window.innerHeight === " + height
+                + " && window.devicePixelRatio === 1", timeout);
+        List<?> size = (List<?>) observed.evaluate("[window.innerWidth, window.innerHeight, window.devicePixelRatio]", timeout);
+        if (((Number) size.get(0)).doubleValue() != width || ((Number) size.get(1)).doubleValue() != height
+                || ((Number) size.get(2)).doubleValue() != 1)
+            throw new IllegalStateException("Observed browser viewport " + size + " instead of " + width + "x" + height + " at scale 1");
+        return new long[] {((Number) size.get(0)).longValue(), ((Number) size.get(1)).longValue()};
     }
 
     /**
@@ -220,12 +251,15 @@ public final class EdgeLauncher {
             Path activePort = profile.resolve(ACTIVE_PORT_FILE);
             long deadline = System.nanoTime() + timeout.toNanos();
             while (true) {
+                session.captureOwned();
                 Optional<int[]> port = readPort(activePort);
                 if (port.isPresent()) {
                     session.connected(port.get()[0], readWebSocketPath(activePort));
                     return session;
                 }
-                if (!process.isAlive()) {
+                // Нулевой выход лаунчера не доказывает завершение Edge: настоящий
+                // дочерний браузер ещё может дописывать собственный DevToolsActivePort.
+                if (!process.isAlive() && process.exitValue() != 0) {
                     throw new IllegalStateException(browser + " exited with code " + process.exitValue()
                             + " before writing " + ACTIVE_PORT_FILE + "; see " + log);
                 }

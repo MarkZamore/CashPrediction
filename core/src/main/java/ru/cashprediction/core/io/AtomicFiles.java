@@ -9,11 +9,15 @@ import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.DirectoryStream;
 import java.nio.file.FileSystemException;
 import java.nio.file.Files;
+import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Locale;
+import java.util.UUID;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import ru.cashprediction.core.text.Texts;
 
@@ -24,7 +28,8 @@ import ru.cashprediction.core.text.Texts;
  * снимка сессии или плана. Если писать прямо в целевой файл, после сбоя останется обрезанный файл,
  * и восстановление станет невозможным ровно тогда, когда оно нужнее всего.</p>
  *
- * <p>Как: содержимое пишется во временный файл В ТОЙ ЖЕ ПАПКЕ ({@code имя.<pid>.<nano>.tmp}),
+ * <p>Как: содержимое пишется во временный файл В ТОЙ ЖЕ ПАПКЕ
+ * ({@code cashprediction-tmp-<pid>-<uuid>.md} или {@code .xml} для текста),
  * сбрасывается на диск ({@code force}), затем переименовывается поверх целевого файла атомарным
  * перемещением. Временный файл живёт внутри CashMemory, поэтому требование «никаких файлов вне
  * CashMemory» не нарушается. Уникальное имя исключает столкновение двух потоков или двух
@@ -42,8 +47,12 @@ import ru.cashprediction.core.text.Texts;
  */
 public final class AtomicFiles {
 
-    /** Шаблон временных файлов этого класса: {@code <что-угодно>.<pid>.<nano>.tmp}. */
-    private static final Pattern TMP_NAME = Pattern.compile(".+\\.\\d+\\.-?\\d+\\.tmp");
+    /** Служебное пространство имён; пользовательские планы не могут занимать этот префикс. */
+    static final String TEMP_PREFIX = "cashprediction-tmp-";
+
+    /** Только расходные копии записи и пробы; единственная копия при переименовании сюда не входит. */
+    private static final Pattern TMP_NAME = Pattern.compile(TEMP_PREFIX
+            + "([1-9]\\d*)-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\\.(md|xml|tmp)");
 
     /** Число попыток перемещения при временной блокировке файла. */
     private static final int MOVE_ATTEMPTS = 3;
@@ -59,7 +68,16 @@ public final class AtomicFiles {
      * @throws IOException если запись не удалась; целевой файл в этом случае не изменён
      */
     public static void writeString(Path target, String content) throws IOException {
-        write(target, content.getBytes(StandardCharsets.UTF_8));
+        write(target, content.getBytes(StandardCharsets.UTF_8), textSuffix(content));
+    }
+
+    /** Выбирает расширение по содержимому, а не по имени конечного файла. */
+    static String textSuffix(String content) {
+        // XML-снимок имеет декларацию; остальной текст остаётся читаемым Markdown независимо от имени цели.
+        String text = content.startsWith("\uFEFF") ? content.substring(1) : content;
+        text = text.stripLeading();
+        return text.startsWith("<?xml") && text.length() > 5 && Character.isWhitespace(text.charAt(5))
+                ? "xml" : "md";
     }
 
     /**
@@ -70,15 +88,33 @@ public final class AtomicFiles {
      * @throws IOException если запись не удалась; целевой файл в этом случае не изменён
      */
     public static void write(Path target, byte[] bytes) throws IOException {
+        write(target, bytes, "tmp");
+    }
+
+    /** Создаёт уникальный служебный путь без обращения к диску; расширение отражает вид содержимого. */
+    static Path temporaryPath(Path target, String suffix) {
+        return target.toAbsolutePath().resolveSibling(TEMP_PREFIX + ProcessHandle.current().pid()
+                + "-" + UUID.randomUUID() + "." + suffix);
+    }
+
+    /** Резервирует весь префикс, включая незавершённые имена и алиасы Windows с конечными точками. */
+    static boolean isTemporaryName(String name) {
+        return name != null && name.strip().toLowerCase(Locale.ROOT).startsWith(TEMP_PREFIX);
+    }
+
+    /** Записывает копию с нужным расширением, сохраняя сброс на диск и атомарную замену. */
+    private static void write(Path target, byte[] bytes, String suffix) throws IOException {
         Path dir = target.toAbsolutePath().getParent();
         if (dir == null) {
             throw new IOException(Texts.get("io.error.noParentFolder", target));
         }
         Files.createDirectories(dir);
-        Path tmp = dir.resolve(target.getFileName() + "." + ProcessHandle.current().pid() + "." + System.nanoTime() + ".tmp");
+        Path tmp = temporaryPath(target, suffix);
+        boolean created = false;
         try {
             // CREATE_NEW: если такое имя вдруг занято, лучше ошибка, чем чужие данные.
             try (FileChannel channel = FileChannel.open(tmp, StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE)) {
+                created = true;
                 ByteBuffer buffer = ByteBuffer.wrap(bytes);
                 while (buffer.hasRemaining()) {
                     channel.write(buffer);
@@ -90,7 +126,7 @@ public final class AtomicFiles {
             moveWithRetries(tmp, target);
         } finally {
             // Если перемещение не случилось, временный файл не должен остаться мусором.
-            Files.deleteIfExists(tmp);
+            if (created) Files.deleteIfExists(tmp);
         }
     }
 
@@ -129,31 +165,33 @@ public final class AtomicFiles {
 
     /**
      * Удаляет временные файлы, оставшиеся после аварийного завершения посреди записи.
-     * Удаляются только файлы старше минуты: свежий временный файл может принадлежать
-     * параллельно работающему экземпляру другого клиента.
+     * Удаляются только обычные файлы строгого служебного шаблона старше минуты, если PID
+     * владельца больше не существует. Живой PID (даже повторно использованный), ссылки,
+     * старые неоднозначные .tmp и промежуточные копии переименования сохраняются.
      *
      * @param dir папка CashMemory
      * @return число удалённых файлов
      */
     public static int cleanupStaleTemporaryFiles(Path dir) {
-        if (!Files.isDirectory(dir)) {
+        if (!Files.isDirectory(dir, LinkOption.NOFOLLOW_LINKS)) {
             return 0;
         }
         int removed = 0;
         Instant threshold = Instant.now().minus(Duration.ofMinutes(1));
-        try (DirectoryStream<Path> stream = Files.newDirectoryStream(dir, "*.tmp")) {
+        try (DirectoryStream<Path> stream = Files.newDirectoryStream(dir)) {
             for (Path file : stream) {
                 try {
-                    if (TMP_NAME.matcher(file.getFileName().toString()).matches()
-                            && Files.getLastModifiedTime(file).toInstant().isBefore(threshold)) {
-                        Files.deleteIfExists(file);
-                        removed++;
+                    Matcher name = TMP_NAME.matcher(file.getFileName().toString());
+                    if (name.matches() && Files.isRegularFile(file, LinkOption.NOFOLLOW_LINKS)
+                            && Files.getLastModifiedTime(file, LinkOption.NOFOLLOW_LINKS).toInstant().isBefore(threshold)
+                            && ProcessHandle.of(Long.parseLong(name.group(1))).isEmpty()) {
+                        if (Files.deleteIfExists(file)) removed++;
                     }
-                } catch (IOException ignored) {
+                } catch (IOException | IllegalArgumentException | SecurityException ignored) {
                     // Файл занят или уже удалён: не критично, попробуем при следующем запуске.
                 }
             }
-        } catch (IOException ignored) {
+        } catch (IOException | SecurityException ignored) {
             // Папка недоступна для чтения: очистка не обязательна для работы.
         }
         return removed;

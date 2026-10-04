@@ -2,6 +2,7 @@ package ru.cashprediction.fx;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -14,6 +15,7 @@ import java.util.Locale;
 import java.util.Set;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
+import ru.cashprediction.core.ui.token.UiIcons;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -152,10 +154,21 @@ class NoDashesInFxUiTest {
     void scannedFoldersExistSoTheCheckIsNotEmpty() {
         Path main = moduleDir().resolve("src/main/java");
         assertTrue(Files.isDirectory(main.resolve("ru/cashprediction/fx")), main.toString());
-        assertTrue(Files.isRegularFile(moduleDir().resolve("src/main/resources/ru/cashprediction/fx/styles.css")),
-                "styles.css проверяется");
-        int literals = javaFiles(main).stream().mapToInt(file -> literalCount(read(file))).sum();
-        assertTrue(literals > 500, "в ui-fx много литералов, сканер их видит: " + literals);
+        for (String survivor : List.of("FxMain.java", "ui/FxStartupErrors.java", "ui/FxUiPort.java",
+                "ui/FxMenus.java", "ui/FxFormDialog.java", "ui/FxToolbar.java", "ui/FxStyles.java")) {
+            Path source = main.resolve("ru/cashprediction/fx").resolve(survivor);
+            assertTrue(Files.isRegularFile(source), source.toString());
+            assertTrue(javaFiles(main).contains(source), "файл входит в обход: " + source);
+            assertTrue(literalCount(read(source)) > 0, "сканер видит литералы: " + source);
+        }
+        Path smoke = moduleDir().resolve("src/test/resources/widget-smoke.cps");
+        assertTrue(resourceFiles().contains(smoke), "сценарий входит в проверку ресурсов");
+        byte[] application = UiIcons.applicationPng();
+        assertTrue(application.length > 8);
+        assertTrue(java.util.Arrays.equals(new byte[] {(byte) 137, 80, 78, 71, 13, 10, 26, 10},
+                java.util.Arrays.copyOf(application, 8)), "общая эмблема имеет сигнатуру PNG");
+        assertFalse(Files.exists(moduleDir().resolve("src/main/resources/ru/cashprediction/fx/icon.png")),
+                "клиентская копия эмблемы отсутствует");
     }
 
     @Test

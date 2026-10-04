@@ -49,6 +49,12 @@ public final class QuickEditForm implements FormLogic {
     public QuickEditForm() {
     }
 
+    /**
+     * Строит немодальную всплывающую форму с денежным полем в фокусе и подсказкой клавиш.
+     * Видимых кнопок нет; идентификатор сохранения задан для обработки Enter сеансом формы.
+     * @param context окружение формы; для построения раскладки не используется
+     * @return спецификация быстрой правки суммы
+     */
     @Override
     public FormSpec spec(FormContext context) {
         var amount = FieldSpecs.focused(FieldSpecs.withTooltip(
@@ -58,6 +64,12 @@ public final class QuickEditForm implements FormLogic {
                         new FormRow.Hint("quickHint", UiText.get("quick.hint"))))), List.of(), ButtonSpecs.OK);
     }
 
+    /**
+     * Берёт сумму существующей корректировки, если она задана, иначе сумму правила.
+     * При некорректном ключе события или отсутствующем правиле оставляет поле пустым.
+     * @param context окружение с правилом и исходной датой события
+     * @return каноническое начальное значение поля {@code amount}
+     */
     @Override
     public Map<String, String> defaults(FormContext context) {
         OccurrenceKey key = key(context);
@@ -67,6 +79,14 @@ public final class QuickEditForm implements FormLogic {
         return Map.of("amount", FieldCodec.money(adjustment == null ? rule.amount() : adjustment.action().newAmount().orElse(rule.amount())));
     }
 
+    /**
+     * Проверяет обязательную положительную сумму и формирует подпись события с валютой плана.
+     * Если цель не найдена, показывает соответствующую подпись; доступность сохранения
+     * определяется проверкой суммы.
+     * @param state введённая сумма
+     * @param context окружение с целью корректировки и текущим планом
+     * @return модель с полем суммы, строкой проблем и состоянием сохранения
+     */
     @Override
     public FormView evaluate(FormState state, FormContext context) {
         OccurrenceKey key = key(context);
@@ -78,6 +98,18 @@ public final class QuickEditForm implements FormLogic {
         return new FormView(0, 0, header, fields, problem, Map.of(ButtonSpecs.OK, check.isPresent() ? ButtonView.DISABLED : ButtonView.ENABLED), List.of(), List.of(), "", false);
     }
 
+    /**
+     * При отмене или отсутствующей цели закрывает форму без результата; для остальных
+     * идентификаторов проверяет сумму и возвращает корректировку для применения контроллером.
+     * Сохраняет заметку и перенесённую дату, заменяя перенос действием {@code Replace}.
+     * Если корректировки нет либо она только меняет сумму, сумма правила при пустой
+     * заметке даёт результат с отсутствующей корректировкой для её удаления.
+     * Корректировку пропуска заменяет изменением суммы. Сам план не изменяет.
+     * @param buttonId идентификатор кнопки, обычно сохранение по Enter или отмена
+     * @param state введённая сумма
+     * @param context окружение с правилом, исходной датой и текущей корректировкой
+     * @return закрытие с результатом, закрытие без результата либо продолжение ввода при ошибке суммы
+     */
     @Override
     public FormOutcome onButton(String buttonId, FormState state, FormContext context) {
         if (ButtonSpecs.CANCEL.equals(buttonId)) return new FormOutcome.Close(null);

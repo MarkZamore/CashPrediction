@@ -1,5 +1,6 @@
 /** @file Явный тестовый порт: реальные щелчки, ввод, клавиши и DOM-дамп. */
-import {dump} from './dump.js';
+import {dump, prepareDump, readPreparedDump, discardPreparedDump} from './dump.js';
+import {createPaintObserver} from './paint-observation.js';
 import {radioInputs, setFieldValue} from './render-form.js';
 import {visible, frame} from './dom.js';
 
@@ -10,24 +11,25 @@ async function idle(app, timeoutMs = 5000) {
   while (performance.now() < deadline) {
     await app.transport.tail; await app.transport.effectTail;
     await app.testDriver?.consumeChoice();
-    const busy = app.transport.pending || app.resyncing || [...app.debouncers].some(fn => fn.pending());
+    app.iconCapture?.sources.requireHealthy();
+    const busy = app.transport.pending || app.resyncing || app.iconCapture?.sources.pending() || [...app.debouncers].some(/** Проверяет наличие ожидающего вызова у обработчика отложенного ввода. */ fn => fn.pending());
     stable = busy ? 0 : stable + 1;
     if (stable >= 3) { await frame(); return {ok: true}; }
-    await new Promise(resolve => setTimeout(resolve, 50));
+    await new Promise(/** Завершает паузу перед следующей проверкой готовности интерфейса через 50 миллисекунд. */ resolve => setTimeout(resolve, 50));
   }
   throw new Error('UI idle timeout');
 }
 
 /** Находит единственный живой виджет с идентификатором. */
 function byId(id, root = document) {
-  const node = [...root.querySelectorAll('[data-cp-id]')].find(n => n.dataset.cpId === id);
+  const node = [...root.querySelectorAll('[data-cp-id]')].find(/** Находит живой виджет по точному идентификатору. */ n => n.dataset.cpId === id);
   if (!node) throw new Error(`Widget missing: ${id}`);
   return node;
 }
 
 /** Открывает реальных предков пункта меню и нажимает его кнопку. */
 async function clickMenu(app, id) {
-  const node = [...document.querySelectorAll('.menu-node')].find(n => n.dataset.cpId === id);
+  const node = [...document.querySelectorAll('.menu-node')].find(/** Находит узел меню по точному идентификатору. */ n => n.dataset.cpId === id);
   if (!node) throw new Error(`Menu missing: ${id}`);
   const ancestors = []; let parent = node.parentElement;
   while (parent) { if (parent.classList.contains('menu-panel')) ancestors.unshift(parent); parent = parent.parentElement; }
@@ -40,14 +42,14 @@ async function clickMenu(app, id) {
 /** Находит открытое окно по точному заголовку, назначению или id. */
 function windowFor(app, name) {
   const windows = [...app.windows.values()];
-  const form = windows.find(window => window.id === name || window.spec.windowTitle === name || window.spec.purpose === name || window.spec.windowType === name) || (!name || name === 'last' ? windows.at(-1) : null);
+  const form = windows.find(/** Сопоставляет окно с запрошенным идентификатором, заголовком, назначением или типом. */ window => window.id === name || window.spec.windowTitle === name || window.spec.purpose === name || window.spec.windowType === name) || (!name || name === 'last' ? windows.at(-1) : null);
   if (!form) throw new Error(`Window missing: ${name}`);
   return form;
 }
 
 /** Находит поле по id или точной видимой подписи. */
 function fieldFor(form, label) {
-  const entry = form.fields.get(label) || [...form.fields.values()].flatMap(field => field.peers || [field]).find(field => field.label.textContent === label || field.checkLabel?.textContent === label);
+  const entry = form.fields.get(label) || [...form.fields.values()].flatMap(/** Разворачивает составное поле в его отдельные представления. */ field => field.peers || [field]).find(/** Сопоставляет видимую подпись обычного поля или флажка с запросом. */ field => field.label.textContent === label || field.checkLabel?.textContent === label);
   if (!entry) throw new Error(`Field missing: ${label}`);
   return entry;
 }
@@ -58,14 +60,14 @@ function input(entry, text) {
   if (node.disabled || node.readOnly) throw new Error(`Field unavailable: ${node.dataset.cpId}`);
   node.focus();
   if (node.dataset.kind === 'RADIO') {
-    const radio = radioInputs(node).find(n => n.value === text || n.parentElement.textContent === text);
+    const radio = radioInputs(node).find(/** Находит переключатель по значению или видимой подписи. */ n => n.value === text || n.parentElement.textContent === text);
     if (!radio) throw new Error(`Option missing: ${text}`);
     if (radio.disabled || !visible(radio) || radio.closest('[inert]')) throw new Error(`Option unavailable: ${text}`);
     radio.focus();
     radio.click();
   } else {
     let value = text;
-    if (node.tagName === 'SELECT') value = [...node.options].find(option => option.textContent === text || option.value === text)?.value ?? text;
+    if (node.tagName === 'SELECT') value = [...node.options].find(/** Находит вариант списка по тексту или значению. */ option => option.textContent === text || option.value === text)?.value ?? text;
     setFieldValue(node, value);
     node.dispatchEvent(new Event('input', {bubbles: true})); node.dispatchEvent(new Event('change', {bubbles: true}));
   }
@@ -75,7 +77,7 @@ function input(entry, text) {
 function finishInput(entry) {
   const node = document.activeElement && entry.control.contains(document.activeElement) ? document.activeElement : entry.control;
   let delivered = false;
-  const observed = () => { delivered = true; };
+  const observed = /** Отмечает фактическую доставку события потери фокуса полю. */ () => { delivered = true; };
   entry.control.addEventListener('blur', observed, true);
   node.blur();
   entry.control.removeEventListener('blur', observed, true);
@@ -100,16 +102,64 @@ function key(chord) {
 export function installTestApi(app) {
   const supported = ['Wait', 'Size', 'Sample', 'Menu', 'Click', 'Key', 'View', 'Period', 'Filter', 'FilterType', 'Select', 'DoubleClick', 'RowClick', 'QuickEdit', 'Field', 'Fill', 'Button', 'Answer', 'Ok', 'Cancel', 'Context', 'Hover', 'SliderSet', 'SpinnerSet', 'ListPick', 'FieldEnter', 'Chooser', 'Save', 'Snapshot', 'Exit', 'Dump'];
   const steps = []; let lastStep = -1; let hovered = null; let pendingChoice; let choiceWork;
+  let paintObserver = null;
+  const preparedCaptures = new Map(), cancelledCaptures = new Set();
+
+  /** Освобождает подготовку сразу при отмене, в том числе до первого синхронного чтения. */
+  function discardCapture(captureId) {
+    const prepared = preparedCaptures.get(captureId);
+    if (prepared) discardPreparedDump(prepared.dump);
+    preparedCaptures.delete(captureId);
+  }
+
+  /** Читает реальные счётчики контроллера до начала атомарного чтения виджетов. */
+  async function readCounters() {
+    const snapshot = await app.transport.request('/api/test/counters'), counters = snapshot.counters;
+    if (!counters || typeof counters !== 'object' || Array.isArray(counters) || Object.values(counters).some(
+      /** Отвергает счётчик, не являющийся неотрицательным безопасным целым. */
+      value => !Number.isSafeInteger(value) || value < 0)) throw new Error('Invalid controller counters snapshot');
+    return structuredClone(counters);
+  }
+
+  /** Включает отдельную диагностическую секцию только для явно разрешённой capture-вкладки. */
+  function configurePaintCapture(environment) {
+    if (!app.testApi || !app.iconCapture || !app.paintCssomJournal || paintObserver) throw new Error('Paint capture unavailable or already configured');
+    paintObserver = createPaintObserver({root: document.getElementById('main'), toolbar: document.getElementById('toolbar'),
+      summary: document.getElementById('summary'), registry: app.iconCapture.registry, cssomJournal: app.paintCssomJournal,
+      awaitIdle: /** Завершает обработку событий до подготовки дампа. */ () => idle(app),
+      prepareRaw: /** Выполняет сеть и прокрутку до синхронного bracket, сохраняя отмену. */ async request => {
+        const counters = await readCounters(), prepared = await prepareDump(app, request);
+        if (cancelledCaptures.has(request.captureId)) {
+          discardPreparedDump(prepared); throw new Error('Capture preparation cancelled');
+        }
+        preparedCaptures.set(request.captureId, {dump: prepared, counters});
+        return prepared;
+      },
+      readRaw: /** Синхронно читает живой DOM и добавляет уже измеренные счётчики без сети. */ (request, prepared) => {
+        const saved = preparedCaptures.get(request.captureId);
+        if (!saved || saved.dump !== prepared) throw new Error('Prepared capture identity missing');
+        try {const raw = readPreparedDump(app, request, prepared); raw.counters = saved.counters; return raw;}
+        finally {discardCapture(request.captureId);}
+      },
+      readRenderGeneration: /** Возвращает журнал фактических применений экранов и эффектов. */ () => app.paintGeneration,
+      environment});
+    window.addEventListener('pagehide', /** Освобождает capture и CSSOM обёртки при уходе со страницы. */ () => {
+      paintObserver.dispose();
+      for (const captureId of preparedCaptures.keys()) discardCapture(captureId);
+      app.paintCssomJournal.dispose();
+    }, {once: true});
+    return {ok: true, value: {protocol: 'widget-paint-diagnostic-v1', complete: app.paintCssomJournal.complete}};
+  }
   /** Сериализует потребление ответа при параллельном журнале и ожидании сборщика. */
   function consumeChoice() {
     if (choiceWork) return choiceWork;
-    if (pendingChoice === undefined || ![...app.windows.values()].some(window => window.spec.presentation === 'FILE_BROWSER' && window.showing())) return Promise.resolve();
-    choiceWork = applyChoice().finally(() => { choiceWork = null; });
+    if (pendingChoice === undefined || ![...app.windows.values()].some(/** Проверяет наличие показанного обозревателя для потребления ответа. */ window => window.spec.presentation === 'FILE_BROWSER' && window.showing())) return Promise.resolve();
+    choiceWork = applyChoice().finally(/** Освобождает общий маркер обработки выбора после завершения попытки. */ () => { choiceWork = null; });
     return choiceWork;
   }
   /** Потребляет один заранее заданный ответ только через открытый обозреватель файлов. */
   async function applyChoice() {
-    const form = [...app.windows.values()].find(window => window.spec.presentation === 'FILE_BROWSER' && window.showing());
+    const form = [...app.windows.values()].find(/** Находит показанный обозреватель файлов для применения заданного ответа. */ window => window.spec.presentation === 'FILE_BROWSER' && window.showing());
     if (pendingChoice === undefined || !form) return;
     const choice = pendingChoice; pendingChoice = undefined;
     if (choice.path == null) {
@@ -133,6 +183,27 @@ export function installTestApi(app) {
     await app.transport.tail; await app.transport.effectTail;
   }
   const api = {
+    /** Принимает provenance внешнего сборщика; не утверждает полноту CSSOM или успешный strict capture. */
+    configurePaintCapture({environment}) {return configurePaintCapture(environment);},
+    /** Начинает bounded подготовку живых виджетов перед внешним CDP PNG. */
+    async prepareCapture(request) {
+      if (!paintObserver) throw new Error('Paint observer not configured');
+      if (!request || typeof request.captureId !== 'string' || !/^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/.test(request.captureId)
+        || cancelledCaptures.size >= 10000 || cancelledCaptures.has(request.captureId)) throw new Error('Capture identity unavailable');
+      try {return await paintObserver.prepareCapture(request);}
+      finally {cancelledCaptures.add(request.captureId); discardCapture(request.captureId);}
+    },
+    /** Завершает bracket после CDP PNG и возвращает фактические stable/unsupported результаты. */
+    finishCapture(value) {
+      if (!paintObserver) throw new Error('Paint observer not configured');
+      return paintObserver.finishCapture(value);
+    },
+    /** Отменяет одноразовый handle и подготовленные данные без ожидания следующего кадра. */
+    abortCapture(value) {
+      if (!paintObserver) throw new Error('Paint observer not configured');
+      const result = paintObserver.abortCapture(value);
+      cancelledCaptures.add(value.captureId); discardCapture(value.captureId); return result;
+    },
     supported,
     /** Исполняет одну команду через реальный виджет. */
     async execute({kind, args = {}}) {
@@ -143,7 +214,7 @@ export function installTestApi(app) {
         hovered = null;
       }
       switch (kind) {
-        case 'Wait': await new Promise(resolve => setTimeout(resolve, args.millis)); break;
+        case 'Wait': await new Promise(/** Завершает паузу на число миллисекунд, указанное командой ожидания. */ resolve => setTimeout(resolve, args.millis)); break;
         case 'Size': {
           if (innerWidth !== args.width || innerHeight !== args.height) window.resizeTo(args.width + outerWidth - innerWidth, args.height + outerHeight - innerHeight);
           await frame();
@@ -189,22 +260,22 @@ export function installTestApi(app) {
         case 'Fill': { const form = windowFor(app, args.window); for (const [id, text] of Object.entries(args.values)) { const entry = fieldFor(form, id); input(entry, text); finishInput(entry); } break; }
         case 'Button': case 'Ok': case 'Cancel': {
           const form = windowFor(app, args.windowTitle || args.window);
-          const control = [...form.node.querySelectorAll('button')].find(node => kind === 'Ok' ? node.classList.contains('default-button') : kind === 'Cancel' ? node.dataset.role === 'CANCEL' : node.textContent === args.label);
+          const control = [...form.node.querySelectorAll('button')].find(/** Выбирает кнопку формы по роли подтверждения, отмены или точной подписи. */ node => kind === 'Ok' ? node.classList.contains('default-button') : kind === 'Cancel' ? node.dataset.role === 'CANCEL' : node.textContent === args.label);
           if (!control || control.disabled || !visible(control)) throw new Error('Form button unavailable'); control.click(); break;
         }
         case 'Answer': {
           const alert = [...app.alerts.values()].at(-1);
           const controls = [...(alert?.node.querySelectorAll('.window-buttons button') || [])];
-          let control = controls.find(node => node.textContent === args.buttonText);
+          let control = controls.find(/** Находит кнопку сообщения по заданному видимому тексту. */ node => node.textContent === args.buttonText);
           // Разрешённые различия web: серверное хранилище и одна кнопка второго экземпляра.
-          if (!control && alert?.spec.purpose === 'crashRecovery') control = controls.find(node => node.dataset.role === 'OTHER' && !node.disabled);
+          if (!control && alert?.spec.purpose === 'crashRecovery') control = controls.find(/** Находит доступную дополнительную кнопку восстановления после сбоя. */ node => node.dataset.role === 'OTHER' && !node.disabled);
           if (!control && alert?.spec.purpose === 'alreadyRunning' && controls.length === 1) control = controls[0];
           if (!control || control.disabled) throw new Error('Alert button unavailable'); control.click(); break;
         }
         case 'Context': case 'Hover': {
           const [type, ...rest] = args.target.split(':'); const id = rest.join(':'); let node;
           if (type === 'row' || type === 'total' || type === 'pastHeader') {
-            const rowId = id || (await app.table.page(0)).find(row => row.kind === 'PAST_HEADER')?.rowId;
+            const rowId = id || (await app.table.page(0)).find(/** Находит строку заголовка прошлых периодов для наведения или контекстного меню. */ row => row.kind === 'PAST_HEADER')?.rowId;
             if (!rowId) throw new Error('Past header unavailable');
             await app.table.ensureVisible(rowId); node = byId(rowId, app.table.canvas);
           }
@@ -220,14 +291,14 @@ export function installTestApi(app) {
           const rect = node.getBoundingClientRect();
           const coordinates = type === 'chart' ? id.split(',').map(Number) : [rect.width / 2, rect.height / 2];
           node.dispatchEvent(kind === 'Context' ? new MouseEvent('contextmenu', {bubbles: true, cancelable: true, clientX: rect.x + coordinates[0], clientY: rect.y + coordinates[1]}) : new PointerEvent(type === 'chart' ? 'pointermove' : 'pointerenter', {bubbles: false, clientX: rect.x + coordinates[0], clientY: rect.y + coordinates[1]}));
-          if (kind === 'Hover') { hovered = node; node.dispatchEvent(new PointerEvent('pointerover', {bubbles: true})); await new Promise(resolve => setTimeout(resolve, 700)); } break;
+          if (kind === 'Hover') { hovered = node; node.dispatchEvent(new PointerEvent('pointerover', {bubbles: true})); await new Promise(/** Выдерживает 700 миллисекунд для показа подсказки после наведения. */ resolve => setTimeout(resolve, 700)); } break;
         }
         case 'SliderSet': case 'SpinnerSet': {
           await clickMenuAncestors(args.itemId); const control = byId(args.itemId).querySelector('input'); if (!control) throw new Error('Menu input missing');
           control.focus(); control.value = args.value; control.dispatchEvent(new Event('input', {bubbles: true})); control.dispatchEvent(new Event('change', {bubbles: true}));
           if (kind === 'SpinnerSet') {
             await idle(app);
-            await new Promise(resolve => setTimeout(resolve, Number(control.dataset.applyDelayMs)));
+            await new Promise(/** Выдерживает заданную полем задержку применения числового значения. */ resolve => setTimeout(resolve, Number(control.dataset.applyDelayMs)));
           }
           break;
         }
@@ -253,9 +324,7 @@ export function installTestApi(app) {
     /** Читает настоящие виджеты, не вызывая ModelDump. */
     async dump({step}) {
       await idle(app);
-      const snapshot = await app.transport.request('/api/test/counters');
-      const counters = snapshot.counters;
-      if (!counters || typeof counters !== 'object' || Array.isArray(counters) || Object.values(counters).some(value => !Number.isSafeInteger(value) || value < 0)) throw new Error('Invalid controller counters snapshot');
+      const counters = await readCounters();
       const value = await dump(app, step); value.counters = counters;
       return {ok: true, value};
     },
@@ -273,7 +342,7 @@ export function installTestApi(app) {
     /** Потребляет ожидающий выбор после завершения очереди реальных эффектов. */
     consumeChoice,
     /** Планирует выбор после применения открытия, не блокируя очередь эффектов своим намерением. */
-    chooserOpened() { setTimeout(() => consumeChoice().catch(error => app.clientError(error)), 0); },
+    chooserOpened() { setTimeout(/** Запускает потребление ожидающего выбора после текущего цикла обработки событий. */ () => consumeChoice().catch(/** Передаёт ошибку отложенного выбора общему обработчику ошибок клиента. */ error => app.clientError(error)), 0); },
     /** Сохраняет упорядоченный шаг без исполнения и без отправки результатов. */
     step(effect) {
       if (!Number.isInteger(effect.n) || effect.n <= lastStep) throw new Error('Test step order');

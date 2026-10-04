@@ -2,12 +2,13 @@ package ru.cashprediction.core.app.flow;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
-import java.nio.file.FileAlreadyExistsException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.attribute.FileTime;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 import ru.cashprediction.core.app.AppState;
@@ -19,10 +20,12 @@ import ru.cashprediction.core.diagnostics.Severity;
 import ru.cashprediction.core.export.CsvExporter;
 import ru.cashprediction.core.export.CsvOptions;
 import ru.cashprediction.core.io.AtomicFiles;
-import ru.cashprediction.core.io.PlanRepository;
-import ru.cashprediction.core.markdown.MarkdownParseException;
+import ru.cashprediction.core.io.PlanFileInfo;
 import ru.cashprediction.core.markdown.PlanMarkdownReader;
 import ru.cashprediction.core.model.Plan;
+import ru.cashprediction.core.service.storage.FilePlanStorage;
+import ru.cashprediction.core.service.storage.PlanStorage;
+import ru.cashprediction.core.service.storage.PlanStorageException;
 import ru.cashprediction.core.session.WindowType;
 import ru.cashprediction.core.ui.alert.AlertCatalog;
 import ru.cashprediction.core.ui.alert.AlertSpec;
@@ -46,12 +49,22 @@ import ru.cashprediction.core.diagnostics.PlanValidator;
 /** Файловые сценарии общего приложения: открытие с подтверждением, сохранение, экспорт и выбор папки. */
 public final class FileFlow {
     private final FlowContext context;
+    private final PlanStorage storage;
     private boolean saving;
     private boolean discardPrompt;
 
     /** @param context контекст контроллера, доступный только в его потоке */
     public FileFlow(FlowContext context) {
+        this(context, context.externalChanges().storage());
+    }
+
+    /**
+     * @param context контекст контроллера
+     * @param storage общий сервис сохранённых планов
+     */
+    public FileFlow(FlowContext context, PlanStorage storage) {
         this.context = Objects.requireNonNull(context, "context");
+        this.storage = Objects.requireNonNull(storage, "storage");
     }
 
     /** @return контекст контроллера */
@@ -98,12 +111,13 @@ public final class FileFlow {
             try {
                 Path file = Path.of(path);
                 if (!file.isAbsolute()) file = context.environment().cashMemory().resolve(file);
-                if (!Files.isRegularFile(file)) {
+                var observed = storage.version(FilePlanStorage.reference(file)).requireValue();
+                if (PlanStorage.Version.ABSENT.equals(observed)) {
                     context.updateSettings(settings -> settings.withRecentPlanRemoved(path));
                     error("recentMissing", null, file);
                     return;
                 }
-                load(file, false);
+                load(file, false, Optional.of(observed));
             } catch (RuntimeException failure) {
                 error("readPlan", failure, path);
             }
@@ -135,10 +149,17 @@ public final class FileFlow {
             boolean rename = !name.equals(expected.name()) && PlanValidator.checkPlanName(name).isEmpty();
             Plan written = rename ? expected.withName(name) : expected;
             try {
-                repository().save(written, target);
-                if (rename) context.edits().edit(UiText.get("undo.saveAsName", name), "", plan -> written);
-                saved(target, false, null);
-            } catch (IOException | RuntimeException failure) {
+                var reference = FilePlanStorage.reference(target);
+                var version = storage.version(reference).requireValue();
+                if (oldFile != null && reference.equals(FilePlanStorage.reference(oldFile))) {
+                    version = context.externalChanges().expectedVersion(reference, version);
+                }
+                Runnable afterWrite = () -> {
+                    if (rename) context.edits().edit(UiText.get("undo.saveAsName", name), "",
+                            new ru.cashprediction.core.service.plan.PlanCommand.RenamePlan(name));
+                };
+                write(target, expected, oldFile, written, version, false, afterWrite, null);
+            } catch (RuntimeException failure) {
                 error("save", failure, target);
             }
         });
@@ -166,34 +187,42 @@ public final class FileFlow {
         if (name.equals(context.document().plan().name())) return;
         Path oldFile = context.document().file().orElse(null);
         if (oldFile == null) {
-            if (context.edits().edit(UiText.get("undo.rename"), "", plan -> plan.withName(name))) {
+            if (context.edits().edit(UiText.get("undo.rename"), "",
+                    new ru.cashprediction.core.service.plan.PlanCommand.RenamePlan(name))) {
                 context.status(StatusLevel.INFO, "status.msg.renamed", name);
             }
             return;
         }
-        if (context.externalChanges().changedExternally(oldFile)) {
-            throw new IllegalArgumentException(UiText.get("alert.external.header",
-                    PlanMarkdownReader.nameWithoutExtension(oldFile)));
-        }
         try {
-            Path target = oldFile.resolveSibling(PlanRepository.fileBaseName(name) + ".md");
-            if (Files.exists(target) && !Files.isSameFile(oldFile, target)) {
-                throw new FileAlreadyExistsException(target.toString());
+            var reference = FilePlanStorage.reference(oldFile);
+            var observed = storage.version(reference).requireValue();
+            var expected = context.externalChanges().expectedVersion(reference, observed);
+            var result = storage.rename(reference, name, expected);
+            if (!result.succeeded()) {
+                var problem = result.problem();
+                if (problem.conflict() == PlanStorage.Conflict.NAME_EXISTS) {
+                    throw new IllegalArgumentException(UiText.get("s2.file.renameExists", name));
+                }
+                if (problem.code() == PlanStorage.Code.CONFLICT || problem.code() == PlanStorage.Code.MISSING) {
+                    throw new IllegalArgumentException(UiText.get("alert.external.header",
+                            PlanMarkdownReader.nameWithoutExtension(oldFile)));
+                }
+                throw new PlanStorageException(problem);
             }
-            Path renamed = repository().rename(oldFile, name);
+            var stored = result.value();
+            Path renamed = FilePlanStorage.path(stored.reference());
             // Переименование не сохраняет прежние несохранённые правки автоматически.
             boolean dirty = context.document().isDirty();
             Plan renamedPlan = context.document().plan().withName(name);
             context.document().replace(renamedPlan, renamed, dirty, context.document().loadDiagnostics());
-            context.externalChanges().remember(renamed);
+            context.externalChanges().remember(stored.reference(), stored.version());
             context.updateSettings(settings -> settings.withRecentPlanRemoved(oldFile.toString())
                     .withRecentPlanRemoved(oldFile.getFileName().toString()).withPlanOpened(renamed.toString()));
             context.status(StatusLevel.INFO, "status.msg.renamed", name);
             context.refresh();
-        } catch (FileAlreadyExistsException failure) {
-            throw new IllegalArgumentException(UiText.get("s2.file.renameExists", name), failure);
-        } catch (IOException failure) {
-            throw new UncheckedIOException(UiText.get("s2.file.renameFailed", failure.getMessage()), failure);
+        } catch (PlanStorageException failure) {
+            throw new UncheckedIOException(UiText.get("s2.file.renameFailed", failure.getMessage()),
+                    new IOException(failure.getMessage(), failure));
         }
     }
 
@@ -290,51 +319,94 @@ public final class FileFlow {
         if (automatic && !context.document().isDirty()) return;
         Plan expected = context.document().plan();
         Path current = context.document().file().orElse(null);
-        Path target = current == null ? repository().pathFor(expected.name()) : current;
-        if (automatic && current == null && Files.exists(target)) {
-            String text = UiText.get("status.msg.autosaveSkipped", PlanMarkdownReader.nameWithoutExtension(target));
-            context.setAutosaveProblem(text);
-            context.status(StatusLevel.WARN, "status.msg.autosaveSkipped", PlanMarkdownReader.nameWithoutExtension(target));
+        Path target = current == null ? FilePlanStorage.pathFor(context.environment().cashMemory(), expected.name()) : current;
+        var reference = FilePlanStorage.reference(target);
+        PlanStorage.Version observed;
+        try {
+            observed = storage.version(reference).requireValue();
+        } catch (RuntimeException failure) {
+            saveFailure(target, automatic, failure);
             return;
         }
+        if (automatic && current == null && !PlanStorage.Version.ABSENT.equals(observed)) {
+            autosaveSkipped(target);
+            return;
+        }
+        var version = current == null ? PlanStorage.Version.ABSENT
+                : context.externalChanges().expectedVersion(reference, observed);
+        if (!version.equals(observed) || current != null && PlanStorage.Version.ABSENT.equals(observed)) {
+            promptOverwrite(target, expected, current, expected, observed, automatic, () -> { }, onSaved);
+        } else {
+            write(target, expected, current, expected, version, automatic, () -> { }, onSaved);
+        }
+    }
+
+    /** Показывает прежние варианты решения, связывая ответ с показанной версией и документом. */
+    private void promptOverwrite(Path target, Plan expected, Path current, Plan written,
+            PlanStorage.Version observed, boolean automatic, Runnable afterWrite, Runnable onSaved) {
         saving = true;
         Consumer<String> answer = button -> {
             saving = false;
             if (!sameDocument(expected, current)) return;
-            if (AlertCatalog.BUTTON_OVERWRITE.equals(button)) write(target, automatic, onSaved);
+            if (AlertCatalog.BUTTON_OVERWRITE.equals(button)) {
+                write(target, expected, current, written, observed, automatic, afterWrite, onSaved);
+            }
             else if (AlertCatalog.BUTTON_RELOAD.equals(button)) {
-                if (load(target, true)) context.setAutosaveProblem("");
+                if (load(target, true, Optional.of(observed))) context.setAutosaveProblem("");
                 else if (automatic) context.setAutosaveProblem(UiText.get("s2.file.autosaveReloadFailed", target));
             } else if (automatic) {
                 context.setAutosaveProblem(UiText.get("s2.file.autosaveCancelled", target));
             }
         };
-        if (current != null && context.externalChanges().changedExternally(current)) {
-            ask(AlertCatalog.externalChange(PlanMarkdownReader.nameWithoutExtension(target)), answer);
-        } else if (current == null && Files.exists(target)) {
-            ask(AlertCatalog.overwriteOnFirstSave(PlanMarkdownReader.nameWithoutExtension(target)), answer);
-        } else {
-            saving = false;
-            write(target, automatic, onSaved);
-        }
+        ask(current == null ? AlertCatalog.overwriteOnFirstSave(PlanMarkdownReader.nameWithoutExtension(target))
+                : AlertCatalog.externalChange(PlanMarkdownReader.nameWithoutExtension(target)), answer);
     }
 
-    /** Записывает документ; продолжение вызывается за пределами обработки файловой ошибки. */
-    private void write(Path target, boolean automatic, Runnable onSaved) {
+    /** Записывает снимок с обязательной версией; повторный конфликт не теряет правки и не вызывает продолжение. */
+    private void write(Path target, Plan expected, Path current, Plan written, PlanStorage.Version version,
+            boolean automatic, Runnable afterWrite, Runnable onSaved) {
+        PlanStorage.Result<PlanStorage.Stored> result;
         try {
-            repository().save(context.document().plan(), target);
-        } catch (IOException | RuntimeException failure) {
-            if (automatic) context.setAutosaveProblem(UiText.get("s2.file.autosaveFailed", target, failure.getMessage()));
-            else error("save", failure, target);
+            result = storage.write(FilePlanStorage.reference(target), written, version);
+        } catch (RuntimeException failure) {
+            saveFailure(target, automatic, failure);
             return;
         }
-        saved(target, automatic, onSaved);
+        if (!result.succeeded()) {
+            if (result.problem().code() != PlanStorage.Code.CONFLICT) {
+                saveFailure(target, automatic, new PlanStorageException(result.problem()));
+                return;
+            }
+            if (automatic && current == null) { autosaveSkipped(target); return; }
+            PlanStorage.Version observed;
+            try { observed = storage.version(FilePlanStorage.reference(target)).requireValue(); }
+            catch (RuntimeException failure) { saveFailure(target, automatic, failure); return; }
+            promptOverwrite(target, expected, current, written, observed, automatic, afterWrite, onSaved);
+            return;
+        }
+        afterWrite.run();
+        saved(result.value(), automatic, onSaved);
+    }
+
+    /** Объясняет прежний пропуск автосохранения первого файла без подтверждения перезаписи. */
+    private void autosaveSkipped(Path target) {
+        context.setAutosaveProblem(UiText.get("status.msg.autosaveSkipped", PlanMarkdownReader.nameWithoutExtension(target)));
+        context.status(StatusLevel.WARN, "status.msg.autosaveSkipped", PlanMarkdownReader.nameWithoutExtension(target));
+    }
+
+    /** Сохраняет прежнее различие ручной ошибки и проблемы автосохранения. */
+    private void saveFailure(Path target, boolean automatic, RuntimeException failure) {
+        String detail = failure.getMessage();
+        if (failure instanceof PlanStorageException && (detail == null || detail.isBlank())) detail = UiText.get("err.generic");
+        if (automatic) context.setAutosaveProblem(UiText.get("s2.file.autosaveFailed", target, detail));
+        else error("save", failure, target);
     }
 
     /** Синхронизирует документ, недавние файлы, внешнюю метку и статус после успешной записи. */
-    private void saved(Path target, boolean automatic, Runnable onSaved) {
+    private void saved(PlanStorage.Stored stored, boolean automatic, Runnable onSaved) {
+        Path target = FilePlanStorage.path(stored.reference());
         context.document().markSaved(target);
-        context.externalChanges().remember(target);
+        context.externalChanges().remember(stored.reference(), stored.version());
         context.updateSettings(settings -> settings.withPlanOpened(target.toAbsolutePath().normalize().toString()));
         context.setAutosaveProblem("");
         if (!automatic) context.status(StatusLevel.SUCCESS, "status.msg.saved", target);
@@ -350,14 +422,19 @@ public final class FileFlow {
                     if (result instanceof NewPlanWizardForm.OpenSample) sample();
                     else if (result instanceof NewPlanWizardForm.Created created) {
                         Plan plan = created.plan();
-                        Path file = repository().pathFor(plan.name());
-                        if (Files.exists(file)) throw new IllegalArgumentException(UiText.get("val.plan.exists", plan.name()));
+                        Path file = FilePlanStorage.pathFor(context.environment().cashMemory(), plan.name());
+                        var reference = FilePlanStorage.reference(file);
+                        var observed = storage.version(reference);
+                        if (observed.succeeded() && !PlanStorage.Version.ABSENT.equals(observed.value())) {
+                            throw new IllegalArgumentException(UiText.get("val.plan.exists", plan.name()));
+                        }
                         replace(plan, null, true, List.of());
                         try {
-                            repository().save(plan, file);
-                            saved(file, true, null);
+                            observed.requireValue();
+                            var stored = storage.write(reference, plan, PlanStorage.Version.ABSENT).requireValue();
+                            saved(stored, true, null);
                             context.status(StatusLevel.SUCCESS, "status.msg.created", plan.name());
-                        } catch (IOException | RuntimeException failure) {
+                        } catch (RuntimeException failure) {
                             error("createdNotSaved", failure);
                         }
                     }
@@ -366,9 +443,13 @@ public final class FileFlow {
 
     /** Показывает список после подтверждения; «Из файла» продолжает уже разрешённое открытие. */
     private void openList() {
-        List<ru.cashprediction.core.io.PlanFileInfo> plans;
+        List<PlanFileInfo> plans;
+        List<PlanStorage.Entry> entries;
         try {
-            plans = new PlanRepository(context.state().plansFolder()).list();
+            entries = storage.list(FilePlanStorage.collection(context.state().plansFolder())).requireValue();
+            // Тип файловой формы остаётся на границе выбора; бизнес-список не содержит Path и FileTime.
+            plans = entries.stream().map(entry -> new PlanFileInfo(entry.name(), FilePlanStorage.path(entry.reference()),
+                    FileTime.from(entry.modifiedAt()))).toList();
         } catch (RuntimeException failure) {
             error("readPlansFolder", failure);
             return;
@@ -376,7 +457,11 @@ public final class FileFlow {
         // JavaFX: Dialog → Swing: SwingDialog → Web: dialog.
         context.openForm(FormRequest.fresh(new OpenPlanForm(plans), WindowType.CHOICE, true,
                 Map.of("purpose", OpenPlanForm.PURPOSE)), null, result -> {
-            if (result instanceof Path path) load(path, false);
+            if (result instanceof Path path) {
+                var expected = entries.stream().filter(entry -> entry.reference().equals(FilePlanStorage.reference(path)))
+                        .findFirst().map(PlanStorage.Entry::version);
+                load(path, false, expected);
+            }
             else if (OpenPlanForm.FROM_FILE.equals(result)) chooseOpen();
         });
     }
@@ -389,9 +474,21 @@ public final class FileFlow {
 
     /** Читает план до изменения документа; при ошибке прежний документ и история сохраняются. */
     private boolean load(Path path, boolean reloaded) {
+        return load(path, reloaded, Optional.empty());
+    }
+
+    /** Не заменяет документ, если выбранный в списке или сообщении снимок уже изменился. */
+    private boolean load(Path path, boolean reloaded, Optional<PlanStorage.Version> expectedVersion) {
         Path file = path.toAbsolutePath().normalize();
         try {
-            var read = repository().load(file, context.environment().clock().today());
+            var result = storage.read(FilePlanStorage.reference(file), context.environment().clock().today(), expectedVersion);
+            if (!result.succeeded()) {
+                error(result.problem().code() == PlanStorage.Code.CORRUPT ? "notPlan" : "readPlan",
+                        new PlanStorageException(result.problem()), file);
+                return false;
+            }
+            var read = result.value();
+            context.externalChanges().remember(read.reference(), read.version());
             replace(read.plan(), file, false, read.diagnostics());
             context.updateSettings(settings -> settings.withPlanOpened(file.toString()));
             if (reloaded) context.status(StatusLevel.INFO, "status.msg.reloaded");
@@ -400,9 +497,7 @@ public final class FileFlow {
                 ask(AlertCatalog.loadDiagnostics(PlanMarkdownReader.nameWithoutExtension(file), read.diagnostics()), ignored -> { });
             }
             return true;
-        } catch (MarkdownParseException failure) {
-            error("notPlan", failure, file);
-        } catch (IOException | RuntimeException failure) {
+        } catch (RuntimeException failure) {
             error("readPlan", failure, file);
         }
         return false;
@@ -414,7 +509,7 @@ public final class FileFlow {
         context.document().replace(plan, file, dirty, diagnostics);
         context.setSelection("");
         context.setPastExpanded(false);
-        context.externalChanges().remember(file);
+        if (file == null) context.externalChanges().forget();
         context.setAutosaveProblem("");
         context.refresh();
         if (context.state().document().forecastAvailable()) {
@@ -430,13 +525,10 @@ public final class FileFlow {
         context.status(StatusLevel.INFO, "status.msg.sample");
     }
 
-    /** @return репозиторий для автоматических имён в CashMemory */
-    private PlanRepository repository() { return new PlanRepository(context.environment().cashMemory()); }
-
     /** @return безопасное базовое имя текущего файла либо плана */
     private String baseName() {
         return context.document().file().map(PlanMarkdownReader::nameWithoutExtension)
-                .orElseGet(() -> PlanRepository.fileBaseName(context.document().plan().name()));
+                .orElseGet(() -> FilePlanStorage.fileBaseName(context.document().plan().name()));
     }
 
     /** Проверяет, что ответ относится к тому документу, для которого открыли запрос. */
@@ -471,7 +563,10 @@ public final class FileFlow {
 
     /** Показывает локализованную ошибку со свёрнутым стеком. */
     private void error(String key, Throwable failure, Object... args) {
-        ask(AlertCatalog.error(key, failure, args), ignored -> { });
+        Throwable shown = failure instanceof PlanStorageException
+                && (failure.getMessage() == null || failure.getMessage().isBlank())
+                ? new IOException(UiText.get("err.generic"), failure) : failure;
+        ask(AlertCatalog.error(key, shown, args), ignored -> { });
     }
 
     /** Дополняет общую форму имени проверкой коллизии файла до разрешения подтверждающей кнопки. */
@@ -504,7 +599,7 @@ public final class FileFlow {
             if (PlanValidator.checkPlanName(name).isPresent()) return null;
             Path file = form.app().document().fileOptional().orElse(null);
             if (file == null) return null;
-            Path target = file.resolveSibling(PlanRepository.fileBaseName(name.strip()) + ".md");
+            Path target = file.resolveSibling(FilePlanStorage.fileBaseName(name.strip()) + ".md");
             try {
                 return Files.exists(target) && !Files.isSameFile(file, target)
                         ? UiText.get("s2.file.renameExists", name.strip()) : null;

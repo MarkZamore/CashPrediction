@@ -16,6 +16,8 @@ import ru.cashprediction.core.app.fake.FakeWindowHandle;
 import ru.cashprediction.core.app.flow.*;
 import ru.cashprediction.core.document.*;
 import ru.cashprediction.core.model.Plan;
+import ru.cashprediction.core.service.plan.LocalPlanCommands;
+import ru.cashprediction.core.service.plan.PlanCommands;
 import ru.cashprediction.core.session.MainWindowState;
 import ru.cashprediction.core.session.SessionRecorder;
 import ru.cashprediction.core.session.StatefulWindow;
@@ -30,6 +32,8 @@ final class CaptureContext implements InvocationHandler {
     final FakeUiPort port;
     final AppEnvironment environment;
     final PlanDocument document;
+    /** Единственная служба команд и ревизий этого документа. */
+    final PlanCommands planCommands;
     final ExternalChangeGuard external = new ExternalChangeGuard();
     final FlowContext flow;
     final EditFlow edits;
@@ -60,6 +64,7 @@ final class CaptureContext implements InvocationHandler {
                 "--registry", "memory", "--today", TODAY.toString()), new Properties()));
         port = new FakeUiPort(profile);
         document = new PlanDocument(SamplePlan.create(TODAY), null, () -> TODAY);
+        planCommands = new LocalPlanCommands(document);
         flow = (FlowContext) Proxy.newProxyInstance(FlowContext.class.getClassLoader(),
                 new Class<?>[]{FlowContext.class}, this);
         edits = new EditFlow(flow);
@@ -83,6 +88,8 @@ final class CaptureContext implements InvocationHandler {
             case "port" -> port;
             case "environment" -> environment;
             case "document" -> document;
+            case "planCommands" -> planCommands;
+            case "planStorage" -> external.storage();
             case "state" -> state();
             case "externalChanges" -> external;
             case "edits" -> edits;

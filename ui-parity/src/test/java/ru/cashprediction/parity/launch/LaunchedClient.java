@@ -137,6 +137,17 @@ public final class LaunchedClient implements AutoCloseable {
         if (killReport == null) {
             killReport = ProcessTree.kill(process.toHandle(), KILL_TIMEOUT);
         }
+        if (killReport.isClean()) {
+            // ProcessHandle уже может видеть смерть процесса, пока Java Process ещё ждёт reaper.
+            // Контракт kill должен завершать оба наблюдения, иначе последующая isAlive даёт ложный сбой.
+            try {
+                if (!process.waitFor(KILL_TIMEOUT.toMillis(), java.util.concurrent.TimeUnit.MILLISECONDS))
+                    throw new IllegalStateException("Process reaper did not observe owned process exit: " + process.pid());
+            } catch (InterruptedException interrupted) {
+                Thread.currentThread().interrupt();
+                throw new IllegalStateException("Interrupted while waiting for owned process exit", interrupted);
+            }
+        }
         return killReport;
     }
 

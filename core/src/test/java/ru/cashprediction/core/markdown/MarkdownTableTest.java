@@ -61,9 +61,26 @@ class MarkdownTableTest {
     }
 
     @Test
-    void escapeCellFlattensLineBreaks() {
-        assertEquals("a b c \\| d", MarkdownTable.escapeCell("a\nb\r\nc | d"));
+    void escapeCellPreservesLineBreaksWithReadableTokens() {
+        assertEquals("a<br>b&#13;<br>c \\| d", MarkdownTable.escapeCell("a\nb\r\nc | d"));
         assertEquals("", MarkdownTable.escapeCell(null));
+    }
+
+    /** Переносы и буквальные сущности проходят один цикл без рекурсивного HTML-декодирования. */
+    @Test void multilineAndLiteralTokensRoundTripExactly() {
+        for (String value : List.of("a\nb", "a\r\nb", "a\rb", "\na\r\n", "&lt; &amp; &#13; <br> <script>",
+                "C:\\Users\\Oscar\\file | \\| \\n", "a\r\n\rb\n\nc")) {
+            String encoded = MarkdownTable.escapeCell(value);
+            assertFalse(encoded.contains("\n")); assertFalse(encoded.contains("\r"));
+            assertEquals(List.of(value), MarkdownTable.parseRow("| " + encoded + " |"));
+        }
+        assertEquals("&amp;lt; &lt;br&gt; &amp;#13;", MarkdownTable.escapeCell("&lt; <br> &#13;"));
+    }
+
+    /** Декодер распознаёт только точные токены этого протокола, не все HTML-сущности и теги. */
+    @Test void decoderDoesNotExecuteOrRecursivelyInterpretText() {
+        assertEquals(List.of("&lt;", "<br>", "&#13;", "&unknown; <br/> <BR>"),
+                MarkdownTable.parseRow("| &amp;lt; | &lt;br&gt; | &amp;#13; | &unknown; <br/> <BR> |"));
     }
 
     @Test

@@ -4,9 +4,9 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
-import java.util.Locale;
 import java.util.Objects;
 import java.util.regex.Pattern;
+import ru.cashprediction.core.format.ReservedPlanNames;
 
 /**
  * Раскладка папки {@code CashMemory}: какие файлы где лежат.
@@ -19,7 +19,8 @@ import java.util.regex.Pattern;
  *   session-swing.xml         XML-снимок сессии Swing-клиента
  *   web-session.md            снимок сессии web-сервера
  *   web-session.plan.md       несохранённый план web-сессии
- *   *.&lt;pid&gt;.&lt;nano&gt;.tmp       временные файлы атомарной записи (чистятся при старте)
+ *   cashprediction-tmp-&lt;pid&gt;-&lt;uuid&gt;.md / .xml  текстовые копии атомарной записи
+ *   cashprediction-tmp-&lt;pid&gt;-&lt;uuid&gt;.rename.md  копия при смене регистра имени (не удаляется)
  * </pre>
  *
  * <p>Имена служебных файлов зарезервированы: план с таким именем перепутался бы с ними
@@ -34,10 +35,10 @@ public final class CashMemoryLayout {
     public static final String SETTINGS = "settings.md";
 
     /** Начало имени XML-снимка сессии: {@code session-<клиент>.xml}. */
-    public static final String SESSION_XML_PREFIX = "session-";
+    public static final String SESSION_XML_PREFIX = ReservedPlanNames.SESSION_XML_PREFIX;
 
     /** Расширение XML-снимка сессии. */
-    public static final String SESSION_XML_SUFFIX = ".xml";
+    public static final String SESSION_XML_SUFFIX = ReservedPlanNames.SESSION_XML_SUFFIX;
 
     /** Снимок сессии web-сервера. */
     public static final String WEB_SESSION = "web-session.md";
@@ -47,7 +48,7 @@ public final class CashMemoryLayout {
 
     /** Имена (без {@code .md}), которые нельзя использовать как имена планов. */
     public static final List<String> RESERVED_PLAN_NAMES =
-            List.of("settings", "web-session", "web-session.plan", "session-fx", "session-swing");
+            ReservedPlanNames.NAMES;
 
     /** Идентификатор клиента: строчные латинские буквы и цифры ({@code fx}, {@code swing}, {@code web}). */
     private static final Pattern CLIENT_ID = Pattern.compile("[a-z][a-z0-9]*");
@@ -132,14 +133,60 @@ public final class CashMemoryLayout {
      * Проверяет, занято ли имя служебным файлом CashMemory.
      *
      * @param nameWithoutExtension имя плана или файла без {@code .md}
-     * @return {@code true} для settings, web-session, web-session.plan, session-fx, session-swing (регистр не важен)
+     * @return {@code true} для служебных файлов сессии, настроек и ключа переподключения,
+     * включая временные файлы публикации ключа (регистр не важен)
      */
     public static boolean isReservedPlanName(String nameWithoutExtension) {
-        if (nameWithoutExtension == null) {
-            return false;
+        return ReservedPlanNames.isReservedPlanName(nameWithoutExtension)
+                || AtomicFiles.isTemporaryName(nameWithoutExtension);
+    }
+
+    /**
+     * Проверяет служебное имя файла, не читая его содержимое.
+     * @param fileName имя с расширением; регистр не важен
+     * @return принадлежит ли имя настройкам, снимкам или доказательству переподключения
+     */
+    public static boolean isServiceFileName(String fileName) {
+        return ReservedPlanNames.isServiceFileName(fileName) || AtomicFiles.isTemporaryName(fileName);
+    }
+
+    /**
+     * Защищает служебные файлы от пользовательского открытия, экспорта и перезаписи.
+     * Проверка применяется к окончательному имени после добавления расширения. Внешний обычный
+     * файл с таким же именем разрешён, но ссылка на служебный файл своей копии защищена.
+     * @param cashMemory папка служебных данных данной портативной копии
+     * @param candidate окончательный путь операции
+     * @return указывает ли путь на служебный файл, включая реальные алиасы и hard link
+     * @throws IOException если существующие пути нельзя безопасно сопоставить; вызывающий код отказывает в операции
+     */
+    public static boolean isProtectedUserPath(Path cashMemory, Path candidate) throws IOException {
+        Objects.requireNonNull(cashMemory, "cashMemory");
+        Objects.requireNonNull(candidate, "candidate");
+        Path memory = cashMemory.toAbsolutePath().normalize();
+        Path file = candidate.toAbsolutePath().normalize();
+        Path parent = file.getParent();
+        if (parent == null || file.getFileName() == null) return false;
+        boolean serviceName = isServiceFileName(file.getFileName().toString());
+        if (parent.equals(memory) && serviceName) return true;
+        if (!Files.isDirectory(memory)) return false;
+        Path actualMemory = memory.toRealPath();
+        if (serviceName && Files.isDirectory(parent) && Files.isSameFile(parent, actualMemory)) return true;
+        if (!Files.exists(file)) return false;
+        Path actual = file.toRealPath();
+        if (actual.getParent() != null && Files.isSameFile(actual.getParent(), actualMemory)
+                && isServiceFileName(actual.getFileName().toString())) return true;
+        // Имя hard link может быть произвольным: сравниваются идентичности файлов, а не строки путей.
+        for (String base : RESERVED_PLAN_NAMES) {
+            Path known = actualMemory.resolve(base + ".md");
+            if (Files.exists(known) && Files.isSameFile(file, known)) return true;
         }
-        String name = nameWithoutExtension.strip().toLowerCase(Locale.ROOT);
-        return RESERVED_PLAN_NAMES.contains(name);
+        // Фильтр охватывает служебный префикс временных копий и регистр имён на любой файловой системе.
+        try (var entries = Files.newDirectoryStream(actualMemory,
+                entry -> isServiceFileName(entry.getFileName().toString()))) {
+            for (Path known : entries)
+                if (Files.exists(known) && Files.isSameFile(file, known)) return true;
+        }
+        return false;
     }
 
     /**
@@ -152,14 +199,16 @@ public final class CashMemoryLayout {
      * @return {@code true}, если файл удалось создать и удалить
      */
     public boolean probeWritable() {
-        Path probe = dir.resolve("write-probe." + ProcessHandle.current().pid() + "." + System.nanoTime() + ".tmp");
+        Path probe = AtomicFiles.temporaryPath(dir.resolve("write-probe.md"), "md");
+        boolean created = false;
         try {
             Files.write(probe, new byte[] {'o', 'k'}, java.nio.file.StandardOpenOption.CREATE_NEW);
+            created = true;
             Files.delete(probe);
             return true;
         } catch (IOException | SecurityException e) {
             try {
-                Files.deleteIfExists(probe);
+                if (created) Files.deleteIfExists(probe);
             } catch (IOException | SecurityException ignored) {
                 // Удалить не удалось: файл уберёт очистка временных файлов при следующем запуске.
             }

@@ -20,6 +20,7 @@ public sealed interface WebQuery permits WebQuery.ContextMenu, WebQuery.Tooltip,
      * @param target объект меню ({@code kind} + поля цели)
      */
     record ContextMenu(ContextTarget target) implements WebQuery {
+        /** @return идентификатор {@code contextMenu} для чтения пунктов контекстного меню для указанной цели */
         @Override
         public String type() {
             return "contextMenu";
@@ -34,6 +35,7 @@ public sealed interface WebQuery permits WebQuery.ContextMenu, WebQuery.Tooltip,
      * @param columnId id колонки
      */
     record Tooltip(long rev, int index, String columnId) implements WebQuery {
+        /** @return идентификатор {@code tooltip} для чтения подсказки ячейки таблицы в указанной ревизии */
         @Override
         public String type() {
             return "tooltip";
@@ -48,6 +50,7 @@ public sealed interface WebQuery permits WebQuery.ContextMenu, WebQuery.Tooltip,
      * @param count сколько строк (не больше 300)
      */
     record Rows(long rev, int from, int count) implements WebQuery {
+        /** @return идентификатор {@code rows} для чтения диапазона строк таблицы в указанной ревизии */
         @Override
         public String type() {
             return "rows";
@@ -62,6 +65,7 @@ public sealed interface WebQuery permits WebQuery.ContextMenu, WebQuery.Tooltip,
      * @param h   высота
      */
     record Chart(long rev, double w, double h) implements WebQuery {
+        /** @return идентификатор {@code chartScene} для чтения сцены графика для указанной ревизии и размеров */
         @Override
         public String type() {
             return "chartScene";
@@ -80,6 +84,7 @@ public sealed interface WebQuery permits WebQuery.ContextMenu, WebQuery.Tooltip,
      * @param h   высота области рисования
      */
     record ChartHover(long rev, double x, double y, double w, double h) implements WebQuery {
+        /** @return идентификатор {@code chartHover} для чтения наведения на графике по координатам и ревизии */
         @Override
         public String type() {
             return "chartHover";
@@ -92,6 +97,7 @@ public sealed interface WebQuery permits WebQuery.ContextMenu, WebQuery.Tooltip,
      * @param date дата
      */
     record DayCard(LocalDate date) implements WebQuery {
+        /** @return идентификатор {@code dayCard} для чтения карточки дня по дате */
         @Override
         public String type() {
             return "dayCard";
@@ -104,6 +110,7 @@ public sealed interface WebQuery permits WebQuery.ContextMenu, WebQuery.Tooltip,
      * @param cardId id карточки
      */
     record Sparkline(String cardId) implements WebQuery {
+        /** @return идентификатор {@code sparkline} для чтения спарклайна указанной карточки */
         @Override
         public String type() {
             return "sparkline";
@@ -117,6 +124,7 @@ public sealed interface WebQuery permits WebQuery.ContextMenu, WebQuery.Tooltip,
      * @param selected выбранная дата или {@code null}
      */
     record Calendar(YearMonth month, LocalDate selected) implements WebQuery {
+        /** @return идентификатор {@code calendar} для чтения календаря месяца с выбранной датой */
         @Override
         public String type() {
             return "calendar";

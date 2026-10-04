@@ -5,14 +5,16 @@ import com.sun.net.httpserver.HttpHandler;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
+import ru.cashprediction.core.text.Texts;
 import java.util.Locale;
 import java.util.Map;
 import ru.cashprediction.core.ui.token.TokenCss;
+import ru.cashprediction.core.ui.token.UiIcons;
 import ru.cashprediction.core.ui.text.UiText;
 
 /**
  * Отдаёт статические файлы тонкого клиента из ресурсов jar: {@code /} → {@code web/index.html},
- * {@code /app.js} → {@code web/app.js} и т. д.
+ * {@code /app/main.js} → {@code web/app/main.js} и т. д.
  *
  * <p>Файлы берутся из ресурсов модуля, а не с диска: портативная сборка ничего не распаковывает
  * (раздел 5.7 плана). Кэширование выключено ({@code no-store}), чтобы после обновления программы браузер
@@ -59,6 +61,7 @@ public final class StaticHandler implements HttpHandler {
         this.log = log;
     }
 
+    /** Отдаёт только публичные ресурсы клиента и общие значки ядра с поддержкой GET и HEAD. */
     @Override
     public void handle(HttpExchange exchange) throws IOException {
         try (exchange) {
@@ -66,27 +69,48 @@ public final class StaticHandler implements HttpHandler {
             boolean head = "HEAD".equals(method);
             if (!"GET".equals(method) && !head) {
                 exchange.getResponseHeaders().set("Allow", "GET, HEAD");
-                HttpUtil.send(exchange, 405, "text/plain; charset=utf-8", bytes("Метод не поддерживается"), false);
+                HttpUtil.send(exchange, 405, "text/plain; charset=utf-8", bytes(Texts.get("app.http.unsupportedMethod")), false);
                 return;
             }
             String path = exchange.getRequestURI().getPath();
+            if ("/favicon.png".equals(path)) {
+                HttpUtil.send(exchange, 200, "image/png", UiIcons.applicationPng(), head);
+                return;
+            }
+            if ("/app/icons.js".equals(path)) {
+                String module = "export const icons = Object.freeze("
+                        + ru.cashprediction.core.ui.json.UiJson.write(UiIcons.manifest()) + ");\n";
+                HttpUtil.send(exchange, 200, "text/javascript; charset=utf-8", bytes(module), head);
+                return;
+            }
+            if (path.startsWith("/app/icons/")) {
+                String filename = path.substring("/app/icons/".length());
+                var icon = UiIcons.resource(filename);
+                if (icon.isPresent()) {
+                    HttpUtil.send(exchange, 200, contentType(filename), icon.get(), head);
+                } else {
+                    HttpUtil.send(exchange, 404, "text/plain; charset=utf-8", bytes(Texts.get("app.http.notFound", path)), head);
+                }
+                return;
+            }
             if ("/app/tokens.css".equals(path)) {
                 HttpUtil.send(exchange, 200, "text/css; charset=utf-8", bytes(TokenCss.webCss()), head);
                 return;
             }
             String name = resourceName(path);
             if (name == null) {
-                HttpUtil.send(exchange, 404, "text/plain; charset=utf-8", bytes("Не найдено: " + path), head);
+                HttpUtil.send(exchange, 404, "text/plain; charset=utf-8", bytes(Texts.get("app.http.notFound", path)), head);
                 return;
             }
             try (InputStream in = StaticHandler.class.getResourceAsStream(RESOURCE_ROOT + name)) {
                 if (in == null) {
-                    HttpUtil.send(exchange, 404, "text/plain; charset=utf-8", bytes("Не найдено: " + path), head);
+                    HttpUtil.send(exchange, 404, "text/plain; charset=utf-8", bytes(Texts.get("app.http.notFound", path)), head);
                     return;
                 }
                 byte[] body = in.readAllBytes();
-                if (name.equals("app.html")) {
+                if (name.equals("index.html")) {
                     String html = new String(body, StandardCharsets.UTF_8);
+                    html = html.replace("{{alert.info.title}}", escapeHtml(UiText.get("alert.info.title")));
                     Map<String, String> texts = new java.util.LinkedHashMap<>();
                     for (String key : UiText.keys()) {
                         if (key.startsWith("offline.")) {
@@ -107,7 +131,7 @@ public final class StaticHandler implements HttpHandler {
             }
         } catch (IOException e) {
             // Чаще всего браузер просто закрыл вкладку во время загрузки.
-            log.error("Не удалось отдать статический файл", e);
+            log.error(Texts.get("app.http.staticFailure"), e);
         }
     }
 

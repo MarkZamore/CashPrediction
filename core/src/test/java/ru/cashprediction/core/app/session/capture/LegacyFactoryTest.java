@@ -56,7 +56,7 @@ class LegacyFactoryTest {
                         continue;
                     }
                     if (state.context().containsKey("page")) assertEquals(state.contextValue("page"), captured.contextValue("page"));
-                    FormRequest request = FormCatalog.forRestore(state, fake.state());
+                    FormRequest request = FormCatalog.forRestore(state, fake.state(), fake.planCommands, fake.external.storage());
                     FormSession session = (FormSession) shown.getFirst();
                     var normalized = request.logic().normalizeRestoredValues(request.restored().fields(), session.context());
                     for (var entry : state.fields().entrySet()) {

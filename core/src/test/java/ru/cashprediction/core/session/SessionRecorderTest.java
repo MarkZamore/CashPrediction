@@ -44,6 +44,50 @@ class SessionRecorderTest {
         return recorder(UiExecutor.direct());
     }
 
+    /** Shutdown-запись не захватывает UI и не рассылает статусы после остановки интерфейса. */
+    @Test void shutdownSnapshotUsesLastCaptureWithoutUiOrListeners() {
+        var unavailable = new java.util.concurrent.atomic.AtomicBoolean();
+        UiExecutor ui = new UiExecutor() {
+            @Override public void execute(Runnable task) {
+                if (unavailable.get()) throw new AssertionError("UI is stopped");
+                task.run();
+            }
+            @Override public boolean isUiThread() {
+                if (unavailable.get()) throw new AssertionError("Shutdown must not query UI");
+                return true;
+            }
+        };
+        SessionRecorder recorder = recorder(ui);
+        recorder.start();
+        recorder.saveNow();
+        SessionSnapshot last = registry.snapshot;
+        int writes = registry.saved.size();
+        int notifications = statuses.size();
+        source.error = new AssertionError("Shutdown must not capture UI");
+        unavailable.set(true);
+        recorder.saveShutdownSnapshot();
+        assertEquals(writes + 1, registry.saved.size());
+        assertSame(last, registry.snapshot);
+        assertSame(last, xml.snapshot);
+        assertEquals(notifications, statuses.size());
+        assertEquals(SessionMarker.running(4242, SessionFixtures.STARTED, "fx"), registry.marker);
+    }
+
+    /** Не начатый и уже чисто закрытый сеансы не становятся снимками аварии. */
+    @Test void shutdownSnapshotBeforeStartAndAfterCleanExitIsInert() {
+        SessionRecorder recorder = recorder();
+        recorder.saveShutdownSnapshot();
+        assertTrue(events.isEmpty());
+        recorder.start();
+        recorder.shutdownClean();
+        List<String> before = List.copyOf(events);
+        int notifications = statuses.size();
+        recorder.saveShutdownSnapshot();
+        assertEquals(before, events);
+        assertEquals(notifications, statuses.size());
+        assertTrue(recorder.isClosed());
+    }
+
     @Test
     void startWritesRunningMarkerToAllStores() {
         SessionRecorder recorder = recorder();

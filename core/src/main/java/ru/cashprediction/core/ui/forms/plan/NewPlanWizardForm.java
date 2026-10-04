@@ -73,6 +73,13 @@ public final class NewPlanWizardForm implements FormLogic {
     public NewPlanWizardForm() {
     }
 
+    /**
+     * Описывает три страницы мастера: имя и валюту, начальные параметры и быстрые операции.
+     * Задаёт кнопки переходов, завершения, открытия примера и отмены; доступность уточняется при оценке.
+     *
+     * @param context контекст формы
+     * @return общая для клиентов спецификация мастера с начальной кнопкой Enter {@code next}
+     */
     @Override
     public FormSpec spec(FormContext context) {
         return new FormSpec("newPlanWizard", WindowType.NEW_PLAN_WIZARD, "", Presentation.WIZARD,
@@ -103,6 +110,13 @@ public final class NewPlanWizardForm implements FormLogic {
                         ButtonSpecs.of("finish", UiText.get("button.finish"), ButtonRole.FINISH), ButtonSpecs.cancel()), "next");
     }
 
+    /**
+     * Подбирает первое свободное имя по наличию файлов в CashMemory и заполняет начальные значения:
+     * сегодняшнюю дату, нулевые суммы, горизонт 12 месяцев и названия быстрых операций без сумм.
+     *
+     * @param context контекст с текущей датой и папкой планов
+     * @return неизменяемая карта значений полей; файлы при подборе имени не создаются
+     */
     @Override
     public Map<String, String> defaults(FormContext context) {
         Map<String, String> values = new LinkedHashMap<>();
@@ -115,6 +129,15 @@ public final class NewPlanWizardForm implements FormLogic {
         return Map.copyOf(values);
     }
 
+    /**
+     * Ограничивает отображаемую страницу диапазоном 0..2, проверяет её поля и вычисляет доступность кнопок.
+     * Показывает ошибку текущего шага либо предупреждение горизонта; при отсутствии обоих на первых
+     * двух страницах ищет ошибку другого шага. Завершение разрешает только при корректности всех шагов.
+     *
+     * @param state значения полей и текущая страница
+     * @param context контекст проверки имени файла
+     * @return представление страницы с проблемой, полями горизонта и состояниями кнопок
+     */
     @Override
     public FormView evaluate(FormState state, FormContext context) {
         int page = Math.clamp(state.page(), 0, 2);
@@ -135,6 +158,17 @@ public final class NewPlanWizardForm implements FormLogic {
                         "cancel", ButtonView.ENABLED), List.of(), List.of(), "", false);
     }
 
+    /**
+     * Обрабатывает переходы мастера: перед переходом вперёд проверяет текущий шаг,
+     * перед завершением проверяет все шаги и собирает план с заполненными быстрыми операциями.
+     * Возвращает результат контроллеру без сохранения плана; открытие примера возвращает отдельный признак.
+     *
+     * @param buttonId идентификатор нажатой кнопки
+     * @param state значения полей и текущая страница
+     * @param context контекст проверки имени файла
+     * @return смена страницы, закрытие с {@link Created} или {@link OpenSample},
+     *         закрытие с {@code null} при отмене либо сохранение формы при ошибке или неизвестной кнопке
+     */
     @Override
     public FormOutcome onButton(String buttonId, FormState state, FormContext context) {
         return switch (buttonId) {

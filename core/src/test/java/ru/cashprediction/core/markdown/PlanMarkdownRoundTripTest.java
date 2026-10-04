@@ -166,7 +166,7 @@ class PlanMarkdownRoundTripTest {
 
                 ## Параметры
 
-                - Формат: CashPrediction 1
+                - Формат: CashPrediction 2
                 - Валюта: ₽
                 - Начало: 2026-09-01
                 - Горизонт: 12 месяцев
@@ -234,14 +234,15 @@ class PlanMarkdownRoundTripTest {
         assertEquals(rule, back.plan().rules().get(0));
     }
 
+    /** Одна физическая строка таблицы сохраняет исходные LF заголовка и CRLF заметки. */
     @Test
-    void lineBreaksInCellsAreFlattened() {
+    void lineBreaksInCellsArePreserved() {
         RecurringRule rule = new RecurringRule(new RuleId("r1"), "Две\nстроки", Kind.EXPENSE, Money.ofMajor(1),
                 "", new Recurrence.Monthly(1, 1), null, null, WeekendPolicy.NONE, true, "a\r\nb");
         Plan plan = Plan.empty("Переводы", LocalDate.of(2026, 9, 1)).withRuleAdded(rule);
         RecurringRule back = PlanMarkdownReader.read(PlanMarkdownWriter.write(plan), "x", TODAY).plan().rules().get(0);
-        assertEquals("Две строки", back.title());
-        assertEquals("a b", back.note());
+        assertEquals("Две\nстроки", back.title());
+        assertEquals("a\r\nb", back.note());
     }
 
     private static OccurrenceKey key(String rule, int y, int m, int d) {

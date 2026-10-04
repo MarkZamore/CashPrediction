@@ -5,7 +5,7 @@ import ru.cashprediction.core.app.AppController;
 import ru.cashprediction.core.app.AppEnvironment;
 import ru.cashprediction.core.ui.selftest.SelfTestScript;
 
-/** Владеет единственным контроллером core-интерфейса и его потоком, не создавая прежний ServerState. */
+/** Владеет единственным контроллером приложения и его потоком для HTTP-клиента. */
 public final class CoreWebRuntime implements AutoCloseable {
     private final ControllerThread thread = new ControllerThread();
     private final EffectLog effects = new EffectLog();
@@ -16,9 +16,15 @@ public final class CoreWebRuntime implements AutoCloseable {
 
     /** Готовит окружение; запуск выполняется отдельно после регистрации маршрутов. */
     public CoreWebRuntime(AppEnvironment environment) {
+        this(environment, () -> { });
+    }
+
+    /** Передаёт фактическую готовность главной модели владельцу серверного lifecycle. */
+    public CoreWebRuntime(AppEnvironment environment, Runnable mainReady) {
         var options = environment.options();
         if (options.isSelftest() && !options.testApi()) throw new IllegalArgumentException("--selftest requires --test-api");
         port = new WebUiPort(thread, effects, options.testApi());
+        port.onMainReady(mainReady);
         controller = new AppController(port, environment);
         tests = options.testApi() ? new WebSelfTestBridge(effects,
                 options.isSelftest() ? SelfTestScript.load(options.selftest()) : null,
@@ -41,11 +47,32 @@ public final class CoreWebRuntime implements AutoCloseable {
     public AppController controller() { return controller; }
     /** Возвращает тестовый мост либо null. */
     public WebSelfTestBridge tests() { return tests; }
-    /** Сохраняет последний снимок при внешнем завершении, не помечая его чистым. */
+    /**
+     * Захватывает свежий снимок на живом UI; при ошибке очереди сохраняет последний захваченный.
+     * Пять секунд ограничивают ожидание UI, но не время дискового IO запасной записи.
+     * Ни один путь не помечает сеанс чистым.
+     */
     public void saveSnapshot() {
         if (closed.get() || port.exitKind() != null) return;
-        try { thread.submit(() -> { if (controller.recorder() != null) controller.recorder().saveNow(); return null; }).get(5, TimeUnit.SECONDS); }
-        catch (Exception error) { error.printStackTrace(); }
+        java.util.concurrent.CompletableFuture<?> capture = null;
+        try {
+            capture = thread.submit(() -> {
+                if (!closed.get() && port.exitKind() == null && controller.recorder() != null)
+                    controller.recorder().saveNow();
+                return null;
+            });
+            capture.get(5, TimeUnit.SECONDS);
+        } catch (Exception error) {
+            // CompletableFuture отменяет ожидание, не уже поставленную задачу executor.
+            // Поздняя задача повторно проверяет выход; рекордер защищает порядок снимков.
+            if (capture != null) capture.cancel(false);
+            error.printStackTrace();
+            try {
+                if (!closed.get() && port.exitKind() == null) controller.saveShutdownSnapshot();
+            } finally {
+                if (error instanceof InterruptedException) Thread.currentThread().interrupt();
+            }
+        }
     }
     /** Освобождает таймеры, рекордер и ожидания HTTP. */
     @Override public void close() {

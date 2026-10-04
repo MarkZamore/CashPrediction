@@ -13,6 +13,7 @@ final class SwingFractionalLabel extends JLabel {
     /** Создаёт метку из готового общего текста и токенов без изменения размера или семейства шрифта. */
     SwingFractionalLabel(String text, ColorToken color, FontToken font) {
         super(text); setFont(SwingLook.font(font)); setForeground(SwingLook.color(color));
+        SwingIcons.decorate(this);
     }
 
     /** Возвращает метрики того же контекста рисования, которым метка выводит текст. */

@@ -85,6 +85,15 @@ class NoDashesInWebUiTest {
                 "строки web-сервера, которые видит пользователь, пишутся с дефисом-минусом, а не с тире");
     }
 
+    /** Все сохранённые Java-классы, включая инфраструктуру запуска, используют общую локализацию. */
+    @Test
+    void webMainJavaLiteralsContainNoCyrillic() {
+        Pattern cyrillic = Pattern.compile("[\\u0400-\\u04ff]|(?<!\\\\)(?:\\\\\\\\)*\\\\u+04[0-9a-f]{2}", Pattern.CASE_INSENSITIVE);
+        List<String> found = javaFiles(moduleDir().resolve("src/main/java")).stream()
+                .flatMap(file -> signsInLiterals(file, read(file), cyrillic).stream()).toList();
+        assertEquals(List.of(), found, "Все пользовательские Java-тексты Web берутся из общего каталога");
+    }
+
     /** В web-клиенте знак U+2212 не попадает ни в страницу, ни в ответы сервера. */
     @Test
     void webResourcesAndMainJavaLiteralsContainNoTypographicMinus() {
@@ -103,7 +112,7 @@ class NoDashesInWebUiTest {
     void scannedFoldersExistSoTheCheckIsNotEmpty() {
         Path resources = moduleDir().resolve(MARKER);
         assertTrue(Files.isRegularFile(resources.resolve("index.html")), resources.toString());
-        assertTrue(Files.isRegularFile(resources.resolve("app.js")), resources.toString());
+        assertTrue(Files.isRegularFile(resources.resolve("app/main.js")), resources.toString());
         assertTrue(files(resources).size() > 10, "проверяются все ресурсы страницы, а не один файл");
         List<Path> java = javaFiles(moduleDir().resolve("src/main/java"));
         assertTrue(java.size() > 10, "проверяется весь основной Java-код модуля");

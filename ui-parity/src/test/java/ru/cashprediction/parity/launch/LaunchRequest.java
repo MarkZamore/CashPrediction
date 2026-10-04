@@ -17,12 +17,11 @@ import java.util.Objects;
  * @param today              зафиксированное «сегодня» ({@code --today}) или {@code null}
  * @param selftest           сценарий самотеста ({@code --selftest}) или {@code null}
  * @param selftestOut        папка результатов самотеста ({@code --selftest-out}) или {@code null}
- * @param ui                 {@code core} или {@code legacy} ({@code --ui}) или {@code null} — не передавать
  * @param extraArguments     дополнительные аргументы приложения (после стандартных)
  * @param jvmOptions         дополнительные опции JVM (после общих опций стенда)
  */
 public record LaunchRequest(String client, String scenario, Path home, String registryNodePrefix, LocalDate today,
-                            String selftest, Path selftestOut, String ui, List<String> extraArguments,
+                            String selftest, Path selftestOut, List<String> extraArguments,
                             List<String> jvmOptions) {
 
     /** Дата «сегодня», общая для всех сценариев паритета и золотых дампов (архитектура §6.3). */
@@ -54,18 +53,7 @@ public record LaunchRequest(String client, String scenario, Path home, String re
     public static LaunchRequest forScenario(Path parityRoot, String client, String scenario, String registryNodePrefix) {
         Path home = parityRoot.resolve(client).resolve(scenario);
         return new LaunchRequest(client, scenario, home, registryNodePrefix, PARITY_TODAY, scenario,
-                home.resolve(SELFTEST_OUT_DIR), null, List.of(), List.of());
-    }
-
-    /**
-     * Копия запроса с выбранным интерфейсом.
-     *
-     * @param mode {@code core}, {@code legacy} или {@code null}
-     * @return новый запрос
-     */
-    public LaunchRequest withUi(String mode) {
-        return new LaunchRequest(client, scenario, home, registryNodePrefix, today, selftest, selftestOut, mode,
-                extraArguments, jvmOptions);
+                home.resolve(SELFTEST_OUT_DIR), List.of(), List.of());
     }
 
     /**
@@ -77,7 +65,7 @@ public record LaunchRequest(String client, String scenario, Path home, String re
     public LaunchRequest withExtraArguments(List<String> arguments) {
         List<String> all = new ArrayList<>(extraArguments);
         all.addAll(arguments);
-        return new LaunchRequest(client, scenario, home, registryNodePrefix, today, selftest, selftestOut, ui, all,
+        return new LaunchRequest(client, scenario, home, registryNodePrefix, today, selftest, selftestOut, all,
                 jvmOptions);
     }
 
@@ -90,7 +78,7 @@ public record LaunchRequest(String client, String scenario, Path home, String re
     public LaunchRequest withJvmOptions(List<String> options) {
         List<String> all = new ArrayList<>(jvmOptions);
         all.addAll(options);
-        return new LaunchRequest(client, scenario, home, registryNodePrefix, today, selftest, selftestOut, ui,
+        return new LaunchRequest(client, scenario, home, registryNodePrefix, today, selftest, selftestOut,
                 extraArguments, all);
     }
 

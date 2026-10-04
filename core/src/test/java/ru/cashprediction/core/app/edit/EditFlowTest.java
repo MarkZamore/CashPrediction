@@ -4,6 +4,7 @@ import java.time.LocalDate;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import ru.cashprediction.core.model.*;
+import ru.cashprediction.core.service.plan.PlanCommand;
 import ru.cashprediction.core.session.WindowType;
 import ru.cashprediction.core.ui.form.*;
 import ru.cashprediction.core.ui.forms.ops.AdjustmentForm;
@@ -213,13 +214,21 @@ class EditFlowTest {
     @Test void centralEditFailureNoopAndStaleFormPreserveHistory() {
         EditHarness h = new EditHarness(plan().withRuleAdded(rule()));
         Plan original = h.document.plan();
-        assertFalse(h.edits.edit("Правка", "status.msg.settings", p -> { throw new IllegalArgumentException("Ошибка модели"); }));
+        long revision = h.planCommands.snapshot().revision();
+        assertSame(h.planCommands, h.context.planCommands());
+        assertSame(h.context.planCommands(), h.context.planCommands());
+        // Нулевая сумма проходит мимо формы и отклоняется предметной службой до записи истории.
+        assertFalse(h.edits.edit("Правка", "status.msg.settings", new PlanCommand.ReplaceRule(rule().withAmount(Money.ZERO))));
         assertEquals("err.editFailed", h.alert().purpose());
         assertEquals(original, h.document.plan());
         assertFalse(h.document.canUndo());
+        assertEquals(revision, h.planCommands.snapshot().revision());
         assertEquals("", h.statusKey);
-        assertFalse(h.edits.edit("Правка", "status.msg.settings", p -> p));
+        assertFalse(h.edits.edit("Правка", "status.msg.settings", new PlanCommand.ReplaceRule(rule())));
+        assertEquals(original, h.document.plan());
         assertFalse(h.document.canUndo());
+        assertEquals(revision, h.planCommands.snapshot().revision());
+        assertEquals("", h.statusKey);
         h.edits.editRow(ROW);
         h.document.edit("Удаление", p -> p.withRuleRemoved(rule().id()));
         h.form().apply(new FormOutcome.Close(rule().withAmount(Money.ofMajor(300))));

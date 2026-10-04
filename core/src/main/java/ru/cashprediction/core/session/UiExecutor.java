@@ -34,11 +34,24 @@ public interface UiExecutor {
      */
     static UiExecutor direct() {
         return new UiExecutor() {
+            /**
+             * Выполняет задачу синхронно в вызывающем потоке, без очереди и переключения потока.
+             * Исключения задачи передаются вызывающему коду непосредственно.
+             *
+             * @param task задача, завершающаяся до возврата из метода
+             * @throws NullPointerException если задача равна {@code null}
+             */
             @Override
             public void execute(Runnable task) {
                 task.run();
             }
 
+            /**
+             * Считает любой вызывающий поток допустимым потоком интерфейса
+             * для прямого исполнителя web-сервера и тестов.
+             *
+             * @return всегда {@code true}, без проверки принадлежности потока
+             */
             @Override
             public boolean isUiThread() {
                 return true;

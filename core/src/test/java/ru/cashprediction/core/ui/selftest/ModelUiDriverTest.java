@@ -172,10 +172,10 @@ class ModelUiDriverTest {
         assertEquals(InvokeSource.FORM, calls.getLast().args().get(2));
         assertEquals("w1", ((CommandArgs) calls.getLast().args().get(1)).key());
     }
-    @Test void latestFilterAndSpinnerAreAppliedAfterTheirOwnDelay() {
+    @Test void latestFilterUsesNextQueueTurnAndSpinnerKeepsItsOwnDelay() {
         var port = port(); var driver = new ModelUiDriver(environment(), port, intents());
         driver.execute(new SelfTestCommand.FilterType("old")); driver.execute(new SelfTestCommand.FilterType("new"));
-        driver.advance(Duration.ofMillis(299)); assertTrue(calls.isEmpty()); driver.advance(Duration.ofMillis(1));
+        assertTrue(calls.isEmpty()); driver.advance(Duration.ZERO);
         assertEquals(List.of("new"), calls.getFirst().args());
         driver.execute(new SelfTestCommand.SpinnerSet("whatIf.extra", 100)); driver.execute(new SelfTestCommand.SpinnerSet("whatIf.extra", 200));
         driver.advance(Duration.ofMillis(599)); assertEquals(1, calls.size()); driver.advance(Duration.ofMillis(1));

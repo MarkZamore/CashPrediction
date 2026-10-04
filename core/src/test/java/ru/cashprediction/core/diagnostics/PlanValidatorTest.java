@@ -174,8 +174,10 @@ class PlanValidatorTest {
     /** Зарезервированные имена ровно те, что заняты служебными файлами. */
     @Test
     void reservedNames() {
-        assertEquals(5, PlanValidator.RESERVED_NAMES.size());
+        assertEquals(java.util.Set.copyOf(ru.cashprediction.core.io.CashMemoryLayout.RESERVED_PLAN_NAMES), PlanValidator.RESERVED_NAMES);
         assertTrue(PlanValidator.RESERVED_NAMES.contains("web-session.plan"));
+        assertTrue(PlanValidator.checkPlanName("WEB-RECONNECT").isPresent());
+        assertTrue(PlanValidator.checkPlanName("web-reconnect-tmp-0123456789abcdef").isPresent());
     }
 
     private static Plan base(List<RecurringRule> rules) {

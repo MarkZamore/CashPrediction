@@ -8,7 +8,7 @@ import javafx.scene.layout.Priority;
 import javafx.scene.layout.Region;
 
 /** Панель формы с явной распоркой: стандартный ButtonBar добавляет её перед всеми кнопками даже при BUTTON_ORDER_NONE. */
-// JavaFX: DialogPane → Swing: SwingDialogPane → Web: div.dialog-pane
+// JavaFX: DialogPane → Swing: JPanel → Web: div.dialog-pane
 final class FxFormPane extends DialogPane {
     /** Отделяет общий внешний отступ от внутренних платформенных отступов DialogPane. */
     FxFormPane() {

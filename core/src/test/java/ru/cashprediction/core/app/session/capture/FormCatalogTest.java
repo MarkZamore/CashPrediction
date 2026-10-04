@@ -32,17 +32,19 @@ class FormCatalogTest {
             };
             WindowState state = new WindowState("w7", type, type.defaultModal(), "w3",
                     new WindowBounds(200, 100, 580, 400), context, Map.of());
-            FormRequest request = FormCatalog.forRestore(state, fake.state());
+            FormRequest request = FormCatalog.forRestore(state, fake.state(), fake.planCommands, fake.external.storage());
             assertEquals(state, request.restored());
             assertEquals(state.modal(), request.modal());
             FormContext formContext = new FormContext(state.id(), state.ownerId(), request.context(), fake.state());
             assertEquals(type, request.logic().spec(formContext).windowType());
         }
         for (String purpose : Set.of("rename", "reconcile", "customMonths", "customCurrency")) {
-            FormRequest request = FormCatalog.forRestore(window(WindowType.TEXT_INPUT, Map.of("purpose", purpose), Map.of()), fake.state());
+            FormRequest request = FormCatalog.forRestore(window(WindowType.TEXT_INPUT, Map.of("purpose", purpose), Map.of()),
+                    fake.state(), fake.planCommands, fake.external.storage());
             assertEquals(purpose, request.logic().spec(new FormContext("w1", "main", request.context(), fake.state())).purpose());
         }
-        assertNotNull(FormCatalog.forRestore(window(WindowType.CHOICE, Map.of("purpose", "openPlan"), Map.of()), fake.state()));
+        assertNotNull(FormCatalog.forRestore(window(WindowType.CHOICE, Map.of("purpose", "openPlan"), Map.of()),
+                fake.state(), fake.planCommands, fake.external.storage()));
     }
 
     /** Прежние подписи и суммы проходят FieldCodec, неизвестное поле и некорректный текст сохраняются. */
@@ -50,19 +52,20 @@ class FormCatalogTest {
         CaptureContext fake = new CaptureContext(home, ClientProfile.swing());
         Map<String, String> fields = Map.of("amount", "95 000", "kind", "income", "extraField", "raw text");
         WindowState state = window(WindowType.RULE_EDITOR, Map.of("mode", "create"), fields);
-        FormRequest request = FormCatalog.forRestore(state, fake.state());
+        FormRequest request = FormCatalog.forRestore(state, fake.state(), fake.planCommands, fake.external.storage());
         for (var entry : fields.entrySet()) assertEquals(FieldCodec.acceptLegacy(state.type(), entry.getKey(), entry.getValue()),
                 request.restored().fields().get(entry.getKey()));
         assertEquals("95000,00", request.restored().fields().get("amount"));
         WindowState invalid = window(WindowType.RULE_EDITOR, Map.of("mode", "create"), Map.of("amount", "bad amount"));
-        assertEquals("bad amount", FormCatalog.forRestore(invalid, fake.state()).restored().fields().get("amount"));
+        assertEquals("bad amount", FormCatalog.forRestore(invalid, fake.state(), fake.planCommands, fake.external.storage())
+                .restored().fields().get("amount"));
     }
 
     /** Восстановленный горизонт использует проверку общего потока, включая переполнение ввода. */
     @Test void restoredCustomMonthsValidatesLikeViewFlow() {
         CaptureContext fake = new CaptureContext(home, ClientProfile.web());
         FormRequest request = FormCatalog.forRestore(window(WindowType.TEXT_INPUT,
-                Map.of("purpose", "customMonths"), Map.of()), fake.state());
+                Map.of("purpose", "customMonths"), Map.of()), fake.state(), fake.planCommands, fake.external.storage());
         FormContext context = new FormContext("w1", "main", request.context(), fake.state());
         for (String invalid : java.util.List.of("0", "601", "bad", "999999999999999999999999999")) {
             FormState state = new FormState(0, Map.of("value", invalid));
@@ -87,7 +90,7 @@ class FormCatalogTest {
         for (String purpose : Set.of("deleteRule", "deleteOneTime", "actualize", "applyWhatIf", "clearSnapshots")) {
             String target = "deleteRule".equals(purpose) ? "r1" : "deleteOneTime".equals(purpose) ? "t1" : "";
             WindowState state = window(WindowType.ALERT, Map.of("purpose", purpose, "targetId", target), Map.of());
-            FormRequest request = FormCatalog.forRestore(state, fake.state());
+            FormRequest request = FormCatalog.forRestore(state, fake.state(), fake.planCommands, fake.external.storage());
             assertEquals(state, request.restored());
             FormSpec spec = request.logic().spec(new FormContext("w1", "main", request.context(), fake.state()));
             assertEquals(WindowType.ALERT, spec.windowType());
@@ -97,7 +100,8 @@ class FormCatalogTest {
         }
         assertEquals(UiText.get("restore.warn.targetGone"),
                 assertThrows(IllegalArgumentException.class, () -> FormCatalog.forRestore(
-                        window(WindowType.ALERT, Map.of("purpose", "deleteRule", "targetId", "gone"), Map.of()), fake.state())).getMessage());
+                        window(WindowType.ALERT, Map.of("purpose", "deleteRule", "targetId", "gone"), Map.of()),
+                        fake.state(), fake.planCommands, fake.external.storage())).getMessage());
     }
 
     /** Неизвестное назначение, исчезнувшая цель и скрытая строка различаются точными текстами. */
@@ -105,17 +109,21 @@ class FormCatalogTest {
         CaptureContext fake = new CaptureContext(home, ClientProfile.web());
         assertEquals(UiText.get("restore.warn.unknownPurpose", "future"),
                 assertThrows(IllegalArgumentException.class, () -> FormCatalog.forRestore(
-                        window(WindowType.TEXT_INPUT, Map.of("purpose", "future"), Map.of()), fake.state())).getMessage());
+                        window(WindowType.TEXT_INPUT, Map.of("purpose", "future"), Map.of()),
+                        fake.state(), fake.planCommands, fake.external.storage())).getMessage());
         assertEquals(UiText.get("restore.warn.targetGone"),
                 assertThrows(IllegalArgumentException.class, () -> FormCatalog.forRestore(
-                        window(WindowType.RULE_EDITOR, Map.of("mode", "edit", "ruleId", "gone"), Map.of()), fake.state())).getMessage());
+                        window(WindowType.RULE_EDITOR, Map.of("mode", "edit", "ruleId", "gone"), Map.of()),
+                        fake.state(), fake.planCommands, fake.external.storage())).getMessage());
         assertEquals(UiText.get("restore.warn.noContext"),
                 assertThrows(IllegalArgumentException.class, () -> FormCatalog.forRestore(
-                        window(WindowType.ADJUSTMENT_EDITOR, Map.of(), Map.of()), fake.state())).getMessage());
+                        window(WindowType.ADJUSTMENT_EDITOR, Map.of(), Map.of()),
+                        fake.state(), fake.planCommands, fake.external.storage())).getMessage());
         fake.document.setViewState(fake.document.viewState().withShowIncome(false));
         assertEquals(UiText.get("restore.warn.rowHidden", "r1", "05.10.2026"),
                 assertThrows(IllegalArgumentException.class, () -> FormCatalog.forRestore(window(WindowType.QUICK_EDIT_POPUP,
-                        Map.of("ruleId", "r1", "originalDate", "2026-10-05"), Map.of()), fake.state())).getMessage());
+                        Map.of("ruleId", "r1", "originalDate", "2026-10-05"), Map.of()),
+                        fake.state(), fake.planCommands, fake.external.storage())).getMessage());
     }
 
     /** Создаёт окно с обычными идентификаторами и без привязки к инструменту интерфейса. */

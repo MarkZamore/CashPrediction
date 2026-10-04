@@ -18,6 +18,9 @@ import ru.cashprediction.core.json.JsonParser;
 import ru.cashprediction.core.json.JsonWriter;
 import ru.cashprediction.core.ui.token.TokenCss;
 import ru.cashprediction.core.ui.token.FontToken;
+import ru.cashprediction.core.ui.token.DesignTokens;
+import ru.cashprediction.core.ui.token.ColorToken;
+import ru.cashprediction.core.ui.text.UiText;
 import ru.cashprediction.core.ui.json.UiJson;
 import ru.cashprediction.core.ui.form.FieldView;
 import ru.cashprediction.core.ui.form.FieldKind;
@@ -82,12 +85,24 @@ public final class BrowserFixtureProbe {
     public static void main(String[] args) throws Exception {
         Path root = Path.of(args[0]).toAbsolutePath().normalize();
         Path output = Path.of(args[1]).toAbsolutePath().normalize(); Files.createDirectories(output);
+        if (args.length > 2 && "revision-only".equals(args[2])) {
+            verifyRevisionResync(output);
+            return;
+        }
         var probe = new BrowserFixtureProbe(root);
         var pool = Executors.newVirtualThreadPerTaskExecutor();
         HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         server.setExecutor(pool); server.createContext("/", probe::handle); server.start();
-        String url = "http://127.0.0.1:" + server.getAddress().getPort() + "/app.html?t=fixture";
+        String url = "http://127.0.0.1:" + server.getAddress().getPort() + "/index.html?t=fixture";
         try {
+            if (args.length > 2 && "summary-only".equals(args[2])) {
+                probe.verifySummaryPolish(output, url);
+                return;
+            }
+            if (args.length > 2 && "icons-only".equals(args[2])) {
+                probe.verifySharedIcons(output, url);
+                return;
+            }
             if (args.length > 2 && "chooser-only".equals(args[2])) {
                 probe.verifyChooserHistory(output, url);
                 return;
@@ -143,6 +158,10 @@ public final class BrowserFixtureProbe {
                     cdp.waitFor("!!window.cpParityTestApi", Duration.ofSeconds(20));
                     cdp.evaluate("window.dispatchEvent(new Event('resize'))");
                     cdp.evaluate("window.cpParityTestApi.awaitIdle({timeoutMs:5000})");
+                    if (width == 1200) probe.verifySharedIcons(cdp, output);
+                    probe.verifySummaryLayout(cdp);
+                    var columns = Json.object(Json.object(probe.bootstrap, "screen"), "table").get("columns");
+                    check(cdp.evaluate("(" + JsonWriter.write(columns) + ").every(column=>{const node=[...document.querySelectorAll('.table-header > .table-cell')].find(node=>node.dataset.cpId===column.id);return node && Number(getComputedStyle(node).fontWeight)===400 && getComputedStyle(node).textAlign===column.align.toLowerCase();})"), "all headers use normal weight and model alignment");
                     check(probe.earlyStep, "test.step arrived during bootstrap row rendering");
                     check(cdp.evaluate("document.documentElement.scrollWidth <= innerWidth"), "page width " + width);
                     Files.writeString(output.resolve("alignment-" + width + ".json"), JsonWriter.write(cdp.evaluate("(() => {const rect=node=>node?.getBoundingClientRect().toJSON(); const table=document.getElementById('table'); const scroll=table.querySelector('.table-scroll'); return {cards:[...document.querySelectorAll('#summary .card')].map(rect),header:rect(table.querySelector('.table-header')),scrollWidth:scroll.offsetWidth,clientWidth:scroll.clientWidth,columns:[...table.querySelector('.table-header').children].map(node=>({id:node.dataset.cpId,header:rect(node),cell:rect(table.querySelector('.table-row [data-cp-id='+node.dataset.cpId+']'))}))};})()")), StandardCharsets.UTF_8);
@@ -169,7 +188,7 @@ public final class BrowserFixtureProbe {
                     check(cdp.evaluate("(() => { const toolbar=document.getElementById('toolbar'); const canvas=document.createElement('canvas'); const context=canvas.getContext('2d'); return [...toolbar.querySelectorAll(':scope > .toolbar-node > button:not(.glyph-only):not(.toolbar-arrow)')].every(button=>{ const css=getComputedStyle(button); context.font=css.font; const label=button.querySelector('.toolbar-label'); const arrow=button.querySelector('.toolbar-arrow'); return css.paddingTop==='4px' && css.paddingLeft==='10px' && Math.abs(button.getBoundingClientRect().width-context.measureText(label.textContent).width-20-(arrow?20:0))<1; }); })()"), "toolbar measured text widths");
                     if (width >= 1200) check(cdp.evaluate("document.getElementById('toolbar').getBoundingClientRect().height===36 && document.querySelector('#toolbar > .toolbar-node > button').getBoundingClientRect().x===0 && document.querySelector('#toolbar > .toolbar-node > button').getBoundingClientRect().y===32"), "toolbar content origin and vertical centering");
                     check(cdp.evaluate("document.querySelectorAll('.table-row').length > 0 && document.querySelectorAll('.table-row').length < 60"), "virtual table");
-                    check(cdp.evaluate("[...document.querySelectorAll('.table-row [data-cp-id=balance]')].every(node=>Number(getComputedStyle(node).fontWeight)>=600)"), "balance column retains bold over plain row style");
+                    check(cdp.evaluate("[...document.querySelectorAll('.table-row [data-cp-id=balance]')].every(node=>Number(getComputedStyle(node).fontWeight)===700)"), "balance column retains bold over plain row style");
                     check(cdp.evaluate("window.cpParityTestApi.dump({step:'slider-text'}).then(reply=>{ const visit=items=>items.every(item=>(item.kind!=='Slider'||item.text==='')&&visit(item.children)); return visit(reply.value.menuBar)&&reply.value.toolbar.items.every(item=>visit(item.items)); })"), "slider current caption stays separate from menu text");
                     cdp.waitFor("(() => { window.fixtureStep ||= window.cpParityTestApi.takeStep({}).value; return !!window.fixtureStep; })()", Duration.ofSeconds(5));
                     check(cdp.evaluate("window.fixtureStep.command === 'sample'"), "queue API");
@@ -308,7 +327,7 @@ public final class BrowserFixtureProbe {
                     Files.writeString(output.resolve("dump-" + width + ".json"), JsonWriter.write(tree), StandardCharsets.UTF_8);
                     Files.write(output.resolve("fixture-" + width + ".png"), cdp.captureScreenshot());
                     if (width == 1200) {
-                        cdp.evaluate("(() => { const frame=document.createElement('iframe'); frame.id='narrow-probe'; frame.style.cssText='position:fixed;left:0;top:0;width:400px;height:800px;border:0;z-index:1000'; frame.src='/app.html?t=fixture'; document.body.append(frame); })()");
+                        cdp.evaluate("(() => { const frame=document.createElement('iframe'); frame.id='narrow-probe'; frame.style.cssText='position:fixed;left:0;top:0;width:400px;height:800px;border:0;z-index:1000'; frame.src='/index.html?t=fixture'; document.body.append(frame); })()");
                         cdp.waitFor("!!document.getElementById('narrow-probe').contentWindow.cpParityTestApi", Duration.ofSeconds(10));
                         cdp.evaluate("document.getElementById('narrow-probe').contentWindow.cpParityTestApi.awaitIdle({timeoutMs:5000})");
                         check(cdp.evaluate("(() => { const frame=document.getElementById('narrow-probe').contentWindow; return frame.innerWidth===400 && frame.document.documentElement.scrollWidth<=400 && frame.document.getElementById('toolbar').getBoundingClientRect().height>36; })()"), "real 400px iframe has wrapped toolbar and no page scroll");
@@ -323,6 +342,237 @@ public final class BrowserFixtureProbe {
 
     private static void check(Object result, String message) {
         if (!Boolean.TRUE.equals(result)) throw new AssertionError(message);
+    }
+
+    /** Запускает только сводку и заголовки на настоящих виджетах при ширинах главного окна 1200 и 400px. */
+    private void verifySummaryPolish(Path output, String url) throws Exception {
+        for (int width : new int[] {1200, 400}) {
+            try (var browser = BrowserBridge.start(output.resolve("summary-browser-" + width), width, url);
+                 var cdp = browser.connect()) {
+                cdp.waitFor("!!window.cpParityTestApi", Duration.ofSeconds(20));
+                cdp.evaluate("window.cpParityTestApi.awaitIdle({timeoutMs:5000})");
+                Object result = verifySummaryLayout(cdp);
+                Files.writeString(output.resolve("summary-polish-" + width + ".json"),
+                        JsonWriter.write(result), StandardCharsets.UTF_8);
+                Files.write(output.resolve("summary-polish-" + width + ".png"), cdp.captureScreenshot());
+                System.out.println("ACTUAL SUMMARY POLISH OK " + width);
+            }
+        }
+    }
+
+    /** Проверяет живую панель и таблицу; ожидания ширин и метрик заданы независимо от рендерера. */
+    private Object verifySummaryLayout(CdpBridge cdp) throws Exception {
+        String summary = JsonWriter.write(Json.object(Json.object(bootstrap, "screen"), "summary"));
+        String unavailable = JsonWriter.write(UiText.get("summary.unavailable", "fixture"));
+        int expense = ColorToken.EXPENSE.argb();
+        String expenseRgb = JsonWriter.write("rgb(" + ((expense >> 16) & 255) + ", "
+                + ((expense >> 8) & 255) + ", " + (expense & 255) + ")");
+        check(DesignTokens.CARD_MIN_WIDTH == 118 && DesignTokens.CARD_GAP == 6, "canonical summary tokens");
+        Object result = cdp.evaluate("(async()=>{const model=" + summary + ";const unavailable=" + unavailable
+                + ";const expenseRgb=" + expenseRgb + ";" + """
+                const {renderSummary}=await import('/app/render-summary.js');
+                const {Application}=await import('/app/main.js');
+                const original=document.getElementById('summary');
+                const main=document.getElementById('main');
+                const table=document.getElementById('table');
+                const header=table.querySelector('.table-header');
+                const scroll=table.querySelector('.table-scroll');
+                const savedMainStyle=main.getAttribute('style');
+                const savedPanelStyle=original.getAttribute('style');
+                const savedMainHidden=main.hidden;
+                const savedHidden=original.hidden;
+                const savedCards=[...original.children];
+                const savedScroll=[scroll.scrollLeft,scroll.scrollTop];
+                const savedSend=Application.prototype.send;
+                const initialWidth=main.getBoundingClientRect().width;
+                const initialColumns=new Map([[1200,9],[400,3],[500,3],[1920,9]]).get(initialWidth);
+                const cases=[]; let app; let checks=0;
+                /** Даёт ошибке имя сценария и считает только выполненные утверждения. */
+                const verify=(condition,label)=>{if(!condition)throw new Error('Summary polish: '+label);checks++;};
+                /** Ждёт доставки изменения размера и следующего кадра перед измерением. */
+                const settle=()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
+                /** Проверяет сетку по заданному извне числу колонок, включая неполный ряд и переполнение. */
+                const equalGrid=(panel,expectedColumns,outerWidth,cardCount=9,border=0)=>{
+                  const css=getComputedStyle(panel); const box=panel.getBoundingClientRect();
+                  const cards=[...panel.querySelectorAll(':scope > .card')];
+                  const available=outerWidth-16-2*border;
+                  const width=(available-6*(expectedColumns-1))/expectedColumns;
+                  const rows=Math.ceil(cardCount/expectedColumns); const height=12+2*border+rows*72+(rows-1)*6;
+                  return cards.length===cardCount && parseFloat(css.getPropertyValue('--cp-card-min-width'))===118
+                    && parseFloat(css.columnGap)===6 && parseFloat(css.rowGap)===6 && css.display==='grid'
+                    && parseFloat(css.paddingLeft)===8 && parseFloat(css.paddingRight)===8
+                    && parseFloat(css.paddingTop)===6 && parseFloat(css.paddingBottom)===6
+                    && Math.abs(box.width-outerWidth)<0.1 && Math.abs(box.height-height)<0.1
+                    && panel.scrollWidth<=panel.clientWidth
+                    && (outerWidth-2*border<134 ? width<118 : width>=118)
+                    && css.gridTemplateColumns.trim().split(' ').length===expectedColumns
+                    && cards.every((card,index)=>{const rect=card.getBoundingClientRect();return rect.height===72
+                      && Math.abs(rect.width-width)<0.1
+                      && card.scrollWidth<=card.clientWidth
+                      && Math.abs(rect.x-box.x-8-border-(index%expectedColumns)*(width+6))<0.1
+                      && Math.abs(rect.y-box.y-6-border-Math.floor(index/expectedColumns)*78)<0.1
+                      && parseFloat(getComputedStyle(card).rowGap)===3
+                      && card.children.length===3
+                      && [...card.children].every((line,lineIndex)=>{const lineCss=getComputedStyle(line);
+                        const lineBox=line.getBoundingClientRect();return lineBox.height===[15,22,15][lineIndex]
+                          && line.className===['card-title','card-value','card-caption'][lineIndex]
+                          && Number(lineCss.fontWeight)===[400,700,400][lineIndex]
+                          && lineCss.whiteSpace==='nowrap' && lineCss.overflowX==='hidden'
+                          && lineCss.textOverflow==='ellipsis'
+                          && Math.abs(lineBox.top-rect.top-[7,25,50][lineIndex])<0.1
+                          && Math.abs(lineBox.left-rect.left-11)<0.1
+                          && Math.abs(lineBox.right-rect.right+11)<0.1;});});
+                };
+                /** Записывает фактическую геометрию после сравнения с независимым ожиданием. */
+                const record=(phase,width,columns)=>{
+                  const cards=[...original.querySelectorAll(':scope > .card')];
+                  cases.push({phase,width,columns,cardWidth:cards[0].getBoundingClientRect().width,
+                    cardHeight:cards[0].getBoundingClientRect().height,panelHeight:original.getBoundingClientRect().height,
+                    clippedLines:cards.flatMap(card=>[...card.children]).filter(line=>line.scrollWidth>line.clientWidth).length});
+                };
+                /** Проверяет распределение высоты между панелью, центром и настоящей таблицей. */
+                const liveGeometry=()=>{
+                  const box=main.getBoundingClientRect(); const panel=original.getBoundingClientRect();
+                  const center=document.getElementById('center').getBoundingClientRect();
+                  const tableBox=table.getBoundingClientRect();
+                  const headerBox=header.getBoundingClientRect(); const scrollBox=scroll.getBoundingClientRect();
+                  const chrome=['menuBar','toolbar','status'].reduce((sum,id)=>sum+document.getElementById(id).getBoundingClientRect().height,0);
+                  return original.parentElement===main && !table.hidden
+                    && Math.abs(center.top-panel.bottom)<0.1
+                    && Math.abs(center.height-(box.height-chrome-panel.height))<0.1
+                    && Math.abs(tableBox.top-center.top)<0.1 && Math.abs(tableBox.height-center.height)<0.1
+                    && headerBox.height===28 && Math.abs(scrollBox.top-headerBox.bottom)<0.1
+                    && Math.abs(scrollBox.height-(center.height-28))<0.1;
+                };
+                try {
+                  verify(!original.hidden && !main.hidden && model.cards.length===9,'visible nine-card fixture');
+                  verify(document.documentElement.scrollWidth<=innerWidth,'initial page has no horizontal overflow');
+                  verify(equalGrid(original,initialColumns,initialWidth) && liveGeometry(),'initial main geometry '+initialWidth);
+                  record('initial',initialWidth,initialColumns);
+                  // Перехват живого Application действует только до доставки штатного mainGeometry.
+                  /** Сохраняет владельца виджетов и передаёт намерение неизменённому транспорту. */
+                  Application.prototype.send=function(intent){app=this;return savedSend.call(this,intent);};
+                  try {
+                    window.dispatchEvent(new Event('resize'));
+                    await window.cpParityTestApi.awaitIdle({timeoutMs:5000});
+                  } finally {Application.prototype.send=savedSend;}
+                  verify(app?.table.root===table,'existing application owns the tested widgets');
+                  // Выравнивания известной фикстуры заданы вручную, bold столбца не задаёт жирность заголовка.
+                  const alignments={date:'left',day:'center',title:'left',category:'left',
+                    income:'right',expense:'right',balance:'right',marks:'center'};
+                  verify(header.children.length===8 && [...header.children].every(node=>{
+                    const css=getComputedStyle(node);return Number(css.fontWeight)===400
+                      && css.textAlign===alignments[node.dataset.cpId];}),'eight normal-weight aligned headers');
+                  const balances=[...table.querySelectorAll('.table-row [data-cp-id=balance]')];
+                  verify(balances.length>0 && balances.every(node=>Number(getComputedStyle(node).fontWeight)===700),
+                    'nonempty actual balance cells retain bold');
+                  // Независимые ожидания: при 800px последний ряд содержит три карточки из шести колонок.
+                  for(const [width,columns] of [[800,6],[500,3],[400,3],[1200,9],[800,6]]){
+                    main.style.width=width+'px'; await settle();
+                    verify(equalGrid(original,columns,width) && liveGeometry(),'main allocation '+width);
+                    verify(savedCards.every((card,index)=>original.children[index]===card),'resize preserves live cards '+width);
+                    record('main-resize',width,columns);
+                  }
+                  const visibleHeight=original.getBoundingClientRect().height;
+                  const centerBefore=document.getElementById('center').getBoundingClientRect();
+                  original.hidden=true; await settle();
+                  const centerHidden=document.getElementById('center').getBoundingClientRect();
+                  verify(original.getClientRects().length===0
+                    && Math.abs(centerHidden.height-centerBefore.height-visibleHeight)<0.1
+                    && Math.abs(centerBefore.top-centerHidden.top-visibleHeight)<0.1,'hidden panel releases full height');
+                  const hiddenColumns=original.style.getPropertyValue('--cp-summary-columns');
+                  main.style.width='400px'; await settle();
+                  verify(original.style.getPropertyValue('--cp-summary-columns')===hiddenColumns,'hidden resize defers measurement');
+                  original.hidden=false; await settle();
+                  verify(equalGrid(original,3,400) && liveGeometry(),'ResizeObserver remeasures newly visible panel');
+                  main.hidden=true; main.style.width='800px'; await settle();
+                  verify(original.getClientRects().length===0,'hidden ancestor hides actual panel');
+                  main.hidden=false; await settle();
+                  verify(equalGrid(original,6,800) && liveGeometry(),'ResizeObserver remeasures after ancestor visibility');
+                  // Изменение ширины без повторного рендера проверяет настоящий ResizeObserver.
+                  // Пороги заданы примерами вручную и не вычисляются формулой реализации.
+                  for(const [width,columns] of [[500,3],[1200,9],[1920,9],[140,1],[116,1],
+                    [133,1],[133.75,1],[134,1],[257,1],[257.75,1],[258,2],[258.25,2],[259,2],
+                    [381,2],[381.75,2],[382,3],[505.75,3],[506,4],[629.75,4],[630,5],
+                    [753.75,5],[754,6],[877.75,6],[878,7],[1001,7],[1001.75,7],[1002,8],
+                    [1125,8],[1125.75,8],[1126,9],[800,6]]){
+                    main.style.width=width+'px'; await settle();
+                    verify(equalGrid(original,columns,width),'independent threshold '+width+' / '+columns);
+                    verify(savedCards.every((card,index)=>original.children[index]===card),'observer keeps cards '+width);
+                    record('threshold',width,columns);
+                  }
+                  original.style.border='1px solid var(--cp-border)';
+                  for(const [width,columns] of [[258,1],[259.75,1],[260,2]]){
+                    main.style.width=width+'px'; await settle();
+                    verify(equalGrid(original,columns,width,9,1),'content width excludes panel border '+width);
+                    record('border',width,columns);
+                  }
+                  if(savedPanelStyle===null)original.removeAttribute('style');else original.setAttribute('style',savedPanelStyle);
+                  main.style.width='116px';
+                  const longModel={...model,cards:model.cards.map(card=>({...card,
+                    title:card.title.repeat(24),value:card.value.repeat(24),caption:card.caption.repeat(24)}))};
+                  // JavaFX: Popup / ContextMenu → Swing: JWindow / JPopupMenu → Web: Popups / Menus.
+                  // Настоящий рендерер использует существующие меню и popup приложения для всех вариантов модели.
+                  renderSummary(app,longModel); await settle();
+                  verify(equalGrid(original,1,116),'long text preserves three physical lines');
+                  verify([...original.children].every(card=>[...card.children].every(line=>{
+                    const range=document.createRange();range.selectNodeContents(line);
+                    const tops=new Set([...range.getClientRects()].filter(rect=>rect.width>0).map(rect=>rect.top));
+                    return line.scrollWidth>line.clientWidth && line.scrollHeight<=line.clientHeight && tops.size===1;
+                  })),'all 27 long text lines are clipped horizontally without vertical wrapping');
+                  record('long-text',116,1);
+                  renderSummary(app,{...model,visible:false}); await settle();
+                  verify(original.hidden && original.getClientRects().length===0,'renderer hides actual panel');
+                  main.style.width='400px'; renderSummary(app,{...model,visible:true});
+                  verify(equalGrid(original,3,400),'visible render synchronously computes correct columns');
+                  await settle();
+                  // Ошибка имеет приоритет даже при оставшихся карточках в переданной модели.
+                  renderSummary(app,{...model,visible:true,unavailableText:unavailable}); await settle();
+                  const error=original.querySelector('.summary-unavailable');
+                  verify(!!error,'actual unavailable widget exists');
+                  const css=getComputedStyle(error);
+                  verify(original.children.length===1 && error.textContent===unavailable && css.color===expenseRgb
+                    && css.gridColumnStart==='1' && css.gridColumnEnd==='-1','error replaces cards and uses expense color');
+                  const longError=unavailable.replaceAll(' ','').repeat(24);
+                  main.style.width='116px'; renderSummary(app,{...model,unavailableText:longError}); await settle();
+                  verify(original.children.length===1 && original.firstChild.textContent===longError
+                    && original.scrollWidth<=original.clientWidth,'unbroken unavailable text has no horizontal overflow');
+                  main.style.width='400px'; renderSummary(app,{...model,unavailableText:''}); await settle();
+                  verify(equalGrid(original,3,400),'summary recovers after unavailable text');
+                  main.style.width='1920px'; renderSummary(app,{...model,cards:model.cards.slice(0,2)}); await settle();
+                  verify(equalGrid(original,2,1920,2),'columns capped by current card count');
+                  renderSummary(app,{...model,cards:[]}); await settle();
+                  verify(original.children.length===0 && original.style.getPropertyValue('--cp-summary-columns')==='1'
+                    && original.scrollWidth<=original.clientWidth,'empty model keeps valid grid without phantom card');
+                } finally {
+                  Application.prototype.send=savedSend;
+                  // Восстанавливаем именно исходные узлы с обработчиками, сохраняя остальное приложение.
+                  original.replaceChildren(...savedCards); original.hidden=savedHidden; main.hidden=savedMainHidden;
+                  if(savedPanelStyle===null)original.removeAttribute('style'); else original.setAttribute('style',savedPanelStyle);
+                  if(savedMainStyle===null)main.removeAttribute('style'); else main.setAttribute('style',savedMainStyle);
+                  scroll.scrollLeft=savedScroll[0]; scroll.scrollTop=savedScroll[1];
+                  await settle(); await window.cpParityTestApi.awaitIdle({timeoutMs:5000});
+                }
+                verify(document.getElementById('summary')===original && document.getElementById('table')===table
+                  && table.querySelector('.table-header')===header && table.querySelector('.table-scroll')===scroll
+                  && savedCards.every((card,index)=>original.children[index]===card)
+                  && original.children.length===savedCards.length && Application.prototype.send===savedSend
+                  && main.hidden===savedMainHidden && original.hidden===savedHidden
+                  && main.getAttribute('style')===savedMainStyle && original.getAttribute('style')===savedPanelStyle
+                  && scroll.scrollLeft===savedScroll[0] && scroll.scrollTop===savedScroll[1],
+                  'cleanup preserves main, summary cards, table widgets, styles, visibility and scroll');
+                verify(equalGrid(original,initialColumns,initialWidth) && liveGeometry()
+                  && header.getBoundingClientRect().width===scroll.clientWidth
+                  && scroll.offsetWidth-scroll.clientWidth===16
+                  && document.documentElement.scrollWidth<=innerWidth,'restored main geometry, scrollbar gutter and no page overflow');
+                return {ok:true,checks,initialWidth,initialColumns,cases,restored:{
+                  panelHeight:original.getBoundingClientRect().height,cardWidth:original.firstChild.getBoundingClientRect().width,
+                  headerWidth:header.getBoundingClientRect().width,scrollbar:scroll.offsetWidth-scroll.clientWidth}};
+                })()
+                """);
+        check(Json.asObject(result, "summary polish").get("ok"),
+                "live summary/table allocation, independent thresholds, actual clipped text, visibility, normal headers and preserved application");
+        return result;
     }
 
     /** Проверяет вычисленные шрифты живых виджетов по токенам ядра и намеренные искажения каждого свойства. */
@@ -354,7 +604,7 @@ public final class BrowserFixtureProbe {
         for (Object value : (List<?>) Json.object(screen, "table").get("columns")) {
             var column = Json.asObject(value, "column");
             String id = Json.requireString(column, "id");
-            expected.add(fontExpectation("table.header." + id, ".table-header [data-cp-id='" + id + "']", FontToken.BASE, Boolean.TRUE.equals(column.get("bold"))));
+            expected.add(fontExpectation("table.header." + id, ".table-header [data-cp-id='" + id + "']", FontToken.BASE, false));
         }
         expected.add(fontExpectation("dialog.header", "dialog[open] .window-header-text", FontToken.HEADER, null));
         expected.add(fontExpectation("dialog.label", "dialog[open] .field-label:not([hidden])", FontToken.BASE, null));
@@ -734,8 +984,17 @@ public final class BrowserFixtureProbe {
     private void handle(HttpExchange exchange) {
         try {
             String path = exchange.getRequestURI().getPath();
-            if (path.equals("/app.html")) { bytes(exchange, "text/html", resourceBytes("app.html")); return; }
+            if (path.equals("/index.html")) { bytes(exchange, "text/html", resourceBytes("index.html")); return; }
             if (path.equals("/app/tokens.css")) { bytes(exchange, "text/css", TokenCss.webCss().getBytes(StandardCharsets.UTF_8)); return; }
+            if (path.equals("/app/icons.js")) {
+                bytes(exchange, "text/javascript", ("export const icons = Object.freeze(" + UiJson.write(ru.cashprediction.core.ui.token.UiIcons.manifest()) + ");\n").getBytes(StandardCharsets.UTF_8)); return;
+            }
+            if (path.startsWith("/app/icons/")) {
+                bytes(exchange, "image/png", ru.cashprediction.core.ui.token.UiIcons.resource(path.substring("/app/icons/".length())).orElseThrow()); return;
+            }
+            if (path.equals("/test/icon-regression.js")) {
+                bytes(exchange, "text/javascript", Files.readAllBytes(root.resolve("web/src/test/resources/ui/icon-regression-probe.js"))); return;
+            }
             if (path.startsWith("/app/")) {
                 Path file = root.resolve("web/src/main/resources/web").resolve(path.substring(1)).normalize();
                 if (!file.startsWith(root.resolve("web/src/main/resources/web/app"))) throw new IllegalArgumentException(path);
@@ -869,6 +1128,37 @@ public final class BrowserFixtureProbe {
             if (entry == null) throw new IllegalArgumentException("Missing JAR resource: " + name);
             try (var input = jar.getInputStream(entry)) { return input.readAllBytes(); }
         }
+    }
+
+    /** Запускает изолированную проверку изображений только по явному выбору режима. */
+    private void verifySharedIcons(Path output, String url) throws Exception {
+        try (var browser = BrowserBridge.start(output.resolve("icons-browser"), 1200, url);
+             var cdp = browser.connect()) {
+            cdp.waitFor("!!window.cpParityTestApi", Duration.ofSeconds(20));
+            cdp.evaluate("window.cpParityTestApi.awaitIdle({timeoutMs:5000})");
+            verifySharedIcons(cdp, output);
+        }
+    }
+
+    /** Проверяет реальные PNG и размеры из токенов без изменения эталонных дампов. */
+    private void verifySharedIcons(CdpBridge cdp, Path output) throws Exception {
+        var evidence = Json.asObject(cdp.evaluate("import('/test/icon-regression.js').then(module=>module.runIconRegressionProbe())"), "icon evidence");
+        Files.writeString(output.resolve("shared-icons.json"), JsonWriter.write(evidence), StandardCharsets.UTF_8);
+        for (Object item : (List<?>) evidence.get("checks")) {
+            var result = Json.asObject(item, "icon check");
+            check(result.get("passed"), String.valueOf(result.get("name")));
+        }
+        var sizes = Json.object(evidence, "sizes");
+        for (String kind : List.of("inline", "form", "alert", "spinner")) {
+            int expected = switch (kind) {
+                case "form" -> ru.cashprediction.core.ui.token.DesignTokens.DIALOG_ICON_SIZE;
+                case "alert" -> ru.cashprediction.core.ui.token.DesignTokens.ALERT_ICON_SIZE;
+                default -> ru.cashprediction.core.ui.token.DesignTokens.INLINE_ICON_SIZE;
+            };
+            var size = Json.object(sizes, kind);
+            check(((Number) size.get("width")).doubleValue() == expected && ((Number) size.get("height")).doubleValue() == expected, "shared actual icon size " + kind);
+        }
+        System.out.println("ACTUAL SHARED ICONS GREEN");
     }
 
     /** Проверяет настоящие fallback-значки и обнаружение неверного/отсутствующего значка без доверия spec.glyph. */
@@ -1058,6 +1348,123 @@ public final class BrowserFixtureProbe {
     private static void bytes(HttpExchange exchange, String type, byte[] data) throws Exception {
         exchange.getResponseHeaders().set("Content-Type", type + "; charset=utf-8");
         exchange.sendResponseHeaders(200, data.length); exchange.getResponseBody().write(data); exchange.close();
+    }
+
+    /** Проверяет ревизии настоящего UiApi и пересоздание формы в одной живой вкладке через JDK CDP. */
+    private static void verifyRevisionResync(Path output) throws Exception {
+        var checks = new ArrayList<String>();
+        // Счётчик отчёта отражает только завершённые утверждения текущего запуска.
+        java.util.function.BiConsumer<Object, String> verify = (result, message) -> {
+            check(result, message); checks.add(message);
+        };
+        var environment = ru.cashprediction.core.app.AppEnvironment.from(
+                ru.cashprediction.core.app.LaunchOptions.parse(List.of("--home", output.resolve("home").toString(),
+                        "--registry", "memory", "--today", "2026-09-13", "--test-api"), new java.util.Properties()));
+        var server = ru.cashprediction.web.WebServer.startCore(environment, new ru.cashprediction.web.ServerLog(false), 0, true);
+        try (var browser = BrowserBridge.start(output.resolve("edge-revision"), 1200, server.browserUri().toString());
+             var cdp = browser.connect()) {
+            cdp.waitFor("!!window.cpParityTestApi", Duration.ofSeconds(20));
+            // Получаем существующий Application через реальную отправку, не создавая вторую вкладку или транспорт.
+            cdp.evaluate("""
+                    (async()=>{const {Application}=await import('/app/main.js');
+                    const send=Application.prototype.send;
+                    Application.prototype.send=function(intent){window.revisionApp=this;return send.call(this,intent)};
+                    window.dispatchEvent(new Event('resize'));})()
+                    """);
+            cdp.waitFor("!!window.revisionApp", Duration.ofSeconds(5));
+            cdp.evaluate("""
+                    (async()=>{await cpParityTestApi.awaitIdle({timeoutMs:5000});
+                    for(const form of [...revisionApp.windows.values()]) await revisionApp.send({type:'formClose',windowId:form.id});
+                    await revisionApp.command('file.new');await cpParityTestApi.awaitIdle({timeoutMs:5000});
+                    window.revisionForm=[...revisionApp.windows.values()].at(-1);
+                    window.revisionId=revisionForm.id;window.revisionTab=revisionApp.transport.tab;
+                    window.revisionBefore=revisionForm;window.revisionSent=[];
+                    const request=revisionApp.transport.request.bind(revisionApp.transport);
+                    /** Записывает намерение непосредственно перед настоящим HTTP-запросом. */
+                    revisionApp.transport.request=(path,body,generation)=>{
+                    if(path==='/api/ui/intent' && body.intent.type==='formField')
+                    revisionSent.push(structuredClone(body));
+                    return request(path,body,generation);};
+                    window.revisionApply=revisionApp.transport.apply;window.revisionHighEcho=null;
+                    /** Сохраняет настоящее первое эхо, сохраняя штатную обработку эффекта. */
+                    revisionApp.transport.apply=(effect,generation)=>{
+                    if(effect.type==='form.view' && effect.windowId===revisionId && effect.echoOf?.tab===revisionTab
+                    && effect.echoOf.clientRev===1000) window.revisionHighEcho=structuredClone(effect);
+                    return revisionApply(effect,generation);};
+                    revisionApp.clientRev=999;
+                    window.revisionGeneration=revisionApp.transport.generation;
+                    const field=revisionForm.fields.get('name').control;
+                    field.value='High revision';field.dispatchEvent(new Event('input',{bubbles:true}));
+                    await cpParityTestApi.awaitIdle({timeoutMs:5000});})()
+                    """);
+            verify.accept(revisionServerValue(cdp).equals("High revision"), "high revision accepted by actual UiApi");
+            verify.accept(cdp.evaluate("revisionSent.length===1 && revisionSent[0].tab===revisionTab && revisionSent[0].intent.clientRev===1000 && revisionApp.clientRev===1000"), "HTTP field input uses revision 1000 from application counter");
+            verify.accept(cdp.evaluate("!!revisionHighEcho && revisionHighEcho.view.fields.name.value==='High revision' && revisionForm.clientRev===1000"), "real server echo confirms high revision");
+            cdp.evaluate("revisionApp.resync().then(()=>cpParityTestApi.awaitIdle({timeoutMs:5000}))");
+            verify.accept(cdp.evaluate("revisionApp.transport.tab===revisionTab && revisionApp.transport.generation>revisionGeneration && revisionApp.windows.get(revisionId)!==revisionBefore && !revisionBefore.node.isConnected"),
+                    "live resync recreated same window with same tab");
+            verify.accept(cdp.evaluate("revisionApp.clientRev===1000 && revisionApp.windows.get(revisionId).clientRev===1000 && revisionApp.windows.get(revisionId).fields.get('name').control.value==='High revision'"),
+                    "recreated form inherits application revision and server text");
+            cdp.evaluate("""
+                    (async()=>{window.revisionForm=revisionApp.windows.get(revisionId);
+                    const field=revisionForm.fields.get('name').control;
+                    field.value='After resync';field.dispatchEvent(new Event('input',{bubbles:true}));
+                    await cpParityTestApi.awaitIdle({timeoutMs:5000});})()
+                    """);
+            verify.accept(revisionServerValue(cdp).equals("After resync"), "new field edit accepted on same live server after resync");
+            verify.accept(cdp.evaluate("revisionSent.length===2 && revisionSent[1].intent.clientRev===1001 && revisionForm.clientRev===1001 && revisionApp.clientRev===1001"),
+                    "wire revisions remain strictly increasing across resync");
+            cdp.evaluate("revisionApply(revisionHighEcho,revisionApp.transport.generation)");
+            verify.accept(cdp.evaluate("revisionHighEcho.view.revision<revisionForm.revision && revisionForm.fields.get('name').control.value==='After resync'"), "old pre-resync server view cannot overwrite accepted edit");
+            // Задерживаем настоящее эхо сервера после HTTP, сохраняя штатную последовательность транспорта.
+            cdp.evaluate("""
+                    (async()=>{window.revisionHeld=null;
+                    /** Задерживает только эхо третьей правки после получения настоящего HTTP-ответа. */
+                    revisionApp.transport.apply=(effect,generation)=>{
+                    if(effect.type==='form.view' && effect.windowId===revisionId && effect.echoOf?.tab===revisionTab
+                    && effect.echoOf.clientRev===1002){
+                    window.revisionHeld={effect,generation};return Promise.resolve();}
+                    return revisionApply(effect,generation);};
+                    const field=revisionForm.fields.get('name').control;
+                    field.value='Delayed echo';field.dispatchEvent(new Event('input',{bubbles:true}));
+                    await cpParityTestApi.awaitIdle({timeoutMs:5000});})()
+                    """);
+            cdp.waitFor("!!revisionHeld", Duration.ofSeconds(5));
+            verify.accept(revisionServerValue(cdp).equals("Delayed echo"), "held echo originated from accepted server input");
+            verify.accept(cdp.evaluate("revisionSent.length===3 && revisionSent[2].intent.clientRev===1002 && revisionHeld.generation===revisionApp.transport.generation && revisionHeld.effect.view.revision>=revisionForm.revision && revisionHeld.effect.view.fields.name.value==='Delayed echo' && revisionForm.sent.get(1002)?.get('name')==='Delayed echo'"),
+                    "held echo reaches snapshot guard rather than stale view guard");
+            cdp.evaluate("""
+                    (async()=>{revisionApp.transport.apply=revisionApply;
+                    const field=revisionForm.fields.get('name').control;
+                    field.value='Latest local edit';field.dispatchEvent(new Event('input',{bubbles:true}));
+                    window.revisionPendingLocal=revisionSent.length===3 && revisionForm.fields.get('name').commit.pending()
+                    && revisionForm.sent.get(1002)?.get('name')!==field.value;
+                    await revisionApply(revisionHeld.effect,revisionHeld.generation);
+                    window.revisionEchoSafe=field.value==='Latest local edit'
+                    && revisionForm.view===revisionHeld.effect.view && revisionForm.revision===revisionHeld.effect.view.revision;
+                    await cpParityTestApi.awaitIdle({timeoutMs:5000});})()
+                    """);
+            verify.accept(cdp.evaluate("revisionPendingLocal"), "newer local text is still unsent when delayed echo arrives");
+            verify.accept(cdp.evaluate("revisionEchoSafe && revisionForm.fields.get('name').control.value==='Latest local edit'"),
+                    "delayed echo preserves newer local text and final DOM");
+            verify.accept(revisionServerValue(cdp).equals("Latest local edit"), "latest local edit accepted by actual server");
+            verify.accept(cdp.evaluate("revisionSent.length===4 && revisionSent.every((body,index)=>body.tab===revisionTab && body.intent.windowId===revisionId && body.intent.fieldId==='name' && body.intent.committed===false && body.intent.clientRev===1000+index && body.intent.raw===['High revision','After resync','Delayed echo','Latest local edit'][index]) && revisionApp.clientRev===1003 && revisionForm.clientRev===1003"),
+                    "all four actual HTTP inputs have exact monotonic revisions and texts");
+            cdp.evaluate("revisionApply(revisionHeld.effect,revisionHeld.generation)");
+            verify.accept(cdp.evaluate("revisionHeld.effect.view.revision<revisionForm.revision && revisionForm.fields.get('name').control.value==='Latest local edit'"),
+                    "delayed echo also cannot overwrite final accepted view");
+            cdp.evaluate("window.revisionSecondBefore=revisionForm;revisionApp.resync().then(()=>cpParityTestApi.awaitIdle({timeoutMs:5000}))");
+            verify.accept(cdp.evaluate("revisionApp.transport.tab===revisionTab && revisionApp.windows.get(revisionId)!==revisionSecondBefore && !revisionSecondBefore.node.isConnected && revisionApp.clientRev===1003 && revisionApp.windows.get(revisionId).clientRev===1003 && revisionApp.windows.get(revisionId).fields.get('name').control.value==='Latest local edit' && revisionSent.length===4"),
+                    "second resync preserves final server text and application counter");
+            var result = Json.asObject(cdp.evaluate("({tab:revisionTab,windowId:revisionId,revisions:revisionSent.map(body=>body.intent.clientRev),requests:revisionSent,value:revisionApp.windows.get(revisionId).fields.get('name').control.value,echoSafe:revisionEchoSafe,pendingLocal:revisionPendingLocal,recreated:revisionForm!==revisionBefore,clientRev:revisionApp.clientRev,highEcho:revisionHighEcho,heldEcho:revisionHeld.effect})"), "revision proof");
+            result.put("checks", checks.size()); result.put("completedChecks", checks);
+            Files.writeString(output.resolve("revision-result.json"), JsonWriter.write(result), StandardCharsets.UTF_8);
+        } finally { server.stop(); }
+    }
+
+    /** Читает поле свежего серверного bootstrap по тому же токену и tab, не пересоздавая клиентскую форму. */
+    private static String revisionServerValue(CdpBridge cdp) throws Exception {
+        return (String) cdp.evaluate("revisionApp.transport.request('/api/ui/bootstrap?tab='+encodeURIComponent(revisionTab)).then(data=>data.windows.find(effect=>effect.window?.id===revisionId).window.view.fields.name.value)");
     }
 
     /** Подключает существующий стенд только при ручном запуске, без зависимости Maven-модуля web. */

@@ -4,12 +4,12 @@
     {
       "number": 12,
       "specSection": "§10 №12",
-      "reason": "ChooserRequest is compared in full; native chooser appearance is not dumped."
+      "reason": "ChooserRequest is compared in full; OS-owned graphics inside native Windows FileChooser/DirectoryChooser are not dumped. Application-owned icons in Swing/Web choosers use the same physical core icon files and receive no allowance."
     },
     {
       "number": 16,
       "specSection": "§10 №16",
-      "reason": "OS decoration, scrollbars, dropdown internals, font smoothing and text field system menus are outside UiDump."
+      "reason": "OS decoration, scrollbars, dropdown internals, font smoothing and text field system menus are outside UiDump. This excludes application-owned icons, alert graphics, application arrows and window/exe/favicon branding: all use the same physical core icon files. Logical icon glyphs/ids and semantic text in UiDump remain compared without an icon allowance."
     }
   ],
   "entries": [

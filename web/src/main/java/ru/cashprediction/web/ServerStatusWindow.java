@@ -1,5 +1,9 @@
 package ru.cashprediction.web;
 
+import ru.cashprediction.core.text.Texts;
+import ru.cashprediction.core.ui.token.UiIcons;
+import ru.cashprediction.core.ui.text.UiText;
+
 import java.awt.BorderLayout;
 import java.awt.Cursor;
 import java.awt.FlowLayout;
@@ -37,7 +41,7 @@ public final class ServerStatusWindow {
 
     private final WebServer server;
     private final ServerLog log;
-    private final JFrame frame = new JFrame("CashPrediction Web - сервер");
+    private final JFrame frame = new JFrame(Texts.get("app.web.statusTitle"));
     private final JTextArea logArea = new JTextArea(12, 60);
     private final Consumer<String> logListener = line -> SwingUtilities.invokeLater(() -> append(line));
 
@@ -63,8 +67,9 @@ public final class ServerStatusWindow {
         JLabel link = new JLabel("<html><a href=\"#\">" + escapeHtml(address) + "</a></html>");
         link.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
         // JavaFX: Tooltip → Swing: setToolTipText → Web: title
-        link.setToolTipText("Щёлкните, чтобы открыть CashPrediction в браузере");
+        link.setToolTipText(Texts.get("app.web.openHint"));
         link.addMouseListener(new MouseAdapter() {
+            /** Открывает адрес собственного сервера штатным браузером при щелчке по ссылке. */
             @Override
             public void mouseClicked(MouseEvent e) {
                 browse();
@@ -74,19 +79,19 @@ public final class ServerStatusWindow {
         JTextField url = new JTextField(address);
         url.setEditable(false);
         // JavaFX: Tooltip → Swing: setToolTipText → Web: title
-        url.setToolTipText("Адрес содержит секретный токен: не передавайте его другим");
+        url.setToolTipText(Texts.get("app.web.tokenHint"));
 
-        JButton open = new JButton("Открыть в браузере");
+        JButton open = new JButton(Texts.get("app.web.openBrowser"));
         open.addActionListener(e -> browse());
-        JButton copy = new JButton("Копировать адрес");
+        JButton copy = new JButton(Texts.get("app.web.copyAddress"));
         copy.addActionListener(e -> Toolkit.getDefaultToolkit().getSystemClipboard()
                 .setContents(new StringSelection(url.getText()), null));
-        JButton stop = new JButton("Остановить сервер");
+        JButton stop = new JButton(Texts.get("app.web.stopServer"));
         stop.addActionListener(e -> confirmStop());
 
         JPanel top = new JPanel(new BorderLayout(6, 6));
         top.setBorder(BorderFactory.createEmptyBorder(10, 10, 4, 10));
-        top.add(new JLabel("Адрес:"), BorderLayout.WEST);
+        top.add(new JLabel(Texts.get("app.web.address")), BorderLayout.WEST);
         JPanel addressPanel = new JPanel(new BorderLayout(0, 4));
         addressPanel.add(link, BorderLayout.NORTH);
         addressPanel.add(url, BorderLayout.CENTER);
@@ -102,17 +107,15 @@ public final class ServerStatusWindow {
         log.tail(ServerLog.CAPACITY).forEach(this::append);
         log.addListener(logListener);
         JScrollPane scroll = new JScrollPane(logArea);
-        scroll.setBorder(BorderFactory.createTitledBorder("Журнал"));
+        scroll.setBorder(BorderFactory.createTitledBorder(Texts.get("app.web.log")));
 
         frame.setLayout(new BorderLayout());
         frame.add(top, BorderLayout.NORTH);
         frame.add(scroll, BorderLayout.CENTER);
-        java.net.URL icon = ServerStatusWindow.class.getResource("/web/favicon.png");
-        if (icon != null) {
-            frame.setIconImage(new ImageIcon(icon).getImage());
-        }
+        frame.setIconImage(new ImageIcon(UiIcons.applicationPng()).getImage());
         frame.setDefaultCloseOperation(WindowConstants.DO_NOTHING_ON_CLOSE);
         frame.addWindowListener(new WindowAdapter() {
+            /** Запрашивает подтверждение остановки сервера, а не закрывает только его служебное окно. */
             @Override
             public void windowClosing(WindowEvent e) {
                 confirmStop();
@@ -134,8 +137,8 @@ public final class ServerStatusWindow {
             if (!WebMain.browse(server.browserUri())) {
                 SwingUtilities.invokeLater(() ->
                         // JavaFX: Alert(ERROR) → Swing: JOptionPane.showMessageDialog(ERROR_MESSAGE) → Web: <dialog class="alert">
-                        JOptionPane.showMessageDialog(frame, "Не удалось открыть браузер."
-                                + "\nСкопируйте адрес и откройте его вручную.", "CashPrediction", JOptionPane.ERROR_MESSAGE));
+                        JOptionPane.showMessageDialog(frame, Texts.get("app.web.browserFailure"), UiText.get("alert.info.title"), JOptionPane.ERROR_MESSAGE,
+                                new ImageIcon(UiIcons.png("\u2716").orElseThrow())));
             }
         }, "cashprediction-browser");
         thread.setDaemon(true);
@@ -156,8 +159,9 @@ public final class ServerStatusWindow {
     private void confirmStop() {
         // JavaFX: Alert(CONFIRMATION) → Swing: JOptionPane.showConfirmDialog → Web: <dialog class="alert">
         int answer = JOptionPane.showConfirmDialog(frame,
-                "Остановить сервер CashPrediction? Открытые вкладки браузера перестанут работать.",
-                "CashPrediction", JOptionPane.OK_CANCEL_OPTION, JOptionPane.QUESTION_MESSAGE);
+                Texts.get("app.web.confirmStop"),
+                UiText.get("alert.info.title"), JOptionPane.OK_CANCEL_OPTION, JOptionPane.QUESTION_MESSAGE,
+                new ImageIcon(UiIcons.png("?").orElseThrow()));
         if (answer == JOptionPane.OK_OPTION) {
             // Остановка пишет файлы и ждёт запись снимка — не в EDT, чтобы окно не «зависало».
             new Thread(server::shutdownAndExit, "cashprediction-shutdown").start();

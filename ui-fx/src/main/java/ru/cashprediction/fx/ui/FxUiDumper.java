@@ -147,7 +147,8 @@ public final class FxUiDumper {
             List<String> texts = new ArrayList<>(); Map<String, UiDump.CellLook> looks = new LinkedHashMap<>();
             for (int col = 0; col < cells.size(); col++) {
                 var cell = cells.get(col); cell.updateIndex(i);
-                Text text = (Text) cell.getGraphic(); texts.add(text == null ? Objects.toString(cell.getText(), "") : text.getText());
+                Text text = (Text) cell.getProperties().get("cp.paintText");
+                texts.add(Objects.toString(cell.getProperties().get("cp.logicalText"), Objects.toString(cell.getText(), "")));
                 if (text != null) looks.put(table.root.getColumns().get(col).getId(), new UiDump.CellLook(color(text.getFill()), text.getFont().getStyle().contains("Bold"), text.getFont().getStyle().contains("Italic"), text.isStrikethrough()));
             }
             String rowId = Objects.toString(cells.getFirst().getProperties().get("cp.row"), "");

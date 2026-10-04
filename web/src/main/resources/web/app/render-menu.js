@@ -1,12 +1,13 @@
 /** @file Меню из узлов ядра и навигация по настоящим кнопкам. */
 import {element, identify, button, debounce} from './dom.js';
 import {scope} from './keys.js';
+import {iconText, iconColor, spinnerArrows} from './icon.js';
 
 /** Передаёт объявленную ядром клавишу меню через обычное намерение клавиатуры. */
 function menuKey(app, key, target) {
   const focus = scope(target, app);
   const chord = {ctrl: false, alt: false, shift: false, key};
-  if (app.hotkeys.some(binding => binding.chord.key === key && !binding.chord.ctrl && !binding.chord.alt && !binding.chord.shift && binding.scopes.includes(focus.scope))) app.send({type: 'key', chord, ...focus});
+  if (app.hotkeys.some(/** Проверяет наличие клавиши меню без модификаторов в текущей области фокуса. */ binding => binding.chord.key === key && !binding.chord.ctrl && !binding.chord.alt && !binding.chord.shift && binding.scopes.includes(focus.scope))) app.send({type: 'key', chord, ...focus});
 }
 
 /** Отображает физическое сочетание клавиш без регистрации ускорителя браузера. */
@@ -22,11 +23,11 @@ export class Menus {
   constructor(app) {
     this.app = app;
     this.panels = [];
-    document.addEventListener('pointerdown', event => {
+    document.addEventListener('pointerdown', /** Закрывает меню при нажатии вне меню и панели инструментов. */ event => {
       if (!event.target.closest('.menu-panel, .menu-node, .toolbar-node')) this.close();
     });
-    document.addEventListener('keydown', event => this.navigate(event), true);
-    document.addEventListener('keyup', event => {
+    document.addEventListener('keydown', /** Передаёт событие клавиатуры обработчику навигации меню. */ event => this.navigate(event), true);
+    document.addEventListener('keyup', /** Переводит фокус в строку меню после отпускания одиночной клавиши Alt. */ event => {
       if ((event.code === 'AltLeft' || event.code === 'AltRight') && this.altPending) {
         this.altPending = false;
         if (document.querySelector('dialog:modal')) return;
@@ -39,6 +40,7 @@ export class Menus {
 
   /** Закрывает раскрытые панели, сохраняя узлы меню для дампа. */
   close() {
+    this.contextEpoch = (this.contextEpoch || 0) + 1;
     for (const panel of this.panels) panel.hidden = true;
     this.panels.length = 0;
   }
@@ -48,15 +50,15 @@ export class Menus {
     const root = document.getElementById('menuBar');
     for (const fn of this.barDebouncers || []) { fn.cancel(); this.app.debouncers.delete(fn); }
     this.barDebouncers = [];
-    root.replaceChildren(...model.menus.map(node => this.node(node, 'MENU', true)));
+    root.replaceChildren(...model.menus.map(/** Создаёт узел верхнего уровня строки меню из модели ядра. */ node => this.node(node, 'MENU', true)));
   }
 
-  /** Строит панель дочерних пунктов. JavaFX: Menu → Swing: JMenu → Web: div[role=menu]. */
+  /** Строит панель дочерних пунктов. JavaFX: Menu / ContextMenu → Swing: JMenu / JPopupMenu → Web: div[role=menu]. */
   panel(items, source) {
     const root = element('div', 'menu-panel');
     root.role = 'menu';
     root.hidden = true;
-    root.append(...items.map(node => this.node(node, source)));
+    root.append(...items.map(/** Создаёт дочерний узел панели с заданным источником команды. */ node => this.node(node, source)));
     return root;
   }
 
@@ -84,7 +86,8 @@ export class Menus {
       return wrap;
     }
     if (model.kind === 'Slider' || model.kind === 'Spinner') {
-      // JavaFX: CustomMenuItem → Swing: SwingSliderMenuItem → Web: input в меню.
+      // JavaFX: CustomMenuItem → Swing: JPanel с JLabel и JSlider → Web: input[type=range] в меню.
+      // JavaFX: CustomMenuItem → Swing: JPanel с JLabel и JSpinner → Web: input[type=number] в меню.
       wrap.classList.add('menu-custom');
       const label = element('div', 'menu-label', model.label || model.currentLabel || '');
       const input = element('input');
@@ -93,21 +96,23 @@ export class Menus {
       input.dataset.tooltip = model.tooltip || '';
       input.dataset.applyDelayMs = model.applyDelayMs || 0;
       input.style.width = `${model.widthPx || model.fieldWidthPx || 160}px`;
-      const commit = debounce(() => this.app.send({type: model.kind === 'Slider' ? 'sliderCommit' : 'spinnerCommit', itemId: model.id, value: Number(input.value)}), model.applyDelayMs || 0);
+      const commit = debounce(/** Передаёт ядру текущее числовое значение ползунка или счётчика. */ () => this.app.send({type: model.kind === 'Slider' ? 'sliderCommit' : 'spinnerCommit', itemId: model.id, value: Number(input.value)}), model.applyDelayMs || 0);
       this.app.debouncers.add(commit);
       (this.barDebouncers ||= []).push(commit);
-      input.addEventListener('input', () => {
+      input.addEventListener('input', /** Планирует правку счётчика или обновляет подпись ползунка при вводе. */ () => {
         if (model.kind === 'Spinner') commit();
-        else label.textContent = model.labels?.[Number(input.value) - model.min] ?? model.currentLabel ?? '';
+        else iconText(label, model.labels?.[Number(input.value) - model.min] ?? model.currentLabel ?? '', true);
       });
-      input.addEventListener('change', () => commit.flush());
-      input.addEventListener('keydown', event => { if (event.key === 'Enter') commit.flush(); });
+      input.addEventListener('change', /** Немедленно передаёт текущее значение после завершения изменения. */ () => commit.flush());
+      input.addEventListener('keydown', /** Завершает отложенную отправку значения по клавише Enter. */ event => { if (event.key === 'Enter') commit.flush(); });
       wrap.append(label, input);
+      if (model.kind === 'Spinner') spinnerArrows(input, wrap);
       return wrap;
     }
     // JavaFX: MenuItem → Swing: JMenuItem → Web: button[role=menuitem].
     const item = button(model.id + '.action', '', model.tooltip, model.kind !== 'Info' && model.enabled !== false);
     item.role = 'menuitem';
+    item.setAttribute('aria-label', model.text || '');
     if (!top) {
       // JavaFX: CheckMenuItem → Swing: JCheckBoxMenuItem → Web: menuitemcheckbox.
       // JavaFX: RadioMenuItem → Swing: JRadioButtonMenuItem → Web: menuitemradio.
@@ -115,19 +120,24 @@ export class Menus {
         item.role = model.kind === 'Check' ? 'menuitemcheckbox' : 'menuitemradio';
         item.setAttribute('aria-checked', String(!!(model.checked || model.selected)));
       }
-      item.append(element('span', 'menu-mark', model.checked || model.selected ? '\u2713' : ''));
+      const mark = element('span', 'menu-mark');
+      iconText(mark, model.checked || model.selected ? '\u2713' : '', false, model.kind === 'Radio' ? '\u25cf' : null);
+      item.append(mark);
     }
-    item.append(element('span', 'menu-label', model.text || ''));
+    const label = element('span', model.id.startsWith('file.recent.') ? '' : 'menu-label', model.text || '');
+    label.classList.add('menu-label'); item.append(label);
+    iconColor(item, model.enabled === false || model.kind === 'Info' ? 'TEXT_MUTED' : 'TEXT_PRIMARY');
     if (!top) item.append(element('span', 'menu-accel', accelerator(model.accel)));
     wrap.append(item);
-    item.addEventListener('pointerenter', () => this.app.send({type: 'menuHover', itemId: model.id}));
-    item.addEventListener('pointerleave', () => this.app.send({type: 'menuHover', itemId: null}));
+    item.addEventListener('pointerenter', /** Сообщает ядру о наведении на пункт меню. */ () => this.app.send({type: 'menuHover', itemId: model.id}));
+    item.addEventListener('pointerleave', /** Сообщает ядру о завершении наведения на пункт меню. */ () => this.app.send({type: 'menuHover', itemId: null}));
     if (model.kind === 'Submenu') {
+      // JavaFX: Menu → Swing: JMenu → Web: button[role=menuitem] + div[role=menu].
       const panel = this.panel(model.children, source);
       wrap.append(panel);
       item.setAttribute('aria-haspopup', 'menu');
-      item.addEventListener('click', () => this.open(panel, item, top));
-    } else item.addEventListener('click', () => {
+      item.addEventListener('click', /** Открывает дочернюю панель у выбранного пункта меню. */ () => this.open(panel, item, top));
+    } else item.addEventListener('click', /** Закрывает подсказки и меню, затем выполняет команду выбранного пункта. */ () => {
       this.app.popups.dismissHover();
       this.close();
       this.app.command(model.command, model.args, source);
@@ -140,9 +150,10 @@ export class Menus {
     // JavaFX: ContextMenuEvent → Swing: MouseEvent → Web: contextmenu.
     // JavaFX: ContextMenu → Swing: JPopupMenu → Web: div[role=menu].
     this.app.popups.dismissHover(); this.close();
-    document.querySelectorAll('.context-menu').forEach(node => node.remove());
+    const generation = this.app.transport.generation; const epoch = this.contextEpoch;
+    document.querySelectorAll('.context-menu').forEach(/** Удаляет прежнюю панель контекстного меню перед новым запросом. */ node => node.remove());
     const response = items ? {result: items} : await this.app.transport.query({type: 'contextMenu', target});
-    if (!response.result) return;
+    if (!this.app.transport.current(generation) || epoch !== this.contextEpoch || !response.result) return;
     const panel = this.panel(response.result, target.kind === 'preview' ? 'FORM' : 'CONTEXT_MENU');
     panel.classList.add('context-menu');
     panel.dataset.target = target.kind === 'pastHeader' ? target.kind : target.kind === 'chart' ? `chart:${target.x},${target.y}` : target.kind === 'preview' ? `preview:${target.windowId}:${target.index}` : `${target.kind}:${target.rowId || target.cardId || ''}`;

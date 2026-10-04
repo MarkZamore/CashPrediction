@@ -48,6 +48,13 @@ public final class PlanSettingsForm implements FormLogic {
     public PlanSettingsForm() {
     }
 
+    /**
+     * Описывает разделы параметров текущего плана, цели и заметки с кнопками сохранения и отмены.
+     * Имя плана включается в локализованный заголовок; режим его редактирования задаётся при оценке.
+     *
+     * @param context контекст с текущим документом
+     * @return спецификация диалога параметров с кнопкой сохранения по Enter
+     */
     @Override
     public FormSpec spec(FormContext context) {
         return new FormSpec("planSettings", WindowType.PLAN_SETTINGS, "", Presentation.DIALOG,
@@ -69,6 +76,13 @@ public final class PlanSettingsForm implements FormLogic {
                 List.of(ButtonSpecs.ok(UiText.get("button.save")), ButtonSpecs.cancel()), "ok");
     }
 
+    /**
+     * Переносит параметры текущего плана в текстовые значения полей формы.
+     * Отсутствующая цель и её необязательная дата представлены пустыми строками.
+     *
+     * @param context контекст с текущим планом
+     * @return неизменяемая карта параметров, горизонта, цели и заметки
+     */
     @Override
     public Map<String, String> defaults(FormContext context) {
         Plan p = context.app().document().plan();
@@ -80,6 +94,15 @@ public final class PlanSettingsForm implements FormLogic {
         return Map.copyOf(values);
     }
 
+    /**
+     * Проверяет параметры, полноту цели и допустимое число строк прогноза, блокируя сохранение при ошибке.
+     * При отсутствии ошибки показывает первое предупреждение, которое не блокирует сохранение.
+     * Для документа с файлом делает имя доступным только для чтения и добавляет подсказку переименования.
+     *
+     * @param state редактируемые значения полей
+     * @param context контекст с исходным планом и его файлом
+     * @return представление с полями горизонта, проблемой и доступностью сохранения
+     */
     @Override
     public FormView evaluate(FormState state, FormContext context) {
         var error = check(state, context);
@@ -92,6 +115,17 @@ public final class PlanSettingsForm implements FormLogic {
                 "cancel", ButtonView.ENABLED), List.of(), List.of(), "", false);
     }
 
+    /**
+     * На сохранение повторно проверяет поля и возвращает новый план, сохраняя операции,
+     * корректировки и исходные данные блоков прежнего плана. Для плана с файлом сохраняет прежнее имя.
+     * Применение результата к документу выполняет контроллер.
+     *
+     * @param buttonId идентификатор нажатой кнопки
+     * @param state редактируемые параметры
+     * @param context контекст с исходным планом
+     * @return закрытие с обновлённым планом, закрытие с {@code null} при отмене
+     *         либо сохранение формы при ошибке или неизвестной кнопке
+     */
     @Override
     public FormOutcome onButton(String buttonId, FormState state, FormContext context) {
         if ("cancel".equals(buttonId)) return new FormOutcome.Close(null);

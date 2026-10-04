@@ -6,14 +6,13 @@ import java.io.IOException;
 import java.net.URI;
 import java.util.List;
 import java.util.Locale;
-import java.util.concurrent.atomic.AtomicReference;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import javax.swing.JOptionPane;
-import ru.cashprediction.core.io.CashMemoryLayout;
 import ru.cashprediction.core.app.AppEnvironment;
 import ru.cashprediction.core.app.LaunchOptions;
 import ru.cashprediction.core.ui.text.UiText;
+import ru.cashprediction.core.text.Texts;
 
 /**
  * Точка входа web-клиента CashPrediction: открывает серверный сеанс над {@code CashMemory}, запускает HTTP-сервер,
@@ -27,10 +26,9 @@ import ru.cashprediction.core.ui.text.UiText;
  * <p>Системные свойства: {@code cashprediction.home} — папка, рядом с которой создаётся CashMemory;
  * {@code cashprediction.web.port} — строго заданный порт (иначе 8765, а если занят — любой свободный).</p>
  *
- * <p><b>Сбои.</b> Обработчик необработанных исключений ставится первым делом, до запуска сервера и Swing:
- * он сохраняет снимок сессии и немедленно завершает процесс ({@code halt(2)}), не помечая сеанс закрытым — при
- * следующем запуске браузер предложит восстановление. Shutdown hook только сохраняет снимок (закрытие сеанса
- * отмечается исключительно при явной остановке).</p>
+ * <p><b>Сбои.</b> После запуска серверного ядра обработчик необработанных исключений передаёт ошибку
+ * контроллеру на его единственном потоке. Аварийный выход не помечает сеанс чистым; shutdown hook
+ * сохраняет последний снимок. Явный выход проходит через общий сценарий закрытия приложения.</p>
  */
 public final class WebMain {
 
@@ -43,72 +41,32 @@ public final class WebMain {
      * @param args аргументы командной строки
      */
     public static void main(String[] args) {
-        LaunchOptions launch = LaunchOptions.parse(List.of(args), System.getProperties());
-        if (launch.ui() == LaunchOptions.UiMode.CORE) {
-            startCore(launch);
-            return;
-        }
-        // Реестр ядра загружает java.util.prefs, который пишет в журнал предупреждения о HKLM — они не нужны.
+        // Предупреждения HKLM не относятся к пользовательскому хранилищу HKCU.
         Logger.getLogger("java.util.prefs").setLevel(Level.SEVERE);
-        List<String> options = List.of(args);
-        boolean noBrowser = options.contains("--no-browser");
-        boolean noWindow = options.contains("--no-window") || GraphicsEnvironment.isHeadless();
-        ServerLog log = new ServerLog(true);
-        AtomicReference<ServerState> stateRef = new AtomicReference<>();
-
-        Thread.setDefaultUncaughtExceptionHandler((thread, error) -> {
-            log.error("Необработанное исключение в потоке " + thread.getName(), error);
-            error.printStackTrace();
-            ServerState state = stateRef.get();
-            if (state != null) {
-                // saveNow() из чужого потока пишет последний снятый снимок и никогда не бросает.
-                state.recorder().saveNow();
-            }
-            System.err.println("Непредвиденная ошибка. Сессия сохранена, при следующем запуске её можно восстановить.");
-            Runtime.getRuntime().halt(2);
-        });
-
-        ServerState state;
-        WebServer server;
+        List<String> raw = List.of(args);
+        LaunchOptions launch;
         try {
-            // Штатная папка CashMemory рядом с приложением (или -Dcashprediction.home): создаётся при первом запуске,
-            // оставшиеся после сбоя временные файлы удаляются.
-            CashMemoryLayout layout = CashMemoryLayout.openDefault();
-            state = ServerState.open(layout, log);
-            stateRef.set(state);
-            int configured = PortFinder.configuredPort();
-            server = WebServer.start(state, log, configured >= 0 ? configured : PortFinder.DEFAULT_PORT, configured >= 0);
-        } catch (Exception e) {
-            fail(noWindow, "Не удалось запустить сервер CashPrediction: " + e.getMessage());
+            launch = LaunchOptions.parse(raw, System.getProperties());
+        } catch (IllegalArgumentException error) {
+            // При ошибке разбора ещё нет LaunchOptions: уважаем явный запрет окна и headless.
+            boolean noWindow = GraphicsEnvironment.isHeadless()
+                    || raw.stream().anyMatch(argument -> argument.equals("--no-window") || argument.startsWith("--no-window="));
+            fail(noWindow, UiText.get("s2.startup.errorHeader") + ": " + error.getMessage());
             return;
         }
-
-        ServerState finalState = state;
-        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
-            // Завершение сеанса Windows или Ctrl+C в консоли: снимок сохраняется, маркер остаётся «running».
-            if (!finalState.recorder().isClosed()) {
-                finalState.recorder().saveNow();
-            }
-        }, "cashprediction-shutdown-hook"));
-
-        System.out.println("CashPrediction Web: " + server.browserUri());
-        System.out.println("CashMemory: " + state.layout().dir());
-        if (!noWindow) {
-            ServerStatusWindow.show(server, log);
-        }
-        if (!noBrowser) {
-            openBrowser(server, log);
-        }
+        startCore(launch, args);
     }
 
-    /** Запускает контроллер нового интерфейса только по явному выбору --ui core. */
-    private static void startCore(LaunchOptions options) {
+    /** Запускает единственный контроллер ядра и HTTP-отрисовщик. */
+    private static void startCore(LaunchOptions options, String[] args) {
         ServerLog log = new ServerLog(true);
         boolean noWindow = options.noWindow() || GraphicsEnvironment.isHeadless();
+        WebServer started = null;
         try {
             int configured = PortFinder.configuredPort();
             WebServer server = WebServer.startCore(AppEnvironment.from(options), log,
-                    configured >= 0 ? configured : PortFinder.DEFAULT_PORT, configured >= 0);
+                    configured >= 0 ? configured : PortFinder.DEFAULT_PORT, configured >= 0, args);
+            started = server;
             server.addStopListener(() -> {
                 var port = server.coreRuntime().port();
                 if (port.exitKind() == ru.cashprediction.core.app.ExitKind.HALT || port.exitKind() == ru.cashprediction.core.app.ExitKind.WEB_CRASHED)
@@ -118,11 +76,17 @@ public final class WebMain {
             Thread.setDefaultUncaughtExceptionHandler((thread, error) -> server.coreRuntime().thread().execute(
                     () -> server.coreRuntime().controller().uncaught(thread, error)));
             Runtime.getRuntime().addShutdownHook(new Thread(server.coreRuntime()::saveSnapshot, "cashprediction-core-shutdown"));
-            System.out.println("CashPrediction Web: " + server.browserUri());
+            System.out.println(Texts.get("app.web.started", server.browserUri()));
             if (options.testApi()) System.out.println("PARITY_URL " + server.browserUri());
             if (!noWindow) ServerStatusWindow.show(server, log);
             if (!options.noBrowser()) openBrowser(server, log);
-        } catch (Exception error) { fail(noWindow, UiText.get("err.startup") + ": " + error.getMessage()); }
+        } catch (WebUpdateSession.DeferredLaunch deferred) {
+            // Предстартовый барьер запретил UI; этот процесс не показывает сообщение обновлятора.
+        } catch (Exception | LinkageError error) {
+            // Не вызываем stop-listeners: их System.exit мог бы подменить код раннего сбоя.
+            if (started != null) started.closeUpdates();
+            fail(noWindow, UiText.get("s2.startup.errorHeader") + ": " + error.getMessage());
+        }
     }
 
     /**
@@ -134,7 +98,7 @@ public final class WebMain {
     static void openBrowser(WebServer server, ServerLog log) {
         Thread thread = new Thread(() -> {
             if (!browse(server.browserUri())) {
-                log.info("Браузер открыть не удалось: откройте адрес вручную - " + server.browserUri());
+                log.info(Texts.get("app.web.browserUnavailable", server.browserUri()));
             }
         }, "cashprediction-browser");
         thread.setDaemon(true);

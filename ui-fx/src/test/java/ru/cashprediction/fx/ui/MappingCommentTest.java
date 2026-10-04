@@ -11,7 +11,8 @@ class MappingCommentTest {
     /** Проверяет каждое место создания классов меню, сообщений и всплывающих окон. */
     @Test void constructorsExplainClientMapping() throws Exception {
         var required = Set.of("MenuBar", "Menu", "MenuItem", "CheckMenuItem", "RadioMenuItem", "SeparatorMenuItem", "CustomMenuItem", "MenuButton", "SplitMenuButton", "PopupWindow", "Popup", "PopupControl", "Tooltip", "ContextMenu", "ContextMenuEvent", "Dialog", "DialogPane", "ButtonType", "Alert", "TextInputDialog", "ChoiceDialog", "FileChooser", "DirectoryChooser");
-        Path root = Path.of(System.getProperty("fx.basedir"), "src/main/java/ru/cashprediction/fx/ui");
+        Path root = Path.of(System.getProperty("fx.basedir"), "src/main/java");
+        assertTrue(Files.isRegularFile(root.resolve("ru/cashprediction/fx/ui/FxStartupErrors.java")));
         Pattern constructor = Pattern.compile("new\\s+(\\w+)(?:<[^>]*>)?\\s*\\(");
         try (var paths = Files.walk(root)) {
             for (Path path : paths.filter(p -> p.toString().endsWith(".java")).toList()) {

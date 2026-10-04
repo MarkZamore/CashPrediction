@@ -9,6 +9,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
 import java.util.Set;
+import ru.cashprediction.core.format.ReservedPlanNames;
 import ru.cashprediction.core.model.Adjustment;
 import ru.cashprediction.core.model.Horizon;
 import ru.cashprediction.core.model.Money;
@@ -55,7 +56,7 @@ public final class PlanValidator {
      * Имена, занятые служебными файлами CashMemory (сравниваются без учёта регистра).
      * План с таким именем перезаписал бы настройки или снимок сессии.
      */
-    public static final Set<String> RESERVED_NAMES = Set.of("settings", "web-session", "web-session.plan", "session-fx", "session-swing");
+    public static final Set<String> RESERVED_NAMES = Set.copyOf(ReservedPlanNames.NAMES);
 
     /** Символы, запрещённые в именах файлов Windows. */
     private static final String FORBIDDEN_CHARS = "\\/:*?\"<>|";
@@ -124,7 +125,7 @@ public final class PlanValidator {
             return Optional.of(Texts.get("diagnostic.name.endsWithDot"));
         }
         String lower = n.toLowerCase(Locale.ROOT);
-        if (RESERVED_NAMES.contains(lower)) {
+        if (ReservedPlanNames.isReservedPlanName(lower)) {
             return Optional.of(Texts.get("diagnostic.name.reservedByApp", n));
         }
         if (WINDOWS_DEVICE_NAMES.contains(lower)) {

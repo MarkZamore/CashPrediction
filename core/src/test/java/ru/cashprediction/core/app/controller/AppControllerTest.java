@@ -43,6 +43,24 @@ class AppControllerTest {
         assertEquals(0, app.executedCount(CommandId.FILE_NEW));
     }
 
+    /** Hook может сработать до установки рекордера: нельзя запускать UI или создавать отметку чистого выхода. */
+    @Test void shutdownSnapshotBeforeRecorderInstallationDoesNotDispatchOrWrite() {
+        FakeUiPort delegate = new FakeUiPort(ClientProfile.swing());
+        UiExecutor unavailableUi = new UiExecutor() {
+            @Override public void execute(Runnable task) { throw new AssertionError("Shutdown must not dispatch UI"); }
+            @Override public boolean isUiThread() { return false; }
+        };
+        UiPort guarded = (UiPort) java.lang.reflect.Proxy.newProxyInstance(UiPort.class.getClassLoader(),
+                new Class<?>[] { UiPort.class }, (proxy, method, args) -> method.getName().equals("executor")
+                        ? unavailableUi : method.invoke(delegate, args));
+        AppController app = new AppController(guarded, new AppEnvironment(LaunchOptions.parse("--registry", "memory"),
+                home, home.resolve("CashMemory"), AppClock.fixedToday(LocalDate.of(2026, 10, 1))));
+        assertDoesNotThrow(app::saveShutdownSnapshot);
+        assertNull(app.recorder());
+        assertTrue(delegate.calls().isEmpty());
+        assertFalse(Files.exists(home.resolve("CashMemory")));
+    }
+
     @Test void refreshBeforeShowDoesNotRenderAndShowIsExactlyOnce() {
         FakeUiPort port = new FakeUiPort(ClientProfile.swing());
         AppController app = controller(port);
@@ -68,10 +86,18 @@ class AppControllerTest {
         assertSame(before.table(), after.table());
         assertSame(before.chart(), after.chart());
         assertEquals(EnumSet.of(ScreenPart.STATUS), call.args().get(1));
+        assertEquals(app.tableTooltip(before.table().revision(), 0, "date"),
+                app.decoratedTableTooltip(before.table().revision(), 0, "date").text());
+        assertEquals(ru.cashprediction.core.ui.view.table.DecoratedTooltip.plain(""),
+                app.decoratedTableTooltip(before.table().revision(), -1, "date"));
+        assertEquals(ru.cashprediction.core.ui.view.table.DecoratedTooltip.plain(""),
+                app.decoratedTableTooltip(before.table().revision(), before.table().rowCount(), "date"));
         app.filterText("missing");
         MainScreenModel filtered = port.calls("render").getLast().arg(0, MainScreenModel.class);
         assertTrue(filtered.table().revision() > before.table().revision());
         assertEquals("", app.tableTooltip(before.table().revision(), 0, "date"));
+        assertEquals(ru.cashprediction.core.ui.view.table.DecoratedTooltip.plain(""),
+                app.decoratedTableTooltip(before.table().revision(), 0, "date"));
         assertTrue(app.chartHover(before.chart().revision(), 30, 30, 800, 600).isEmpty());
     }
 
@@ -165,7 +191,8 @@ class AppControllerTest {
                 () -> app.menuHover(null), app::closeMainRequested,
                 () -> app.uncaught(Thread.currentThread(), new RuntimeException("test")),
                 () -> app.contextMenu(new ru.cashprediction.core.ui.menu.ContextTarget.Row("start")),
-                () -> app.tableTooltip(0, 0, "date"), () -> app.chartScene(800, 600),
+                () -> app.tableTooltip(0, 0, "date"), () -> app.decoratedTableTooltip(0, 0, "date"),
+                () -> app.chartScene(800, 600),
                 () -> app.chartHover(0, 30, 30, 800, 600), () -> app.dayCard(LocalDate.of(2026, 10, 1)),
                 () -> app.sparkline("now"), () -> app.calendar(java.time.YearMonth.of(2026, 10), null));
         for (Runnable action : actions) assertThrows(IllegalStateException.class, action::run);

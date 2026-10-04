@@ -6,7 +6,6 @@ import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
-import java.util.Locale;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Properties;
@@ -26,7 +25,6 @@ import ru.cashprediction.core.util.DateFormats;
  *       <td>префикс узла реестра, начинается с {@code ru/cashprediction/}; узел = префикс/клиент</td></tr>
  *   <tr><td>{@code --registry memory}</td><td>—</td><td>реестр в памяти процесса, настоящий не трогается</td></tr>
  *   <tr><td>{@code --today <дата>}</td><td>{@code cashprediction.today}</td><td>зафиксировать «сегодня»</td></tr>
- *   <tr><td>{@code --ui core|legacy}</td><td>{@code cashprediction.ui}</td><td>новый интерфейс ядра или прежний</td></tr>
  *   <tr><td>{@code --selftest <сценарий>}</td><td>{@code cashprediction.selftest}</td><td>запустить сценарий самотеста</td></tr>
  *   <tr><td>{@code --selftest-out <папка>}</td><td>{@code cashprediction.selftest.log}</td>
  *       <td>куда писать результаты; свойство по-прежнему может указывать файл журнала {@code *.log}</td></tr>
@@ -46,7 +44,6 @@ import ru.cashprediction.core.util.DateFormats;
  * @param registryNode     явный префикс узла реестра или {@code null} — узел установки
  * @param registryMemory   {@code true} — хранилище «реестр» в памяти процесса
  * @param today            зафиксированная дата «сегодня» или {@code null}
- * @param ui               какой интерфейс запускать
  * @param selftest         имя или путь сценария самотеста или {@code null}
  * @param selftestOut      папка результатов самотеста (или файл журнала из прежнего свойства) или {@code null}
  * @param selftestRecovery автоответ на диалог восстановления или {@code null}
@@ -55,7 +52,7 @@ import ru.cashprediction.core.util.DateFormats;
  * @param noWindow         web: не показывать окно сервера
  * @param warnings         предупреждения разбора (неизвестные аргументы), готовые тексты из каталога
  */
-public record LaunchOptions(Path home, String registryNode, boolean registryMemory, LocalDate today, UiMode ui,
+public record LaunchOptions(Path home, String registryNode, boolean registryMemory, LocalDate today,
                             String selftest, Path selftestOut, RecoveryAnswer selftestRecovery, boolean testApi,
                             boolean noBrowser, boolean noWindow, List<String> warnings) {
 
@@ -65,22 +62,12 @@ public record LaunchOptions(Path home, String registryNode, boolean registryMemo
     public static final String PROP_REGISTRY_NODE = RegistrySessionStore.PROPERTY_NODE;
     /** Свойство даты «сегодня». */
     public static final String PROP_TODAY = "cashprediction.today";
-    /** Свойство выбора интерфейса. */
-    public static final String PROP_UI = "cashprediction.ui";
     /** Свойство сценария самотеста. */
     public static final String PROP_SELFTEST = "cashprediction.selftest";
     /** Свойство журнала (папки результатов) самотеста. */
     public static final String PROP_SELFTEST_LOG = "cashprediction.selftest.log";
     /** Свойство автоответа на диалог восстановления. */
     public static final String PROP_SELFTEST_RECOVERY = "cashprediction.selftest.recovery";
-
-    /** Интерфейс, который запускает exe. */
-    public enum UiMode {
-        /** Интерфейс, построенный из моделей ядра ({@code AppController}). */
-        CORE,
-        /** Прежний интерфейс клиента; остаётся по умолчанию до прохождения паритета (правило R4), удаляется в S4. */
-        LEGACY
-    }
 
     /** Автоответ самотеста на диалог восстановления или на вопрос о втором экземпляре. */
     public enum RecoveryAnswer {
@@ -121,19 +108,18 @@ public record LaunchOptions(Path home, String registryNode, boolean registryMemo
         }
     }
 
-    /** Копирует список предупреждений и подставляет интерфейс по умолчанию. */
+    /** Копирует список предупреждений. */
     public LaunchOptions {
-        ui = ui == null ? UiMode.LEGACY : ui;
         warnings = warnings == null ? List.of() : List.copyOf(warnings);
     }
 
     /**
-     * Параметры по умолчанию: всё определяется автоматически, прежний интерфейс.
+     * Параметры по умолчанию: всё определяется автоматически.
      *
      * @return параметры без аргументов и свойств
      */
     public static LaunchOptions defaults() {
-        return new LaunchOptions(null, null, false, null, UiMode.LEGACY, null, null, null, false, false, false, List.of());
+        return new LaunchOptions(null, null, false, null, null, null, null, false, false, false, List.of());
     }
 
     /**
@@ -162,7 +148,6 @@ public record LaunchOptions(Path home, String registryNode, boolean registryMemo
         property(properties, PROP_HOME).ifPresent(v -> b.home = path(v, PROP_HOME));
         property(properties, PROP_REGISTRY_NODE).ifPresent(v -> b.registryNode = node(v, PROP_REGISTRY_NODE));
         property(properties, PROP_TODAY).ifPresent(v -> b.today = date(v, PROP_TODAY));
-        property(properties, PROP_UI).ifPresent(v -> b.ui = ui(v, PROP_UI));
         property(properties, PROP_SELFTEST).ifPresent(v -> b.selftest = v);
         property(properties, PROP_SELFTEST_LOG).ifPresent(v -> b.selftestOut = path(v, PROP_SELFTEST_LOG));
         property(properties, PROP_SELFTEST_RECOVERY).ifPresent(v -> b.selftestRecovery = recovery(v, PROP_SELFTEST_RECOVERY));
@@ -188,7 +173,6 @@ public record LaunchOptions(Path home, String registryNode, boolean registryMemo
                     b.registryMemory = true;
                 }
                 case "--today" -> b.today = date(inline != null ? inline : value(list, ++i, name), name);
-                case "--ui" -> b.ui = ui(inline != null ? inline : value(list, ++i, name), name);
                 case "--selftest" -> b.selftest = inline != null ? inline : value(list, ++i, name);
                 case "--selftest-out" -> b.selftestOut = path(inline != null ? inline : value(list, ++i, name), name);
                 case "--selftest-recovery" ->
@@ -196,10 +180,17 @@ public record LaunchOptions(Path home, String registryNode, boolean registryMemo
                 case "--test-api" -> b.testApi = flag(inline, name, b);
                 case "--no-browser" -> b.noBrowser = flag(inline, name, b);
                 case "--no-window" -> b.noWindow = flag(inline, name, b);
+                case "--updated-from" -> {
+                    // Служебный guard проверяет только updater по исходной командной строке.
+                    // UI его не хранит и не показывает, даже если guard повреждён: отказ обновления
+                    // не должен мешать запуску. Не поглощаем следующий настоящий флаг без значения.
+                    if (inline == null && i + 1 < list.size() && list.get(i + 1) != null
+                            && !list.get(i + 1).startsWith("--")) i++;
+                }
                 default -> b.warnings.add(UiText.get("launch.warn.unknownArgument", raw));
             }
         }
-        return new LaunchOptions(b.home, b.registryNode, b.registryMemory, b.today, b.ui, b.selftest, b.selftestOut,
+        return new LaunchOptions(b.home, b.registryNode, b.registryMemory, b.today, b.selftest, b.selftestOut,
                 b.selftestRecovery, b.testApi, b.noBrowser, b.noWindow, b.warnings);
     }
 
@@ -223,7 +214,6 @@ public record LaunchOptions(Path home, String registryNode, boolean registryMemo
         if (today != null) {
             result.addAll(List.of("--today", DateFormats.iso(today)));
         }
-        result.addAll(List.of("--ui", ui.name().toLowerCase(Locale.ROOT)));
         if (selftest != null) {
             result.addAll(List.of("--selftest", selftest));
         }
@@ -256,7 +246,6 @@ public record LaunchOptions(Path home, String registryNode, boolean registryMemo
         private String registryNode;
         private boolean registryMemory;
         private LocalDate today;
-        private UiMode ui = UiMode.LEGACY;
         private String selftest;
         private Path selftestOut;
         private RecoveryAnswer selftestRecovery;
@@ -321,11 +310,4 @@ public record LaunchOptions(Path home, String registryNode, boolean registryMemo
         throw new IllegalArgumentException(UiText.get("launch.error.recovery", name, text));
     }
 
-    private static UiMode ui(String text, String name) {
-        return switch (text.strip().toLowerCase(Locale.ROOT)) {
-            case "core" -> UiMode.CORE;
-            case "legacy" -> UiMode.LEGACY;
-            default -> throw new IllegalArgumentException(UiText.get("launch.error.ui", name, text));
-        };
-    }
 }

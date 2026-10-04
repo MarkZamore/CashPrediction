@@ -8,11 +8,12 @@ export function showScreen(app, kind, title, text, retry = false) {
   document.getElementById('main').inert = true;
   if (retry) {
     const control = button('offline.retry', app.texts['offline.retry'], '');
-    control.addEventListener('click', () => app.resync()); root.append(control);
+    // Ручной повтор пользуется тем же единственным handshake, что и фоновое восстановление.
+    control.addEventListener('click', /** Запускает ручной повтор общего восстановления соединения. */ () => { app.transport.recover().catch(/** Поглощает отклонение ручного повтора, оставляя состояние восстановления транспорту. */ () => {}); }); root.append(control);
   }
-  // JavaFX: Alert → Swing: SwingAlert → Web: dialog полноэкранного сообщения.
+  // JavaFX: Alert → Swing: SwingAlerts → Web: dialog полноэкранного сообщения.
   if (!root.open) root.showModal();
-  root.oncancel = event => event.preventDefault();
+  root.oncancel = /** Предотвращает закрытие полноэкранного сообщения стандартной отменой диалога. */ event => event.preventDefault();
 }
 
 /** Снимает экран после нового bootstrap. */

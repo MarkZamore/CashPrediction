@@ -25,6 +25,8 @@ import ru.cashprediction.core.app.flow.*;
 import ru.cashprediction.core.document.*;
 import ru.cashprediction.core.markdown.PlanMarkdownWriter;
 import ru.cashprediction.core.model.Plan;
+import ru.cashprediction.core.service.plan.LocalPlanCommands;
+import ru.cashprediction.core.service.plan.PlanCommands;
 import ru.cashprediction.core.session.*;
 import ru.cashprediction.core.ui.alert.AlertSpec;
 import ru.cashprediction.core.ui.form.*;
@@ -47,6 +49,8 @@ final class FakeFileFlowContext implements InvocationHandler {
     final FlowContext context;
     final UiPort port;
     final PlanDocument document;
+    /** Единственная служба команд и ревизий этого документа. */
+    final PlanCommands planCommands;
     final FileFlow files;
     final AutosaveService autosave;
     final SettingsKeeper settings;
@@ -80,6 +84,7 @@ final class FakeFileFlowContext implements InvocationHandler {
         Files.createDirectories(environment.cashMemory());
         plansFolder = environment.cashMemory();
         document = new PlanDocument(Plan.empty("Current", TODAY), null, () -> TODAY);
+        planCommands = new LocalPlanCommands(document);
         context = (FlowContext) Proxy.newProxyInstance(FlowContext.class.getClassLoader(),
                 new Class<?>[] { FlowContext.class }, this);
         port = (UiPort) Proxy.newProxyInstance(UiPort.class.getClassLoader(), new Class<?>[] { UiPort.class },
@@ -182,6 +187,7 @@ final class FakeFileFlowContext implements InvocationHandler {
             case "port" -> port;
             case "environment" -> environment;
             case "document" -> document;
+            case "planCommands" -> planCommands;
             case "state" -> state();
             case "recorder" -> recorder;
             case "files" -> files;

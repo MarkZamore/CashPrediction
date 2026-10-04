@@ -1,67 +1,84 @@
 package ru.cashprediction.core.app.flow;
 
 import java.nio.file.Path;
-import java.nio.file.Files;
-import java.nio.file.attribute.FileTime;
-import java.io.IOException;
+import java.util.Objects;
+import ru.cashprediction.core.service.storage.FilePlanStorage;
+import ru.cashprediction.core.service.storage.PlanStorage;
 
 /**
- * Проверка изменения файла плана другой программой (спецификация v2, §6.14): по времени изменения файла, запомненному
- * при открытии и после каждой записи.
+ * Проверка внешнего изменения плана (спецификация v2, §6.14) по непрозрачной версии хранения.
+ * Версия успешного чтения или записи запоминается без повторного наблюдения данных.
  *
  * <p>Не потокобезопасен: только поток контроллера.</p>
  */
 public final class ExternalChangeGuard {
 
-    /** Файл, для которого запомнено состояние. */
-    private Path rememberedFile;
-    /** Время изменения в момент открытия или успешной записи; {@code null}, если файла тогда не было. */
-    private FileTime rememberedTime;
+    private final PlanStorage storage;
+    private PlanStorage.Reference rememberedReference;
+    private PlanStorage.Version rememberedVersion;
 
     /** Создаёт проверку без запомненного файла. */
     public ExternalChangeGuard() {
+        this(new FilePlanStorage());
+    }
+
+    /** @param storage общий владелец сохранённых планов приложения */
+    public ExternalChangeGuard(PlanStorage storage) { this.storage = Objects.requireNonNull(storage, "storage"); }
+
+    /** @return общий сервис; сохраняет прежние конструкторы потоков изолированных тестов */
+    public PlanStorage storage() { return storage; }
+
+    /**
+     * @param reference ссылка
+     * @param version версия именно прочитанного или записанного снимка
+     */
+    public void remember(PlanStorage.Reference reference, PlanStorage.Version version) {
+        rememberedReference = Objects.requireNonNull(reference, "reference");
+        rememberedVersion = Objects.requireNonNull(version, "version");
     }
 
     /**
-     * Запоминает время изменения файла (после открытия или записи).
+     * Возвращает прежнюю версию, не принимая внешнюю правку за успешно прочитанный снимок.
+     * @param reference ссылка
+     * @param fallback текущая версия, только если ссылка ещё не запомнена
+     * @return ожидаемая версия следующей записи
+     */
+    public PlanStorage.Version expectedVersion(PlanStorage.Reference reference, PlanStorage.Version fallback) {
+        return reference.equals(rememberedReference) && rememberedVersion != null ? rememberedVersion : fallback;
+    }
+
+    /**
+     * Наблюдает версию для прежних сценариев восстановления и изолированных тестов.
      *
      * @param file файл плана
      */
     public void remember(Path file) {
-        rememberedFile = file == null ? null : file.toAbsolutePath().normalize();
-        rememberedTime = readTime(rememberedFile);
+        if (file == null) { forget(); return; }
+        rememberedReference = FilePlanStorage.reference(file);
+        var observed = storage.version(rememberedReference);
+        // Недоступная версия запрещает перезапись до явного подтверждения, не создавая чужих токенов.
+        rememberedVersion = observed.succeeded() ? observed.value() : PlanStorage.Version.ABSENT;
     }
 
     /**
      * Изменён ли файл снаружи после {@link #remember(Path)}.
      *
      * @param file файл плана
-     * @return {@code true}, если время изменения отличается или файл исчез
+     * @return {@code true}, если версия отличается, файл исчез или наблюдение не удалось
      */
     public boolean changedExternally(Path file) {
-        Path normalized = file == null ? null : file.toAbsolutePath().normalize();
-        if (rememberedFile == null || normalized == null || !rememberedFile.equals(normalized)) {
+        PlanStorage.Reference reference = file == null ? null : FilePlanStorage.reference(file);
+        if (rememberedReference == null || reference == null || !rememberedReference.equals(reference)) {
             return false;
         }
-        FileTime current = readTime(normalized);
-        return current == null || !current.equals(rememberedTime);
+        var current = storage.version(reference);
+        return !current.succeeded() || PlanStorage.Version.ABSENT.equals(current.value())
+                || !current.value().equals(rememberedVersion);
     }
 
     /** Забывает файл (план без файла). */
     public void forget() {
-        rememberedFile = null;
-        rememberedTime = null;
-    }
-
-    /** Читает метку изменения; ошибка чтения означает, что файл нельзя считать неизменным. */
-    private static FileTime readTime(Path file) {
-        if (file == null) {
-            return null;
-        }
-        try {
-            return Files.isRegularFile(file) ? Files.getLastModifiedTime(file) : null;
-        } catch (IOException | SecurityException ignored) {
-            return null;
-        }
+        rememberedReference = null;
+        rememberedVersion = null;
     }
 }

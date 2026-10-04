@@ -72,6 +72,13 @@ class SwingUiDumperTest {
             assertEquals(text.getX() + text.getWidth() + 4, undo.getX());
             assertEquals(28, undo.getWidth()); assertEquals(28, undo.getHeight());
             assertEquals(new java.awt.Insets(4, 10, 4, 10), text.getInsets());
+            var icon = (AbstractButton) undo;
+            assertEquals(new java.awt.Insets(6, 6, 6, 6), icon.getInsets());
+            assertEquals("", icon.getText());
+            assertEquals("↶", icon.getAccessibleContext().getAccessibleName());
+            assertEquals("↶", SwingUiDumper.toolbar(toolbar).items().get(1).text());
+            assertEquals(16, icon.getIcon().getIconWidth());
+            assertEquals(16, icon.getDisabledIcon().getIconWidth());
         });
     }
     @Test void toolbarBoundsUseRealContentRootCoordinates() throws Exception {

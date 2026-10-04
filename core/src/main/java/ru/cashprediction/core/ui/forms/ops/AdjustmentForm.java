@@ -64,6 +64,14 @@ public final class AdjustmentForm implements FormLogic {
     public AdjustmentForm() {
     }
 
+    /**
+     * Строит раскладку редактора корректировки: сведения о правиле, выбор действия, сумма, дата и заметка.
+     * В раскладку включены сброс, сохранение и отмена; их фактическую доступность определяет {@link #evaluate}.
+     * При отсутствии правила строка сведений пуста, но состав полей сохраняется.
+     *
+     * @param context окружение формы с id правила и исходной датой события
+     * @return неизменяемая раскладка модального редактора с сохранением по умолчанию
+     */
     @Override
     public FormSpec spec(FormContext context) {
         return new FormSpec("adjustment", WindowType.ADJUSTMENT_EDITOR, "", Presentation.DIALOG, UiText.get("adjustment.window"), "✎",
@@ -76,6 +84,15 @@ public final class AdjustmentForm implements FormLogic {
                 List.of(ButtonSpecs.of("reset", UiText.get("button.resetAdjustment"), ButtonRole.LEFT), ButtonSpecs.ok(UiText.get("button.save")), ButtonSpecs.cancel()), ButtonSpecs.OK);
     }
 
+    /**
+     * Заполняет поля существующей корректировкой, а при её отсутствии выбирает изменение суммы правила.
+     * Если действие не задаёт новую сумму или дату, использует сумму правила и дату с учётом выходных.
+     * Недопустимый ключ события или отсутствующее правило не вызывает ошибку ввода: недоступные
+     * исходные значения становятся пустыми строками. Сумма и дата записываются через {@link FieldCodec}.
+     *
+     * @param context окружение с ключом события и текущим планом
+     * @return неизменяемая карта значений action, amount, date и note для новой формы
+     */
     @Override
     public Map<String, String> defaults(FormContext context) {
         OccurrenceKey key = key(context);
@@ -87,6 +104,18 @@ public final class AdjustmentForm implements FormLogic {
                 "date", FieldCodec.date(adjustment == null ? actual : adjustment.action().newDate().orElse(actual)), "note", adjustment == null ? "" : adjustment.note());
     }
 
+    /**
+     * Проверяет поля выбранного действия, сохраняя введённые значения даже в отключённых полях.
+     * Изменение суммы и замена требуют положительной суммы, перенос и замена требуют корректной даты;
+     * первой показывается ошибка суммы. Дата вне горизонта даёт предупреждение и не запрещает сохранение.
+     * Неизвестный код действия при расчёте доступности трактуется как изменение суммы.
+     * Если ключ события некорректен или правило удалено, отключает поля, скрывает сохранение и сброс,
+     * оставляя закрытие; иначе сброс доступен только при наличии корректировки.
+     *
+     * @param state текущие значения полей без изменения исходного состояния
+     * @param context окружение с ключом события и текущим планом
+     * @return модель полей, заголовка, проблем и кнопок; ревизию задаёт сеанс формы
+     */
     @Override
     public FormView evaluate(FormState state, FormContext context) {
         OccurrenceKey key = key(context);
@@ -115,6 +144,19 @@ public final class AdjustmentForm implements FormLogic {
                 Map.of(ButtonSpecs.OK, error.isPresent() ? ButtonView.DISABLED : ButtonView.ENABLED, "reset", existing == null ? ButtonView.HIDDEN : ButtonView.ENABLED), List.of(), List.of(), "", false);
     }
 
+    /**
+     * Преобразует нажатие кнопки в результат формы, не изменяя план непосредственно.
+     * Отмена, закрытие или исчезновение правила возвращают закрытие без результата.
+     * Сброс возвращает ключ события с отсутствующей корректировкой без проверки полей.
+     * Сохранение повторно проверяет ввод: ошибка оставляет форму открытой, предупреждение допускает результат.
+     * Неизвестное или неполное действие также оставляет форму открытой с проблемой;
+     * прочие кнопки не выполняют действие. Применение возвращённого результата принадлежит контроллеру.
+     *
+     * @param buttonId id нажатой кнопки
+     * @param state текущие значения полей
+     * @param context окружение с ключом события и текущим планом
+     * @return закрытие с {@link Result}, закрытие без результата либо продолжение работы формы
+     */
     @Override
     public FormOutcome onButton(String buttonId, FormState state, FormContext context) {
         if (ButtonSpecs.CANCEL.equals(buttonId) || ButtonSpecs.CLOSE.equals(buttonId)) return new FormOutcome.Close(null);
@@ -128,6 +170,7 @@ public final class AdjustmentForm implements FormLogic {
         return action == null ? new FormOutcome.Stay(Problem.error(UiText.get("adjustment.error.action"))) : new FormOutcome.Close(new Result(key, new Adjustment(key, action, state.value("note"))));
     }
 
+    /** Коды действий формы для расчёта доступности суммы и даты; неизвестный ввод заменяется CHANGE_AMOUNT. */
     private enum ActionCode { SKIP, CHANGE_AMOUNT, MOVE, REPLACE }
 
     private List<Option> actionOptions() {

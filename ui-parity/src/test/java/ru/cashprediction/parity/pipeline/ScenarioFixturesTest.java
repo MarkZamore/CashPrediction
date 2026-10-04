@@ -20,7 +20,7 @@ class ScenarioFixturesTest {
         var before = RegistryNodeCleaner.snapshotRealSessionNodes();
         for (String client : List.of("fx", "swing", "web")) {
             String node = RegistryNodeCleaner.newSelftestNode();
-            var request = LaunchRequest.forScenario(root, client, "s17-recovery-dialog", node).withUi("core");
+            var request = LaunchRequest.forScenario(root, client, "s17-recovery-dialog", node);
             try (var fixtures = ScenarioFixtures.prepare(request, Duration.ofSeconds(3))) {
                 var env = environment(request);
                 SessionStore store = client.equals("web") ? env.webStore() : env.xmlStore(client);
@@ -46,7 +46,7 @@ class ScenarioFixturesTest {
     /** Живой чужой pid обнаруживается как второй экземпляр, после close не остаётся процесса. */
     @Test void alreadyRunningHasLiveHolderAndReleasesIt() throws Exception {
         String node = RegistryNodeCleaner.newSelftestNode();
-        var request = LaunchRequest.forScenario(root, "swing", "s18-already-running", node).withUi("core");
+        var request = LaunchRequest.forScenario(root, "swing", "s18-already-running", node);
         long pid;
         try {
             try (var fixtures = ScenarioFixtures.prepare(request, Duration.ofSeconds(3))) {
@@ -66,7 +66,7 @@ class ScenarioFixturesTest {
     /** Сигнал удаляется лишь после изменения mtime, содержимое плана сохраняется. */
     @Test void externalChangeAcknowledgesOnlyAfterMutation() throws Exception {
         String node = RegistryNodeCleaner.newSelftestNode();
-        var request = LaunchRequest.forScenario(root, "fx", "s14-save-conflicts", node).withUi("core");
+        var request = LaunchRequest.forScenario(root, "fx", "s14-save-conflicts", node);
         try (var fixtures = ScenarioFixtures.prepare(request, Duration.ofSeconds(3))) {
             Path file = request.home().resolve("CashMemory").resolve(SamplePlan.name() + ".md");
             Files.writeString(file, "test plan");
@@ -86,7 +86,7 @@ class ScenarioFixturesTest {
     /** Просроченный сигнал и неуказанная изоляция не дают успешную подготовку. */
     @Test void timeoutAndUnsafeRegistryAreRejected() throws Exception {
         String node = RegistryNodeCleaner.newSelftestNode();
-        var request = LaunchRequest.forScenario(root, "fx", "s14-save-conflicts", node).withUi("core");
+        var request = LaunchRequest.forScenario(root, "fx", "s14-save-conflicts", node);
         try (var fixtures = ScenarioFixtures.prepare(request, Duration.ofMillis(20))) {
             Thread.sleep(100);
             assertThrows(IllegalStateException.class, fixtures::requireHealthy);
@@ -98,6 +98,6 @@ class ScenarioFixturesTest {
     /** Собирает окружение чтения изолированных хранилищ без создания контроллера. */
     private static AppEnvironment environment(LaunchRequest request) {
         return AppEnvironment.from(LaunchOptions.parse("--home", request.home().toString(), "--registry-node",
-                request.registryNodePrefix(), "--today", request.today().toString(), "--ui", "core"));
+                request.registryNodePrefix(), "--today", request.today().toString()));
     }
 }

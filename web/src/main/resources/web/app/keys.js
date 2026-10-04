@@ -22,12 +22,12 @@ export function scope(node, app) {
 
 /** Регистрирует физические сочетания, объявленные bootstrap, без двойного срабатывания. */
 export function installKeys(app) {
-  document.addEventListener('keydown', async event => {
+  document.addEventListener('keydown', /** Перехватывает поддержанное физическое сочетание и передаёт его ядру с областью фокуса. */ async event => {
     if (event.defaultPrevented || event.isComposing || event.target.closest('.calendar')) return;
     const focus = scope(event.target, app);
     if (event.target.closest('dialog[open], .quick-edit') && ['Enter', 'Escape'].includes(event.code)) return;
     const chord = {ctrl: event.ctrlKey, shift: event.shiftKey, alt: event.altKey, key: physical(event.code)};
-    const binding = app.hotkeys.find(item => item.chord.key === chord.key && item.chord.ctrl === chord.ctrl && item.chord.alt === chord.alt && item.chord.shift === chord.shift && item.scopes.includes(focus.scope));
+    const binding = app.hotkeys.find(/** Сопоставляет клавишу, модификаторы и область фокуса с объявленной привязкой. */ item => item.chord.key === chord.key && item.chord.ctrl === chord.ctrl && item.chord.alt === chord.alt && item.chord.shift === chord.shift && item.scopes.includes(focus.scope));
     const contextual = (event.code === 'ContextMenu' || event.code === 'F10' && event.shiftKey) && ['TABLE', 'CARD'].includes(focus.scope);
     const filter = focus.scope === 'FILTER' && ['Enter', 'Escape'].includes(event.code);
     if (!binding && !contextual && !filter) return;

@@ -64,6 +64,8 @@ public final class DesignTokens {
 
     /** Минимальная ширина карточки сводки. */
     public static final int CARD_MIN_WIDTH = 118;
+    /** Единый зазор между карточками сводки по обеим осям. */
+    public static final int CARD_GAP = 6;
     /** Отступ карточки по вертикали. */
     public static final int CARD_PAD_V = 6;
     /** Отступ карточки по горизонтали. */
@@ -99,6 +101,10 @@ public final class DesignTokens {
     public static final int FORM_VGAP = 8;
     /** Размер значка в полосе заголовка диалога. */
     public static final int DIALOG_ICON_SIZE = 26;
+    /** Единый размер декоративного значка внутри строки всех клиентов. */
+    public static final int INLINE_ICON_SIZE = 16;
+    /** Размер значка типа сообщения, одинаковый во всех клиентах. */
+    public static final int ALERT_ICON_SIZE = 30;
     /** Размер круга со значком типа сообщения в web. */
     public static final int WEB_ALERT_ICON_SIZE = 30;
     /** Колонки поля подробностей (моноширинное, только чтение). */
@@ -160,8 +166,8 @@ public final class DesignTokens {
     public static final int TOOLTIP_DISMISS_MS = 20_000;
     /** Задержка всплывающего окна карточки. */
     public static final int CARD_POPUP_DELAY_MS = 350;
-    /** Задержка применения фильтра. */
-    public static final int FILTER_DEBOUNCE_MS = 300;
+    /** Фильтр ставится в ближайший оборот UI-очереди без намеренной задержки. */
+    public static final int FILTER_DEBOUNCE_MS = 0;
     /** Задержка применения спиннера «что-если». */
     public static final int WHAT_IF_SPINNER_DELAY_MS = 600;
     /** Задержка записи настроек. */

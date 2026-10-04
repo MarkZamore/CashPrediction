@@ -17,6 +17,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import ru.cashprediction.core.diagnostics.Severity;
 import ru.cashprediction.core.markdown.MarkdownParseException;
 import ru.cashprediction.core.markdown.PlanMarkdownReader;
@@ -24,6 +25,7 @@ import ru.cashprediction.core.markdown.PlanMarkdownWriter;
 import ru.cashprediction.core.markdown.PlanSamples;
 import ru.cashprediction.core.markdown.ReadResult;
 import ru.cashprediction.core.model.Plan;
+import ru.cashprediction.core.text.Texts;
 
 /**
  * Тесты репозитория файлов планов на временной папке.
@@ -38,7 +40,9 @@ class PlanRepositoryTest {
     @Test
     void listShowsOnlyPlanFilesSortedByName() throws IOException {
         for (String name : List.of("Б план.md", "а план.md", "Zeta.MD", "settings.md", "Web-Session.md",
-                "web-session.plan.md", "session-fx.md", "SESSION-SWING.md", "notes.txt", "x.md.123.456.tmp", ".md")) {
+                "web-session.plan.md", "session-fx.md", "SESSION-SWING.md", "notes.txt", "x.md.123.456.tmp", ".md",
+                "cashprediction-tmp-123-00000000-0000-0000-0000-000000000000.md",
+                "CASHPREDICTION-TMP-123-00000000-0000-0000-0000-000000000000.rename.MD")) {
             Files.writeString(dir.resolve(name), "# План: x\n");
         }
         Files.createDirectory(dir.resolve("папка.md"));
@@ -51,6 +55,28 @@ class PlanRepositoryTest {
     @Test
     void listOfMissingFolderIsEmpty() {
         assertEquals(List.of(), new PlanRepository(dir.resolve("нет такой")).list());
+    }
+
+    /** Временные копии и их реальные алиасы нельзя открыть как планы или перезаписать через репозиторий. */
+    @Test
+    void temporaryFilesAndAliasesAreProtected() throws IOException {
+        var repository = new PlanRepository(dir);
+        for (String suffix : List.of("md", "xml", "rename.md")) {
+            Path temporary = AtomicFiles.temporaryPath(dir.resolve("Budget.md"), suffix);
+            Files.writeString(temporary, PlanSamples.FAMILY_BUDGET);
+            Path alias = Files.createLink(dir.resolve("Alias-" + suffix + ".md"), temporary);
+            assertThrows(IOException.class, () -> repository.load(temporary, TODAY));
+            assertThrows(IOException.class, () -> repository.load(alias, TODAY));
+            assertThrows(IOException.class, () -> repository.save(Plan.empty("Budget", TODAY), alias));
+            assertThrows(IOException.class, () -> repository.rename(alias, "Renamed"));
+            assertEquals(PlanSamples.FAMILY_BUDGET, Files.readString(temporary));
+        }
+        assertTrue(repository.list().isEmpty());
+        String reserved = "CASHPREDICTION-TMP-personal";
+        Path safe = repository.pathFor(reserved);
+        assertFalse(CashMemoryLayout.isServiceFileName(safe.getFileName().toString()));
+        repository.save(Plan.empty(reserved, TODAY), safe);
+        assertEquals(List.of(safe), repository.list().stream().map(PlanFileInfo::path).toList());
     }
 
     @Test
@@ -211,5 +237,103 @@ class PlanRepositoryTest {
         Path file = dir.resolve("вложенная").resolve("Новый.md");
         repository.save(plan, file);
         assertEquals(PlanMarkdownWriter.write(plan), Files.readString(file));
+    }
+
+    /** Raw recent/file chooser не обходят защиту служебного имени даже при корректном Markdown внутри. */
+    @ParameterizedTest
+    @ValueSource(strings = {"settings.md", "web-session.md", "web-session.plan.md", "session-fx.xml",
+            "session-swing.xml", "web-reconnect.md", "web-reconnect-lock.md", "web-reconnect-tmp-731.md",
+            "WEB-RECONNECT.md"})
+    void rejectsServiceSourceAndTargetBeforeReadingOrWriting(String name) throws IOException {
+        PlanRepository repository = new PlanRepository(dir);
+        Path service = dir.resolve(name);
+        String secret = "private-service-sentinel-731";
+        Files.writeString(service, secret);
+        Plan plan = Plan.empty("Ordinary", TODAY);
+        IOException load = assertThrows(IOException.class, () -> repository.load(service, TODAY));
+        assertEquals(Texts.get("diagnostic.name.reservedByApp", name), load.getMessage());
+        assertFalse(load.getMessage().contains(secret));
+        assertThrows(IOException.class, () -> repository.save(plan, service));
+        assertThrows(IOException.class, () -> repository.rename(service, "Ordinary"));
+        assertEquals(secret, Files.readString(service));
+        assertFalse(Files.exists(dir.resolve("Ordinary.md")));
+    }
+
+    /** Защита действует и до появления файла, не только после записи служебного секрета. */
+    @ParameterizedTest
+    @ValueSource(strings = {"settings.md", "web-reconnect.md", "web-reconnect-lock.md", "web-reconnect-tmp-732.md"})
+    void refusesCreatingProtectedUserTarget(String name) {
+        var repository = new PlanRepository(dir);
+        Path target = dir.resolve(name);
+        assertThrows(IOException.class, () -> repository.save(Plan.empty("Ordinary", TODAY), target));
+        assertFalse(Files.exists(target));
+    }
+
+    /** Настоящие hard-link алиасы служебных файлов нельзя открыть, перезаписать или переименовать. */
+    @ParameterizedTest
+    @ValueSource(strings = {"settings.md", "web-reconnect.md", "web-session.plan.md", "session-fx.xml",
+            "web-reconnect-tmp-734.md"})
+    void protectsRealAliasesIncludingExternalRecentPath(String name) throws IOException {
+        Path memory = Files.createDirectory(dir.resolve("CashMemory"));
+        var repository = new PlanRepository(memory);
+        Path service = memory.resolve(name);
+        String secret = "private-alias-sentinel-732";
+        Files.writeString(service, secret);
+        Path alias = Files.createLink(dir.resolve("external-recent.md"), service);
+        assertTrue(Files.isSameFile(alias, service), "Test must use a real filesystem alias");
+        assertThrows(IOException.class, () -> repository.load(alias, TODAY));
+        assertThrows(IOException.class, () -> repository.save(Plan.empty("External", TODAY), alias));
+        assertThrows(IOException.class, () -> repository.rename(alias, "Renamed"));
+        assertEquals(secret, Files.readString(service));
+        assertEquals(secret, Files.readString(alias));
+        assertFalse(Files.exists(dir.resolve("Renamed.md")));
+    }
+
+    /** Проверка rename защищает существующий целевой алиас до чтения или изменения исходного плана. */
+    @Test
+    void renameRejectsProtectedTargetAliasAndLeavesSourceIntact() throws IOException {
+        Path memory = Files.createDirectory(dir.resolve("CashMemory"));
+        var repository = new PlanRepository(memory);
+        Path service = memory.resolve("web-reconnect.md");
+        Files.writeString(service, "private-target-sentinel-733");
+        Path targetAlias = Files.createLink(memory.resolve("Destination.md"), service);
+        Path source = memory.resolve("Source.md");
+        repository.save(Plan.empty("Source", TODAY), source);
+        String original = Files.readString(source);
+        IOException failure = assertThrows(IOException.class, () -> repository.rename(source, "Destination"));
+        assertEquals(Texts.get("diagnostic.name.reservedByApp", "Destination.md"), failure.getMessage());
+        assertEquals(original, Files.readString(source));
+        assertEquals("private-target-sentinel-733", Files.readString(service));
+        assertTrue(Files.isSameFile(targetAlias, service));
+    }
+
+    /** Защита папки CashMemory не запрещает пользовательский план в отдельной внешней папке. */
+    @Test
+    void normalExternalPlanCanBeSavedLoadedAndRenamed() throws IOException {
+        Path memory = Files.createDirectory(dir.resolve("CashMemory"));
+        var repository = new PlanRepository(memory);
+        Path external = Files.createDirectory(dir.resolve("External"));
+        Path file = external.resolve("Budget.md");
+        Plan plan = Plan.empty("Budget", TODAY);
+        repository.save(plan, file);
+        assertEquals(plan, repository.load(file, TODAY).plan());
+        Path renamed = repository.rename(file, "BudgetNext");
+        assertEquals(external.resolve("BudgetNext.md"), renamed);
+        assertFalse(Files.exists(file));
+        assertEquals("BudgetNext", repository.load(renamed, TODAY).plan().name());
+    }
+
+    /** Нормализация пути не позволяет спрятать служебную цель за сегментами родительской папки. */
+    @Test
+    void normalizedRecentPathCannotReachServiceFile() throws IOException {
+        var repository = new PlanRepository(dir);
+        Files.createDirectory(dir.resolve("Subfolder"));
+        Path service = dir.resolve("settings.md");
+        Files.writeString(service, "private-normalized-sentinel-735");
+        Path path = dir.resolve("Subfolder").resolve("..").resolve("settings.md");
+        assertThrows(IOException.class, () -> repository.load(path, TODAY));
+        assertThrows(IOException.class, () -> repository.save(Plan.empty("Budget", TODAY), path));
+        assertThrows(IOException.class, () -> repository.rename(path, "Budget"));
+        assertEquals("private-normalized-sentinel-735", Files.readString(service));
     }
 }

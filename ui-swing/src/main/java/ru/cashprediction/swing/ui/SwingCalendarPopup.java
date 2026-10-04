@@ -26,6 +26,7 @@ public final class SwingCalendarPopup {
         CalendarModel model = intents.calendar(month, selected); popup.removeAll();
         JPanel panel = new JPanel(new BorderLayout(4, 4)); JPanel header = new JPanel(new BorderLayout());
         JButton prev = new JButton("◀"), next = new JButton("▶");
+        SwingIcons.decorate(prev); SwingIcons.decorate(next);
         SwingLook.tooltip(prev, model.prevTooltip()); SwingLook.tooltip(next, model.nextTooltip());
         prev.addActionListener(e -> render(month.minusMonths(1))); next.addActionListener(e -> render(month.plusMonths(1)));
         header.add(prev, BorderLayout.WEST); header.add(new JLabel(model.title(), SwingConstants.CENTER)); header.add(next, BorderLayout.EAST); panel.add(header, BorderLayout.NORTH);

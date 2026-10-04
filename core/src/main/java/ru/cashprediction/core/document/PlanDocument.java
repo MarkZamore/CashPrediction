@@ -18,11 +18,14 @@ import java.util.function.Supplier;
 import java.util.function.UnaryOperator;
 import ru.cashprediction.core.diagnostics.Diagnostic;
 import ru.cashprediction.core.forecast.Forecast;
-import ru.cashprediction.core.forecast.ForecastEngine;
 import ru.cashprediction.core.forecast.ForecastRow;
 import ru.cashprediction.core.forecast.Warning;
 import ru.cashprediction.core.forecast.WarningType;
 import ru.cashprediction.core.forecast.WhatIf;
+import ru.cashprediction.core.forecast.service.EngineForecastService;
+import ru.cashprediction.core.forecast.service.ForecastFailure;
+import ru.cashprediction.core.forecast.service.ForecastRequest;
+import ru.cashprediction.core.forecast.service.ForecastService;
 import ru.cashprediction.core.model.Adjustment;
 import ru.cashprediction.core.model.Kind;
 import ru.cashprediction.core.model.Money;
@@ -91,6 +94,9 @@ public final class PlanDocument {
     /** Источник «сегодня»: в приложении — системные часы, в тестах — фиксированная дата. */
     private final Supplier<LocalDate> today;
 
+    /** Внедрённая служба расчёта, доступная для передачи контекстам форм через forecastService(). */
+    private final ForecastService forecastService;
+
     /** Стек отмены: первым лежит последнее изменение. */
     private final Deque<HistoryEntry> undoStack = new ArrayDeque<>();
 
@@ -125,10 +131,28 @@ public final class PlanDocument {
      * @param today источник сегодняшней даты
      */
     public PlanDocument(Plan plan, Path file, Supplier<LocalDate> today) {
+        this(plan, file, today, EngineForecastService.DEFAULT);
+    }
+
+    /**
+     * Создаёт документ с явно внедрённой службой, не выполняя расчёт и не проверяя бизнес-ошибки плана.
+     *
+     * @param plan план, в том числе открытый из повреждённого файла
+     * @param file файл плана либо null
+     * @param today источник сегодняшней даты для явных запросов расчёта
+     * @param forecastService общий исполнитель расчёта документа и его форм
+     */
+    public PlanDocument(Plan plan, Path file, Supplier<LocalDate> today, ForecastService forecastService) {
         this.plan = Objects.requireNonNull(plan, "plan");
         this.today = Objects.requireNonNull(today, "today");
+        this.forecastService = Objects.requireNonNull(forecastService, "forecastService");
         this.file = file;
         this.savedPlan = plan;
+    }
+
+    /** @return внедрённая служба для передачи того же экземпляра формам и временным документам */
+    public ForecastService forecastService() {
+        return forecastService;
     }
 
     // ------------------------------------------------------------------ состояние
@@ -305,12 +329,15 @@ public final class PlanDocument {
      * «прошедшие» и карточки «через N месяцев» устарели бы.</p>
      *
      * @return прогноз
-     * @throws IllegalStateException если горизонт или число дат правила превышают пределы движка
+     * @throws ForecastFailure.LimitExceeded если горизонт или число дат правила превышают пределы движка
+     * @throws ForecastFailure.AmountOverflow если точная денежная арифметика переполняется
+     * @throws ForecastFailure.AmountOutOfRange если результат равен запрещённой нижней границе Money
+     * @throws ForecastFailure.DateRangeExceeded если календарная операция выходит за диапазон дат
      */
     public Forecast forecast() {
         LocalDate now = today();
         if (forecast == null || !forecast.today().equals(now)) {
-            forecast = ForecastEngine.forecast(plan, viewState.whatIf(), now, viewState.showSkipped());
+            forecast = forecastService.calculate(new ForecastRequest(plan, viewState.whatIf(), now, viewState.showSkipped()));
         }
         return forecast;
     }
@@ -324,8 +351,9 @@ public final class PlanDocument {
         Forecast f = forecast();
         LocalDate end = viewState.periodEnd(plan, f.anchor());
         List<ForecastRow> result = new ArrayList<>();
+        var rowFilter = viewState.rowFilter();
         for (ForecastRow row : f.rowsBetween(f.startDate(), end)) {
-            if (viewState.accepts(row)) {
+            if (rowFilter.test(row)) {
                 result.add(row);
             }
         }
@@ -558,7 +586,8 @@ public final class PlanDocument {
      */
     private Forecast plainForecast() {
         Forecast current = forecast();
-        return current.whatIf().isNone() ? current : ForecastEngine.forecast(plan, WhatIf.NONE, current.today(), false);
+        return current.whatIf().isNone() ? current
+                : forecastService.calculate(new ForecastRequest(plan, WhatIf.NONE, current.today(), false));
     }
 
     /** @return копия правила с другой датой «С» */

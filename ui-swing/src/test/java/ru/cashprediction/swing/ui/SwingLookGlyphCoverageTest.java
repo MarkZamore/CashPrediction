@@ -7,13 +7,13 @@ import org.junit.jupiter.api.Test;
 import ru.cashprediction.core.ui.text.UiText;
 import ru.cashprediction.core.ui.token.*;
 
-/** Проверяет реальные шрифты и ключи локализации темы Metal. */
+/** Проверяет общие изображения и ключи локализации темы Metal. */
 class SwingLookGlyphCoverageTest {
-    @Test void everyGlyphHasCompositeFontCoverage() throws Exception {
+    @Test void everyGlyphHasSharedImageCoverage() throws Exception {
         SwingUtilities.invokeAndWait(() -> {
             SwingLook.install();
-            for (FontToken token : FontToken.values()) for (String glyph : DesignTokens.GLYPHS)
-                assertEquals(-1, SwingLook.font(token).canDisplayUpTo(glyph), token + ": " + glyph);
+            for (String glyph : DesignTokens.GLYPHS)
+                assertTrue(SwingIcons.icon(glyph).getIconWidth() > 0, glyph);
         });
     }
     @Test void chooserAndOptionButtonsUseSharedCatalog() throws Exception {

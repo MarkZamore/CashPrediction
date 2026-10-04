@@ -170,7 +170,8 @@ public final class FolderListing {
         for (String extension : extensions == null ? List.<String>of() : extensions) {
             suffixes.add("." + extension.strip().toLowerCase(Locale.ROOT));
         }
-        boolean inCashMemory = dir.equals(cashMemory);
+        boolean inCashMemory = dir.equals(cashMemory)
+                || (Files.isDirectory(cashMemory) && Files.isSameFile(dir, cashMemory));
         List<Entry> entries = new ArrayList<>();
         boolean truncated = false;
         try (DirectoryStream<Path> stream = Files.newDirectoryStream(dir)) {
@@ -199,10 +200,7 @@ public final class FolderListing {
      * @return {@code true} для settings.md, web-session.md, web-session.plan.md и session-*.xml
      */
     public static boolean isServiceFile(String fileName) {
-        String name = fileName.toLowerCase(Locale.ROOT);
-        return name.equals(CashMemoryLayout.SETTINGS) || name.equals(CashMemoryLayout.WEB_SESSION)
-                || name.equals(CashMemoryLayout.WEB_SESSION_PLAN)
-                || (name.startsWith(CashMemoryLayout.SESSION_XML_PREFIX) && name.endsWith(CashMemoryLayout.SESSION_XML_SUFFIX));
+        return CashMemoryLayout.isServiceFileName(fileName);
     }
 
     /** @return описание элемента или {@code null}, если элемент не показывается */

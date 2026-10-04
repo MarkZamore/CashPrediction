@@ -74,6 +74,10 @@ public sealed interface Recurrence
             }
         }
 
+        /**
+         * Записывает период в месяцах и заданный день месяца словами грамматики {@link FormatWords}.
+         * @return «ежемесячно D» при периоде 1 или «каждые N месяцев D» с нужной формой слова «месяц»
+         */
         @Override
         public String toRussian() {
             return everyMonths == 1
@@ -83,11 +87,13 @@ public sealed interface Recurrence
                             FormatWords.get("plan.unit.month.many")) + " " + dayOfMonth;
         }
 
+        /** @return {@link RecurrenceKind#MONTHLY}, независимо от дня месяца и величины периода */
         @Override
         public RecurrenceKind kind() {
             return RecurrenceKind.MONTHLY;
         }
 
+        /** @return {@code true}, если период больше одного месяца и фазу повтора нужно отсчитывать от опорной даты */
         @Override
         public boolean needsAnchor() {
             return everyMonths > 1;
@@ -109,6 +115,10 @@ public sealed interface Recurrence
             }
         }
 
+        /**
+         * Записывает период в неделях и краткое имя дня недели словами грамматики {@link FormatWords}.
+         * @return например «еженедельно сб» при периоде 1 или «каждые 2 недели сб» при большем периоде
+         */
         @Override
         public String toRussian() {
             // День недели — слово формата, а не подпись интерфейса RuText.weekdayShort: этот текст пишется в файл.
@@ -120,11 +130,13 @@ public sealed interface Recurrence
                             FormatWords.get("plan.unit.week.many")) + " " + day;
         }
 
+        /** @return {@link RecurrenceKind#WEEKLY}, независимо от дня недели и величины периода */
         @Override
         public RecurrenceKind kind() {
             return RecurrenceKind.WEEKLY;
         }
 
+        /** @return {@code true}, если период больше одной недели и фазу повтора нужно отсчитывать от опорной даты */
         @Override
         public boolean needsAnchor() {
             return everyWeeks > 1;
@@ -144,6 +156,10 @@ public sealed interface Recurrence
             }
         }
 
+        /**
+         * Записывает интервал в днях словами грамматики {@link FormatWords} с согласованным числительным.
+         * @return «ежедневно» при интервале 1 или «каждые N дней» с нужной формой слова «день»
+         */
         @Override
         public String toRussian() {
             return days == 1
@@ -153,11 +169,16 @@ public sealed interface Recurrence
                             FormatWords.get("plan.unit.day.many"));
         }
 
+        /** @return {@link RecurrenceKind#EVERY_N_DAYS}, в том числе для ежедневного повтора */
         @Override
         public RecurrenceKind kind() {
             return RecurrenceKind.EVERY_N_DAYS;
         }
 
+        /**
+         * Сообщает о необходимости опорной даты для фазы многодневного интервала.
+         * @return {@code true} при {@code days > 1}; для ежедневного повтора возвращает {@code false}
+         */
         @Override
         public boolean needsAnchor() {
             return days > 1;
@@ -175,16 +196,22 @@ public sealed interface Recurrence
             Objects.requireNonNull(monthDay, "monthDay");
         }
 
+        /**
+         * Записывает ежегодный повтор словом грамматики {@link FormatWords} и датой в формате {@code MM-dd}.
+         * @return например «ежегодно 03-15»; заданное 29 февраля сохраняется как {@code 02-29} независимо от года
+         */
         @Override
         public String toRussian() {
             return FormatWords.get("plan.recurrence.yearly") + " " + MONTH_DAY.format(monthDay);
         }
 
+        /** @return {@link RecurrenceKind#YEARLY}, независимо от заданного месяца и дня */
         @Override
         public RecurrenceKind kind() {
             return RecurrenceKind.YEARLY;
         }
 
+        /** @return {@code false}: месяц и день задают календарную фазу без дополнительной опорной даты */
         @Override
         public boolean needsAnchor() {
             return false;

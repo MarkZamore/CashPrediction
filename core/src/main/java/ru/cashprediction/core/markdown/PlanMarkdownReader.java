@@ -91,6 +91,19 @@ public final class PlanMarkdownReader {
     /** Значение параметра «Формат»: {@code CashPrediction N}. */
     private static final Pattern FORMAT_VALUE = Pattern.compile("cashprediction\\s*(\\d{1,9})");
 
+    /** Распознанный заголовок; уровень нужен только для диагностики основного прохода. */
+    private record SectionHeading(String title, String nonCanonicalLevel) { }
+
+    /** Общая грамматика заголовков для поиска версии и основного разбора. */
+    private static SectionHeading sectionHeading(String text) {
+        Matcher canonical = HEADING.matcher(text);
+        if (canonical.matches()) return new SectionHeading(canonical.group(1), null);
+        Matcher other = ANY_LEVEL_HEADING.matcher(text);
+        if (other.matches() && Section.byTitle(other.group(2)) != null)
+            return new SectionHeading(other.group(2), other.group(1));
+        return null;
+    }
+
     private PlanMarkdownReader() {
     }
 
@@ -281,6 +294,8 @@ public final class PlanMarkdownReader {
         private String rawAnchor;
 
         private final Map<String, Param> params = new LinkedHashMap<>();
+        /** Версия определяется структурным проходом, без повторного разбора данных и диагностики. */
+        private MarkdownTable.CellCodec cellCodec;
         private final List<String> parameterExtras = new ArrayList<>();
 
         private final List<List<String>> noteParts = new ArrayList<>();
@@ -308,21 +323,19 @@ public final class PlanMarkdownReader {
         }
 
         ReadResult parse() {
+            cellCodec = discoverCellCodec();
             for (int i = 0; i < lines.length; i++) {
                 int lineNo = i + 1;
                 String line = lines[i].stripTrailing();
                 String t = line.strip();
-                Matcher heading = HEADING.matcher(t);
-                if (heading.matches()) {
-                    startSection(heading.group(1), line, lineNo);
-                    continue;
-                }
-                Matcher otherLevel = ANY_LEVEL_HEADING.matcher(t);
-                if (otherLevel.matches() && Section.byTitle(otherLevel.group(2)) != null) {
-                    Section known = Section.byTitle(otherLevel.group(2));
-                    diagnostics.add(Diagnostic.warning(lineNo,
-                            Texts.get("markdown.read.headingLevel", known.title, otherLevel.group(1))));
-                    startSection(otherLevel.group(2), line, lineNo);
+                SectionHeading heading = sectionHeading(t);
+                if (heading != null) {
+                    if (heading.nonCanonicalLevel() != null) {
+                        Section known = Section.byTitle(heading.title());
+                        diagnostics.add(Diagnostic.warning(lineNo,
+                                Texts.get("markdown.read.headingLevel", known.title, heading.nonCanonicalLevel())));
+                    }
+                    startSection(heading.title(), line, lineNo);
                     continue;
                 }
                 // Заголовок плана распознаётся, пока не встретилась ни одна известная секция: ниже «# План:» — это уже
@@ -356,6 +369,34 @@ public final class PlanMarkdownReader {
                 throw new MarkdownParseException(Texts.get("markdown.read.notAPlan", MarkdownFormat.TITLE_PREFIX.strip()));
             }
             return new ReadResult(buildPlan(), sortedDiagnostics());
+        }
+
+        /**
+         * Находит последний параметр формата только в настоящих секциях параметров.
+         * Порядок секций свободный; заметки и неизвестные секции не задают кодек.
+         * Диагностика остаётся исключительно в основном проходе.
+         */
+        private MarkdownTable.CellCodec discoverCellCodec() {
+            Section current = Section.PREAMBLE;
+            String format = null;
+            for (String line : lines) {
+                SectionHeading heading = sectionHeading(line.strip());
+                if (heading != null) {
+                    Section known = Section.byTitle(heading.title());
+                    current = known == null ? Section.UNKNOWN : known;
+                } else if (current == Section.PARAMETERS) {
+                    Optional<ListItem> item = ListItem.parse(line);
+                    if (item.isPresent() && RuFormats.normalize(item.get().key())
+                            .equals(RuFormats.normalize(MarkdownFormat.KEY_FORMAT)))
+                        format = item.get().value();
+                }
+            }
+            if (format != null) {
+                Matcher version = FORMAT_VALUE.matcher(RuFormats.normalize(format));
+                if (version.matches() && Long.parseLong(version.group(1)) == 2)
+                    return MarkdownTable.CellCodec.ENCODED_V2;
+            }
+            return MarkdownTable.CellCodec.LITERAL_V1;
         }
 
         // -------------------------------------------------------------- структура
@@ -513,7 +554,7 @@ public final class PlanMarkdownReader {
             if (MarkdownTable.isSeparatorRow(t)) {
                 return;
             }
-            List<String> cells = MarkdownTable.parseRow(t);
+            List<String> cells = MarkdownTable.parseRow(t, cellCodec);
             if (cells.stream().allMatch(RuFormats::isEmptyValue)) {
                 // Пустая строка-заготовка из Блокнота данных не несёт; разобранная как операция, она навсегда
                 // осела бы в заметке пометкой «не разобрано».

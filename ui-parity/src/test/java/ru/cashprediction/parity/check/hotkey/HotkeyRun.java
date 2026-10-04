@@ -28,7 +28,7 @@ public final class HotkeyRun {
         String node = RegistryNodeCleaner.newSelftestNode();
         var sessions = RegistryNodeCleaner.snapshotRealSessionNodes();
         LaunchRequest request = new LaunchRequest(client, "hotkey", run.resolve("home"), node,
-                LaunchRequest.PARITY_TODAY, script.toString(), run.resolve("out"), "core", List.of(), List.of());
+                LaunchRequest.PARITY_TODAY, script.toString(), run.resolve("out"), List.of(), List.of());
         try {
             ClientTarget target = switch (client) {
                 case "fx" -> ClientTarget.fx(layout);
@@ -70,7 +70,7 @@ public final class HotkeyRun {
                 }
             }
         } catch (Exception | AssertionError failure) {
-            throw new AssertionError("Hotkey " + client + " " + probe.name() + " failed. Reproduce: --ui core"
+            throw new AssertionError("Hotkey " + client + " " + probe.name() + " failed. Reproduce:"
                     + " --home " + request.home() + " --registry-node " + node + " --today 2026-09-13"
                     + " --selftest \"" + script + "\" --selftest-out " + request.selftestOut()
                     + ". Logs and actual dumps: " + run, failure);

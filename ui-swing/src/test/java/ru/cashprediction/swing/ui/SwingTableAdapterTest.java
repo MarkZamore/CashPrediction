@@ -36,6 +36,38 @@ class SwingTableAdapterTest {
     @Test void onlyRequestedRowIsRead() { SwingTableAdapter adapter = new SwingTableAdapter(model()); assertEquals("cell190000", adapter.getValueAt(190_000, 0)); assertEquals(1, reads.get()); }
     @Test void newRevisionDoesNotMaterializeRows() { SwingTableAdapter adapter = new SwingTableAdapter(model()); adapter.update(model()); assertEquals(0, reads.get()); assertFalse(adapter.isCellEditable(0, 0)); }
 
+    /** Все восемь заголовков следуют модели выравнивания и не наследуют жирность ячеек. */
+    @Test void actualHeadersUseCommonAlignmentTooltipAndNormalWeight() throws Exception {
+        javax.swing.SwingUtilities.invokeAndWait(() -> {
+            SwingLook.install();
+            var ids = List.of("date", "day", "title", "category", "income", "expense", "balance", "marks");
+            var alignments = List.of(ColumnSpec.Align.LEFT, ColumnSpec.Align.CENTER, ColumnSpec.Align.LEFT,
+                    ColumnSpec.Align.LEFT, ColumnSpec.Align.RIGHT, ColumnSpec.Align.RIGHT,
+                    ColumnSpec.Align.RIGHT, ColumnSpec.Align.CENTER);
+            var columns = java.util.stream.IntStream.range(0, 8).mapToObj(index ->
+                    new ColumnSpec(ids.get(index), ids.get(index), 120, false, alignments.get(index),
+                            index == 6, "tip-" + ids.get(index))).toList();
+            var base = model();
+            var source = (TableModel) java.lang.reflect.Proxy.newProxyInstance(getClass().getClassLoader(),
+                    new Class<?>[]{TableModel.class}, (proxy, method, args) ->
+                            method.getName().equals("columns") ? columns : method.invoke(base, args));
+            var view = new SwingTable(null); view.render(source);
+            for (int index = 0; index < 8; index++) {
+                var column = view.table.getColumnModel().getColumn(index);
+                var header = (javax.swing.JLabel) column.getHeaderRenderer().getTableCellRendererComponent(
+                        view.table, column.getHeaderValue(), false, false, -1, index);
+                assertFalse(header.getFont().isBold(), ids.get(index));
+                assertEquals(SwingLook.font(ru.cashprediction.core.ui.token.FontToken.BASE), header.getFont());
+                assertEquals(switch (alignments.get(index)) {
+                    case LEFT -> javax.swing.SwingConstants.LEFT;
+                    case CENTER -> javax.swing.SwingConstants.CENTER;
+                    case RIGHT -> javax.swing.SwingConstants.RIGHT;
+                }, header.getHorizontalAlignment(), ids.get(index));
+                assertEquals("tip-" + ids.get(index), header.getToolTipText());
+            }
+        });
+    }
+
     @Test void selectedCellsPaintSemanticIncomeExpenseAndNegativeBalanceColors() throws Exception {
         javax.swing.SwingUtilities.invokeAndWait(() -> {
             SwingLook.install(); var base = model();

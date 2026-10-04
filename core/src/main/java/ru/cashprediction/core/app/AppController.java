@@ -48,6 +48,11 @@ import ru.cashprediction.core.ui.command.HotkeyTable;
 import ru.cashprediction.core.ui.view.table.RowKind;
 import ru.cashprediction.core.ui.view.table.TableRowView;
 import ru.cashprediction.core.forecast.Forecast;
+import ru.cashprediction.core.forecast.service.EngineForecastService;
+import ru.cashprediction.core.service.plan.LocalPlanCommands;
+import ru.cashprediction.core.service.plan.PlanCommands;
+import ru.cashprediction.core.service.storage.FilePlanStorage;
+import ru.cashprediction.core.service.storage.PlanStorage;
 import ru.cashprediction.core.model.Plan;
 import ru.cashprediction.core.session.StoreStatus;
 import ru.cashprediction.core.ui.text.UiText;
@@ -104,6 +109,8 @@ public final class AppController implements UiIntents, FlowContext {
     private final AppEnvironment environment;
     /** Единственный изменяемый документ; прогноз остаётся ленивым до первого снимка состояния. */
     private final PlanDocument document;
+    private final PlanCommands planCommands;
+    private final PlanStorage planStorage;
     private AppSettings settings = AppSettings.defaults();
     private String selectedRowId = "";
     /** Выбор цели меню и раскрытие прошлого публикуются одним завершённым кадром. */
@@ -130,8 +137,9 @@ public final class AppController implements UiIntents, FlowContext {
     private final FileChooserService chooserService;
     private final AutosaveService autosaveService;
     private final SettingsKeeper settingsService;
-    private final ExternalChangeGuard externalGuard = new ExternalChangeGuard();
-    private SessionRecorder recorder;
+    private final ExternalChangeGuard externalGuard;
+    // Shutdown hook может читать ссылку вне UI-потока после отложенного завершения StartupFlow.
+    private volatile SessionRecorder recorder;
     private MainScreenModel screen;
     private AppState renderedState;
     private boolean shown;
@@ -154,7 +162,10 @@ public final class AppController implements UiIntents, FlowContext {
         this.port = new LifecyclePort();
         this.environment = Objects.requireNonNull(environment, "environment");
         document = new PlanDocument(Plan.empty(UiText.get("plan.defaultName"), environment.clock().today()), null,
-                environment.clock()::today);
+                environment.clock()::today, new EngineForecastService());
+        planCommands = new LocalPlanCommands(document);
+        planStorage = new FilePlanStorage(environment.cashMemory());
+        externalGuard = new ExternalChangeGuard(planStorage);
         plansFolder = environment.cashMemory();
         fileFlow = new FileFlow(this);
         editFlow = new EditFlow(this);
@@ -227,7 +238,9 @@ public final class AppController implements UiIntents, FlowContext {
         String forecastError = "";
         try {
             forecast = document.forecast();
-        } catch (IllegalArgumentException | ArithmeticException exception) {
+        } catch (RuntimeException exception) {
+            // Ожидаемые ошибки службы показываем; ошибки программирования сохраняют аварийное поведение.
+            if (!(exception instanceof ru.cashprediction.core.forecast.service.ForecastFailure)) throw exception;
             forecastError = Objects.requireNonNullElse(exception.getMessage(), exception.getClass().getSimpleName());
         }
         DocumentView snapshot = new DocumentView(document.plan(), document.file().orElse(null), document.isDirty(),
@@ -250,6 +263,20 @@ public final class AppController implements UiIntents, FlowContext {
         return executed.getOrDefault(Objects.requireNonNull(command, "command"), 0);
     }
 
+    /**
+     * Проверяет источник, модальность и доступность команды, затем передаёт её соответствующему потоку.
+     * После выхода вызов игнорируется. Команда формы допускается только для существующего сеанса,
+     * над которым нет другого модального окна; команды главного окна блокируются модальностью.
+     * Недоступная горячая клавиша может показать подсказку. Счётчик увеличивается перед передачей
+     * разрешённой команды, поэтому ошибка её исполнения не отменяет учёт вызова.
+     *
+     * @param id команда
+     * @param args аргументы или {@code null} для {@link CommandArgs#NONE}; без rowId используется выделение
+     * @param source источник действия
+     * @throws IllegalStateException если активный контроллер вызван вне своего потока
+     * @throws NullPointerException если у активного контроллера id или source равен {@code null}
+     * @throws RuntimeException если разбор аргументов или исполнение разрешённой команды завершается ошибкой
+     */
     @Override
     public void command(CommandId id, CommandArgs args, InvokeSource source) {
         if (exited) return;
@@ -350,6 +377,19 @@ public final class AppController implements UiIntents, FlowContext {
         }
     }
 
+    /**
+     * Находит привязку клавиши для области фокуса и профиля клиента и вызывает команду как горячую клавишу.
+     * Enter на заголовке прошлого переключает группу; для карточки передаются её id и дата из сводки.
+     * Клиент перед Enter в поле фильтра должен сначала передать текущий текст через {@link #filterText}.
+     * Enter и Esc форм обрабатываются их сеансами.
+     *
+     * @param chord сочетание физических клавиш
+     * @param scope область фокуса
+     * @param focusId id карточки при фокусе на карточке; в остальных областях здесь не используется
+     * @return {@code false} после выхода, при модальном окне или отсутствии привязки;
+     *         {@code true} при найденной привязке, даже если её команда недоступна
+     * @throws IllegalStateException если активный контроллер вызван вне своего потока
+     */
     @Override
     public boolean key(KeyChord chord, FocusScope scope, String focusId) {
         if (exited) return false;
@@ -371,6 +411,13 @@ public final class AppController implements UiIntents, FlowContext {
         return true;
     }
 
+    /**
+     * Передаёт выделение потоку представления, который проверяет id и при необходимости раскрывает прошлое.
+     * После выхода и при модальном окне ничего не меняет; неизвестная строка игнорируется потоком представления.
+     *
+     * @param rowId id строки; пустая строка или {@code null} снимает выделение
+     * @throws IllegalStateException если активный контроллер вызван вне своего потока
+     */
     @Override
     public void selectRow(String rowId) {
         if (exited) return;
@@ -378,6 +425,17 @@ public final class AppController implements UiIntents, FlowContext {
         if (!windows.modalOpen()) views().selectRow(rowId);
     }
 
+    /**
+     * Обрабатывает щелчок по строке текущей таблицы: одиночный выделяет строку или переключает прошлое,
+     * двойной открывает быструю правку непустой редактируемой суммы либо обычное изменение события.
+     * Итоги и заголовок прошлого не открывают обычный редактор. После выхода, при модальном окне,
+     * отсутствии модели или неизвестном rowId действие игнорируется.
+     *
+     * @param rowId id строки текущей модели
+     * @param columnId id колонки; income и expense могут открыть быструю правку
+     * @param how одиночный или двойной щелчок
+     * @throws IllegalStateException если активный контроллер вызван вне своего потока
+     */
     @Override
     public void activateRow(String rowId, String columnId, Activation how) {
         if (exited) return;
@@ -397,6 +455,14 @@ public final class AppController implements UiIntents, FlowContext {
         }
     }
 
+    /**
+     * Применяет текст фильтра через поток представления, если приложение активно и нет модального окна.
+     * Задержку ввода обеспечивает клиент; этот метод дополнительного таймера не создаёт.
+     * Повторное значение не меняет представление.
+     *
+     * @param text текст фильтра или {@code null} для очистки
+     * @throws IllegalStateException если активный контроллер вызван вне своего потока
+     */
     @Override
     public void filterText(String text) {
         if (exited) return;
@@ -404,6 +470,15 @@ public final class AppController implements UiIntents, FlowContext {
         if (!windows.modalOpen()) views().filterText(text);
     }
 
+    /**
+     * Передаёт отпускание ползунка горизонта потоку представления для однократного изменения плана.
+     * После выхода, при модальном окне и для другого id действие игнорируется без проверки значения.
+     *
+     * @param itemId ожидается {@code view.horizonSlider}
+     * @param value горизонт в месяцах, от 1 до 120
+     * @throws IllegalStateException если активный контроллер вызван вне своего потока
+     * @throws IllegalArgumentException если принятое значение вне диапазона 1..120
+     */
     @Override
     public void sliderCommit(String itemId, int value) {
         if (exited) return;
@@ -411,6 +486,16 @@ public final class AppController implements UiIntents, FlowContext {
         if (!windows.modalOpen() && "view.horizonSlider".equals(itemId)) views().horizonSliderCommit(value);
     }
 
+    /**
+     * Передаёт дополнительное ежемесячное сбережение потоку инструментов, который заменяет предыдущую
+     * отложенную задачу и применяет последнее значение через 600 мс.
+     * После выхода, при модальном окне и для другого id действие игнорируется без проверки значения.
+     *
+     * @param itemId ожидается {@code whatIf.extra}
+     * @param value сумма в основных денежных единицах, от 0 до 10 000 000
+     * @throws IllegalStateException если активный контроллер вызван вне своего потока
+     * @throws IllegalArgumentException если принятое значение вне допустимого диапазона
+     */
     @Override
     public void spinnerCommit(String itemId, long value) {
         if (exited) return;
@@ -418,6 +503,15 @@ public final class AppController implements UiIntents, FlowContext {
         if (!windows.modalOpen() && "whatIf.extra".equals(itemId)) tools().setWhatIfExtra(value);
     }
 
+    /**
+     * Помечает снимок сеанса изменённым при уведомлении о геометрии главного окна, в том числе при модальности.
+     * Геометрию при захвате снимка читает порт: переданные значения здесь не сохраняются и не проверяются.
+     * После выхода или без рекордера снимок не помечается.
+     *
+     * @param bounds границы окна в нормальном состоянии из уведомления клиента
+     * @param maximized признак развёрнутости из уведомления клиента
+     * @throws IllegalStateException если активный контроллер вызван вне своего потока
+     */
     @Override
     public void mainGeometry(WindowBounds bounds, boolean maximized) {
         if (exited) return;
@@ -426,6 +520,14 @@ public final class AppController implements UiIntents, FlowContext {
         if (recorder != null) recorder.touch();
     }
 
+    /**
+     * Находит подсказку пункта в текущей модели главного меню и обновляет сообщение строки состояния.
+     * Отсутствующий пункт, неподдерживаемый вид узла или уход указателя очищает подсказку.
+     * После выхода вызов игнорируется; отдельной проверки модальности в этом обработчике нет.
+     *
+     * @param itemIdOrNull id пункта или {@code null} при уходе указателя
+     * @throws IllegalStateException если активный контроллер вызван вне своего потока
+     */
     @Override
     public void menuHover(String itemIdOrNull) {
         if (exited) return;
@@ -444,6 +546,12 @@ public final class AppController implements UiIntents, FlowContext {
         refresh();
     }
 
+    /**
+     * Передаёт крестик или Alt+F4 потоку выхода, который выполняет общий сценарий завершения приложения.
+     * После выхода или при открытом модальном окне запрос игнорируется.
+     *
+     * @throws IllegalStateException если активный контроллер вызван вне своего потока
+     */
     @Override
     public void closeMainRequested() {
         if (exited) return;
@@ -451,6 +559,14 @@ public final class AppController implements UiIntents, FlowContext {
         if (!windows.modalOpen()) exit().requestExit();
     }
 
+    /**
+     * Передаёт необработанную ошибку клиента потоку восстановления, независимо от наличия модального окна.
+     * Доставку в поток контроллера обеспечивает вызывающая сторона; после выхода ошибка сюда не передаётся.
+     *
+     * @param thread поток, в котором возникла ошибка
+     * @param error исходная ошибка
+     * @throws IllegalStateException если активный контроллер вызван вне своего потока
+     */
     @Override
     public void uncaught(Thread thread, Throwable error) {
         if (exited) return;
@@ -465,6 +581,17 @@ public final class AppController implements UiIntents, FlowContext {
         recovery().clientError(message, stack);
     }
 
+    /**
+     * Строит контекстное меню по текущему состоянию и профилю клиента. Для строки, итога и заголовка
+     * прошлого сначала проверяет и устанавливает выделение через поток представления, публикуя
+     * завершённый кадр после этой операции даже при её ошибке.
+     * Меню предпросмотра допускается только для существующей формы, над которой нет другого
+     * модального окна; для остальных целей открытое модальное окно запрещает меню.
+     *
+     * @param target объект, для которого запрошено меню
+     * @return пункты меню или пустой список после выхода либо при запрете по модальности или сеансу
+     * @throws IllegalStateException если активный контроллер вызван вне своего потока
+     */
     @Override
     public List<MenuNode> contextMenu(ContextTarget target) {
         if (exited) return List.of();
@@ -493,6 +620,17 @@ public final class AppController implements UiIntents, FlowContext {
         return MenuModels.contextMenu(state(), target, port.profile().kind());
     }
 
+    /**
+     * Запрашивает подсказку у текущей таблицы только после проверки её ревизии и границ строки.
+     * Проверяет поток контроллера также после выхода; модальность не ограничивает запрос.
+     *
+     * @param revision ревизия модели таблицы у клиента
+     * @param index индекс строки от нуля
+     * @param columnId id колонки
+     * @return текст подсказки или пустая строка при отсутствии модели, другой ревизии,
+     *         недопустимом индексе либо отсутствии подсказки
+     * @throws IllegalStateException если вызван вне потока контроллера
+     */
     @Override
     public String tableTooltip(long revision, int index, String columnId) {
         assertUiThread();
@@ -502,12 +640,46 @@ public final class AppController implements UiIntents, FlowContext {
         return screen.table().tooltip(index, columnId);
     }
 
+    /** Возвращает явные позиции значков, сохраняя проверку ревизии и границ строк. */
+    @Override
+    public ru.cashprediction.core.ui.view.table.DecoratedTooltip decoratedTableTooltip(
+            long revision, int index, String columnId) {
+        assertUiThread();
+        if (screen == null || revision != screen.table().revision() || index < 0 || index >= screen.table().rowCount()) {
+            return ru.cashprediction.core.ui.view.table.DecoratedTooltip.plain("");
+        }
+        return screen.table().decoratedTooltip(index, columnId);
+    }
+
+    /**
+     * Рассчитывает сцену текущей модели графика для области клиента. До первого кадра строит
+     * временную модель из текущего состояния с текущей ревизией, не публикуя её как кадр.
+     * Запрос не блокируется модальностью или завершением приложения.
+     *
+     * @param width ширина области рисования в пикселях
+     * @param height высота области рисования в пикселях
+     * @return сцена, рассчитанная моделью графика
+     * @throws IllegalStateException если вызван вне потока контроллера
+     */
     @Override
     public ChartScene chartScene(double width, double height) {
         assertUiThread();
         return (screen == null ? ChartLayout.model(state(), revision) : screen.chart()).layout(width, height);
     }
 
+    /**
+     * Передаёт координаты указателя текущей модели графика только при совпадении её ревизии.
+     * Запрос не блокируется модальностью или завершением приложения.
+     *
+     * @param revision ревизия графика у клиента
+     * @param x координата указателя по горизонтали
+     * @param y координата указателя по вертикали
+     * @param width ширина области рисования
+     * @param height высота области рисования
+     * @return наведение или пустое значение при отсутствии кадра, другой ревизии,
+     *         отсутствии данных либо указателе вне области построения
+     * @throws IllegalStateException если вызван вне потока контроллера
+     */
     @Override
     public Optional<ChartHover> chartHover(long revision, double x, double y, double width, double height) {
         assertUiThread();
@@ -515,18 +687,48 @@ public final class AppController implements UiIntents, FlowContext {
                 : screen.chart().hover(x, y, width, height);
     }
 
+    /**
+     * Строит карточку дня из текущего состояния с учётом фильтров событий и валюты плана.
+     * При отсутствии прогноза построитель возвращает карточку без событий и баланса.
+     * Запрос не блокируется модальностью или завершением приложения.
+     *
+     * @param date день карточки
+     * @return модель карточки дня
+     * @throws IllegalStateException если вызван вне потока контроллера
+     * @throws NullPointerException если date равен {@code null}
+     */
     @Override
     public DayCardModel dayCard(LocalDate date) {
         assertUiThread();
         return PopupBuilders.dayCard(state(), date);
     }
 
+    /**
+     * Строит спарклайн карточки сводки из текущего состояния; построитель проверяет известность id.
+     * При отсутствии данных возвращает модель без точек с пояснением.
+     * Запрос не блокируется модальностью или завершением приложения.
+     *
+     * @param cardId id карточки из каталога сводки
+     * @return модель спарклайна
+     * @throws IllegalStateException если вызван вне потока контроллера
+     * @throws IllegalArgumentException если карточка неизвестна
+     */
     @Override
     public SparklineModel sparkline(String cardId) {
         assertUiThread();
         return PopupBuilders.sparkline(state(), cardId);
     }
 
+    /**
+     * Строит календарь из шести недель с понедельника, отмечая выбранный день и сегодня по часам окружения.
+     * Запрос не блокируется модальностью или завершением приложения.
+     *
+     * @param month показываемый месяц
+     * @param selected выбранная дата или {@code null}, если выбора нет
+     * @return модель календаря с 42 днями
+     * @throws IllegalStateException если вызван вне потока контроллера
+     * @throws NullPointerException если month равен {@code null}
+     */
     @Override
     public CalendarModel calendar(YearMonth month, LocalDate selected) {
         assertUiThread();
@@ -535,8 +737,25 @@ public final class AppController implements UiIntents, FlowContext {
 
     /** {@inheritDoc} */
     @Override public PlanDocument document() { return document; }
+
+    /** {@inheritDoc} */
+    @Override public PlanCommands planCommands() { return planCommands; }
+
+    /** {@inheritDoc} */
+    @Override public PlanStorage planStorage() { return planStorage; }
     /** {@inheritDoc} */
     @Override public SessionRecorder recorder() { return recorder; }
+
+    /**
+     * Сохраняет последний уже захваченный снимок при внешнем завершении JVM.
+     * Вызывается из shutdown hook без обращения к UI и без отметки корректного выхода.
+     * До установки рекордера ничего не делает; закрытый рекордер сам запрещает повторную запись.
+     * Это best-effort запись, а не обещание захватить ещё не обработанный ввод или ограничить время дискового IO.
+     */
+    public void saveShutdownSnapshot() {
+        SessionRecorder current = recorder;
+        if (current != null) current.saveShutdownSnapshot();
+    }
     /** {@inheritDoc} */
     @Override public FileFlow files() { return fileFlow; }
     /** {@inheritDoc} */
@@ -677,13 +896,36 @@ public final class AppController implements UiIntents, FlowContext {
         Placement effective = placement == null ? Placement.centered(owner) : placement;
         Consumer<Object> callback = onResult == null ? ignored -> { } : onResult;
         FormSession result = new FormSession(request.type(), request.modal(), request.logic(),
-                new FormContext(id, owner, request.context(), state()), new FormSession.Host() {
+                new FormContext(id, owner, request.context(), state(), document.forecastService()), new FormSession.Host() {
+            /**
+             * Включает показанную форму в запись сеанса, если рекордер уже создан.
+             * @param form показанный сеанс формы
+             */
             @Override public void registered(FormSession form) { if (recorder != null) recorder.register(form); }
+            /**
+             * Убирает форму из записи при наличии рекордера, затем удаляет окно и его дочерние окна
+             * из состояния контроллера. Ошибка рекордера прерывает последующее удаление.
+             * @param form закрытый сеанс формы
+             */
             @Override public void unregistered(FormSession form) {
                 if (recorder != null) recorder.unregister(form);
                 removeWindow(form.windowId());
             }
+            /**
+             * Помечает общий снимок изменённым после изменения значений или геометрии формы.
+             * Без рекордера ничего не делает.
+             * @param form сеанс, сообщивший об изменении
+             */
             @Override public void touched(FormSession form) { if (recorder != null) recorder.touch(); }
+            /**
+             * Передаёт результат продолжению формы и после успеха удаляет окно.
+             * На время продолжения отмечает закрываемую форму, чтобы новое окно получило живого владельца.
+             * При ошибке продолжения восстанавливает эту отметку и передаёт ошибку сеансу, не удаляя форму;
+             * сеанс может оставить её открытой и показать проблему. После выхода вызов игнорируется.
+             * @param form закрываемый сеанс
+             * @param value результат закрытия или {@code null} при отмене
+             * @throws RuntimeException если продолжение не смогло применить результат
+             */
             @Override public void closed(FormSession form, Object value) {
                 if (exited) return;
                 String previous = closingResultId;
@@ -692,7 +934,22 @@ public final class AppController implements UiIntents, FlowContext {
                 finally { closingResultId = previous; }
                 removeWindow(form.windowId());
             }
+            /**
+             * Передаёт действие продолжению, сохраняя форму открытой; после выхода ничего не делает.
+             * Ошибка продолжения передаётся сеансу для показа проблемы без применения обновлений полей.
+             * @param form сеанс, запросивший действие
+             * @param value действие формы
+             * @throws RuntimeException если продолжение не смогло выполнить действие
+             */
             @Override public void applied(FormSession form, Object value) { if (!exited) callback.accept(value); }
+            /**
+             * Открывает дочернее окно общим фабричным маршрутом, заменяя id новым и назначая родительскую
+             * форму владельцем. Предупреждение фабрики превращает в ошибку для вызывающего сеанса.
+             * После выхода ничего не открывает.
+             * @param parent сеанс родительской формы
+             * @param child описание дочернего окна с временным id
+             * @throws IllegalArgumentException если фабрика сообщает о недопустимом состоянии окна
+             */
             @Override public void openChild(FormSession parent, WindowState child) {
                 if (exited) return;
                 WindowState prepared = child.withIds(nextWindowId(), parent.windowId());
@@ -742,7 +999,16 @@ public final class AppController implements UiIntents, FlowContext {
             Consumer<StatefulWindow> onShown, Consumer<String> onButton) {
         discardQuickEdit();
         AlertSession alert = spec.restorable() ? new AlertSession(id, owner, spec, new AlertSession.Host() {
+            /**
+             * Включает показанное восстанавливаемое сообщение в запись сеанса при наличии рекордера.
+             * @param session показанный сеанс сообщения
+             */
             @Override public void registered(AlertSession session) { if (recorder != null) recorder.register(session); }
+            /**
+             * Убирает закрытое сообщение из записи сеанса при наличии рекордера.
+             * Удаление окна из состояния контроллера выполняется отдельным маршрутом закрытия сообщения.
+             * @param session закрытый сеанс сообщения
+             */
             @Override public void unregistered(AlertSession session) { if (recorder != null) recorder.unregister(session); }
         }) : null;
         if (alert != null && restored != null) alert.applyState(restored);

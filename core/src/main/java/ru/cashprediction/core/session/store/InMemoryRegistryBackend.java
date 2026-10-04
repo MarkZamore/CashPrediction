@@ -37,11 +37,16 @@ public final class InMemoryRegistryBackend implements RegistryBackend {
     public InMemoryRegistryBackend() {
     }
 
+    /** {@inheritDoc} */
     @Override
     public synchronized String get(String key) {
         return failure != null ? null : values.get(key);
     }
 
+    /**
+     * {@inheritDoc}
+     * <p>При имитируемом отказе проверяет длины, но не меняет содержимое узла.</p>
+     */
     @Override
     public synchronized void put(String key, String value) {
         if (key.length() > MAX_KEY_LENGTH) {
@@ -56,6 +61,10 @@ public final class InMemoryRegistryBackend implements RegistryBackend {
         }
     }
 
+    /**
+     * {@inheritDoc}
+     * <p>При имитируемом отказе содержимое узла не меняется.</p>
+     */
     @Override
     public synchronized void remove(String key) {
         if (failure == null) {
@@ -63,11 +72,20 @@ public final class InMemoryRegistryBackend implements RegistryBackend {
         }
     }
 
+    /**
+     * {@inheritDoc}
+     * <p>Возвращает отдельный список в порядке первой записи ключей.</p>
+     */
     @Override
     public synchronized List<String> keys() {
         return failure != null ? List.of() : new ArrayList<>(values.keySet());
     }
 
+    /**
+     * Учитывает вызов сброса; для узла в памяти запись на диск не требуется.
+     *
+     * @throws SessionStoreException если отказ задан через {@link #failWith(String)}
+     */
     @Override
     public synchronized void flush() throws SessionStoreException {
         flushCount++;
@@ -76,11 +94,18 @@ public final class InMemoryRegistryBackend implements RegistryBackend {
         }
     }
 
+    /**
+     * Проверяет, задан ли имитируемый отказ хранилища.
+     *
+     * @return {@code true}, если причина отказа отсутствует; {@link #failWith(String)}
+     *         с аргументом {@code null} восстанавливает доступность без перезапуска
+     */
     @Override
     public synchronized boolean isAvailable() {
         return failure == null;
     }
 
+    /** {@inheritDoc} */
     @Override
     public synchronized String unavailableReason() {
         return failure == null ? "" : failure;

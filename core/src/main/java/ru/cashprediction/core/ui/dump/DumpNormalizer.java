@@ -11,6 +11,8 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.Collections;
 import java.lang.reflect.ParameterizedType;
+import ru.cashprediction.core.io.AppInfo;
+import ru.cashprediction.core.ui.text.UiText;
 
 /**
  * Нормализация дампа перед сравнением (архитектура §6.1): время {@code HH:mm:ss} → {@code <time>}, путь CashMemory →
@@ -23,6 +25,8 @@ public final class DumpNormalizer {
     private static final Pattern CLOCK = Pattern.compile("(?<![0-9])(?:[01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9](?![0-9])");
     /** Версия среды меняется между локальным JDK и CI, но нормализуется только в служебной строке about. */
     private static final Pattern ABOUT_JAVA = Pattern.compile("(?m)(, Java )[0-9][A-Za-z0-9.+_-]*(\\.$)");
+    /** Слоты общего шаблона окна «О программе», включая единственный слот версии {0}. */
+    private static final Pattern ABOUT_ARGUMENT = Pattern.compile("\\{([0-3])\\}");
 
     private DumpNormalizer() {
     }
@@ -163,6 +167,32 @@ public final class DumpNormalizer {
     }
 
     /**
+     * Заменяет только точную текущую версию в слоте {0} полного локализованного шаблона.
+     * Остальные аргументы и тексты сохраняются; отдельный параметр позволяет проверить строки релиза
+     * и разработки без подмены метаданных сборки. Вызывается до нормализации путей и времени.
+     *
+     * @param content исходное содержимое окна
+     * @param currentVersion точный текст версии текущей сборки
+     * @return содержимое с {@code <app-version>} либо исходное содержимое при несовпадении
+     */
+    static String normalizeAboutAppVersion(String content, String currentVersion) {
+        String template = UiText.template("alert.about.content").orElseThrow();
+        Matcher arguments = ABOUT_ARGUMENT.matcher(template);
+        StringBuilder expression = new StringBuilder();
+        int offset = 0;
+        while (arguments.find()) {
+            expression.append(Pattern.quote(template.substring(offset, arguments.start())));
+            expression.append(arguments.group(1).equals("0")
+                    ? "(" + Pattern.quote(currentVersion) + ")" : "(?s:.*?)");
+            offset = arguments.end();
+        }
+        expression.append(Pattern.quote(template.substring(offset)));
+        Matcher match = Pattern.compile(expression.toString()).matcher(content);
+        if (!match.matches()) return content;
+        return content.substring(0, match.start(1)) + "<app-version>" + content.substring(match.end(1));
+    }
+
+    /**
      * Копирует закрытую схему UiDump, сохраняя порядок списков и ключи идентификаторов.
      * Обход компонентов записи автоматически охватывает новые вложенные тексты схемы;
      * сторонние записи и произвольные объекты намеренно не преобразуются.
@@ -205,9 +235,14 @@ public final class DumpNormalizer {
                     }
                     values[index] = Math.round(coordinate / 2.0) * 2.0;
                 } else {
+                    // JavaFX: Alert → Swing: JOptionPane → Web: dialog
+                    boolean aboutContent = value instanceof UiDump.Alert alert && "about".equals(alert.purpose())
+                            && component.getName().equals("content");
+                    if (aboutContent) {
+                        raw = normalizeAboutAppVersion((String) raw, AppInfo.displayVersion());
+                    }
                     values[index] = normalizeValue(raw, cashMemory, registryNode);
-                    if (value instanceof UiDump.Alert alert && "about".equals(alert.purpose())
-                            && component.getName().equals("content")) {
+                    if (aboutContent) {
                         values[index] = ABOUT_JAVA.matcher((String) values[index]).replaceAll("$1<java>$2");
                     }
                 }

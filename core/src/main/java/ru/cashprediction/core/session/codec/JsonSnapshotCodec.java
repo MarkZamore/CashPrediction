@@ -44,16 +44,41 @@ public final class JsonSnapshotCodec implements SnapshotCodec<String> {
     public JsonSnapshotCodec() {
     }
 
+    /**
+     * Возвращает название JSON-формата для сообщений о снимке.
+     *
+     * @return {@code JSON}
+     */
     @Override
     public String formatName() {
         return "JSON";
     }
 
+    /**
+     * Записывает снимок в компактный JSON с его версией схемы, состоянием главного окна,
+     * текстом плана и состояниями открытых окон. Строки экранирует JSON-писатель;
+     * неизвестный тип окна и отсутствующие границы записываются как {@code null}.
+     *
+     * @param snapshot снимок для последующего восстановления
+     * @return JSON-текст снимка
+     */
     @Override
     public String encode(SessionSnapshot snapshot) {
         return JsonWriter.write(toJsonObject(snapshot));
     }
 
+    /**
+     * Разбирает JSON-объект снимка и проверяет поддерживаемую версию схемы, типы полей,
+     * момент сохранения и инварианты состояний. Неизвестный тип окна сохраняется как
+     * {@code null}; отсутствующие необязательные поля получают значения по умолчанию.
+     * Метод возвращает данные для восстановления, но не открывает окна и не читает файл плана.
+     *
+     * @param encoded JSON-текст снимка
+     * @return разобранный снимок
+     * @throws SnapshotFormatException если JSON повреждён, схема не поддерживается
+     *                                 или структура и значения полей некорректны;
+     *                                 сообщение локализовано, ошибки парсера сохраняются как причина
+     */
     @Override
     public SessionSnapshot decode(String encoded) throws SnapshotFormatException {
         Map<String, Object> root;

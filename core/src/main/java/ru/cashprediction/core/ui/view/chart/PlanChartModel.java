@@ -99,11 +99,25 @@ final class PlanChartModel implements ChartModel {
         this.dayCards = Objects.requireNonNull(dayCards, "dayCards");
     }
 
+    /**
+     * Возвращает ревизию снимка, заданную при создании модели графика.
+     * @return номер для сопоставления сцены с состоянием приложения
+     */
     @Override
     public long revision() {
         return revision;
     }
 
+    /**
+     * Лениво получает данные графика и строит сцену для заданного размера в порядке рисования.
+     * Размер области построения ограничивает снизу одним пикселем по каждой оси;
+     * неконечные и неположительные размеры при расчёте геометрии считает нулевыми.
+     * Зоны подсказок маркеров ставит перед зонами столбцов, чтобы маркеры имели приоритет.
+     * При отсутствии данных возвращает сцену с текстом пустого состояния без примитивов.
+     * @param width ширина области рисования в пикселях
+     * @param height высота области рисования в пикселях
+     * @return сцена с преобразованием координат, примитивами, легендой и зонами подсказок
+     */
     @Override
     public ChartScene layout(double width, double height) {
         ChartData d = data();
@@ -219,11 +233,27 @@ final class PlanChartModel implements ChartModel {
         return new ChartScene(width, height, plot, primitives, d.legend(), hits, "", ColorToken.TEXT_MUTED);
     }
 
+    /**
+     * Передаёт построителю карточки дня снимок состояния этой модели и выбранную дату.
+     * Сам метод не ограничивает дату горизонтом графика.
+     * @param date дата карточки, не {@code null}
+     * @return модель карточки, полученная от переданного при создании построителя
+     */
     @Override
     public DayCardModel dayCard(LocalDate date) {
         return dayCards.apply(state, Objects.requireNonNull(date, "date"));
     }
 
+    /**
+     * Для указателя внутри области построения выбирает день по горизонтальной координате.
+     * Ставит вертикаль и точку баланса в середине дня, а карточку смещает от указателя
+     * на {@value #CARD_OFFSET} пикселей по обеим осям. Граница области включена в проверку.
+     * @param x горизонтальная координата указателя в пикселях
+     * @param y вертикальная координата указателя в пикселях
+     * @param width ширина области рисования в пикселях
+     * @param height высота области рисования в пикселях
+     * @return модель наведения или пусто, если данных нет либо указатель вне области построения
+     */
     @Override
     public Optional<ChartHover> hover(double x, double y, double width, double height) {
         ChartData d = data();

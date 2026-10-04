@@ -34,6 +34,7 @@ public final class SwingAlerts implements WindowHandle {
         this.port = port; this.id = id; this.session = session; this.onButton = onButton;
         // JavaFX: Alert → Swing: JDialog с иконкой JOptionPane → Web: dialog
         dialog = new JDialog(session == null ? port.visibleOwner() : port.owner(session.ownerId()), spec.windowTitle(), Dialog.ModalityType.APPLICATION_MODAL);
+        dialog.setIconImage(SwingIcons.application());
         dialog.setDefaultCloseOperation(WindowConstants.DO_NOTHING_ON_CLOSE);
         // JavaFX: DialogPane → Swing: JPanel → Web: div.dialog-pane
         JPanel panel = new JPanel(new BorderLayout(10, 10)); panel.setBorder(BorderFactory.createEmptyBorder(16, 16, 16, 16)); panel.setBackground(SwingLook.color(ColorToken.BG_SURFACE));
@@ -42,6 +43,7 @@ public final class SwingAlerts implements WindowHandle {
         JPanel center = new JPanel(); center.setLayout(new BoxLayout(center, BoxLayout.Y_AXIS)); center.setOpaque(false);
         center.add(content); center.add(Box.createVerticalStrut(8)); center.add(detailsLink); center.add(detailsScroll); panel.add(center);
         details.setEditable(false); details.setFont(SwingLook.font(FontToken.MONO));
+        SwingIcons.decorate(detailsLink);
         detailsScroll.setPreferredSize(new Dimension(Math.max(430, spec.minWidth() - 30), 250));
         detailsLink.addActionListener(e -> { expanded = !expanded; detailsVisibility(); fitContent(); });
         buttonBar.setLayout(new BoxLayout(buttonBar, BoxLayout.X_AXIS)); buttonBar.setOpaque(false); panel.add(buttonBar, BorderLayout.SOUTH);
@@ -75,9 +77,12 @@ public final class SwingAlerts implements WindowHandle {
         pane.setMinimumSize(new Dimension(spec.minWidth(), pane.getMinimumSize().height));
         header.setText(SwingLook.html(spec.header(), spec.minWidth() - 80)); header.putClientProperty("cp.text", spec.header());
         content.setText(SwingLook.html(spec.content(), spec.minWidth() - 32)); content.putClientProperty("cp.text", spec.content());
-        glyph.setIcon(UIManager.getIcon(switch (spec.kind()) { case INFORMATION -> "OptionPane.informationIcon"; case WARNING -> "OptionPane.warningIcon"; case ERROR -> "OptionPane.errorIcon"; case CONFIRMATION -> "OptionPane.questionIcon"; }));
-        glyph.setText(spec.glyph()); glyph.setFont(SwingLook.font(FontToken.HEADER).deriveFont(26f)); glyph.setForeground(SwingLook.color(ColorToken.ACCENT));
-        if (!glyph.getText().isEmpty()) glyph.setIcon(null);
+        ColorToken iconColor = switch (spec.kind()) {
+            case WARNING -> ColorToken.WARN;
+            case ERROR -> ColorToken.EXPENSE;
+            default -> ColorToken.ACCENT;
+        };
+        SwingIcons.header(glyph, spec.glyph(), spec.kind().webGlyph(), iconColor, DesignTokens.ALERT_ICON_SIZE);
         details.setText(spec.details());
         // Новый текст показывается с начала: caret в конце иначе прокручивает настоящий viewport вправо и вниз.
         details.setCaretPosition(0);

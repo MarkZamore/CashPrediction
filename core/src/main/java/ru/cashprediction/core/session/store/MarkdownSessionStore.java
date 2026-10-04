@@ -95,11 +95,19 @@ public final class MarkdownSessionStore implements SessionStore {
         return planFile;
     }
 
+    /**
+     * Возвращает машинный идентификатор хранилища web-сервера.
+     * @return {@code server}
+     */
     @Override
     public String id() {
         return "server";
     }
 
+    /**
+     * Возвращает название хранилища из общей локализации.
+     * @return название для пользователя
+     */
     @Override
     public String title() {
         return Texts.get("session.store.title.server");
@@ -115,11 +123,22 @@ public final class MarkdownSessionStore implements SessionStore {
         return true;
     }
 
+    /**
+     * Возвращает пустую причину: файловые ошибки относятся к отдельным операциям.
+     * @return пустая строка
+     */
     @Override
     public String unavailableReason() {
         return "";
     }
 
+    /**
+     * Запоминает маркер и перезаписывает документ с читаемым снимком и прежней ссылкой на план.
+     * Если старый документ не читается или повреждён, записывает только маркер.
+     * Файл плана не меняется; ошибка записи сохраняется в {@link #lastError()},
+     * а новый маркер остаётся в памяти даже при неудаче.
+     * @param newMarker маркер начавшегося сеанса, не {@code null}
+     */
     @Override
     public synchronized void markDirty(SessionMarker newMarker) {
         Objects.requireNonNull(newMarker, "marker");
@@ -128,6 +147,11 @@ public final class MarkdownSessionStore implements SessionStore {
         rewriteMarker(newMarker);
     }
 
+    /**
+     * Закрывает текущий маркер, сохраняя читаемый снимок и ссылку на отдельный план.
+     * Без текущего маркера ничего не записывает. Ошибку записи сохраняет в {@link #lastError()};
+     * закрытый маркер остаётся в памяти даже при неудаче.
+     */
     @Override
     public synchronized void markClean() {
         SessionMarker current = currentMarker();
@@ -138,11 +162,26 @@ public final class MarkdownSessionStore implements SessionStore {
         rewriteMarker(marker);
     }
 
+    /**
+     * Читает маркер из документа сессии, не открывая отдельный файл плана.
+     * @return маркер или пусто при отсутствии маркера, файла либо при ошибке чтения или формата
+     */
     @Override
     public synchronized Optional<SessionMarker> readMarker() {
         return readQuietly().map(SessionDocument::marker);
     }
 
+    /**
+     * Записывает снимок с текущим маркером: сначала несохранённый план, затем документ сессии.
+     * Документ сессии фиксирует ссылку на уже записанный план; для чистого плана отдельный
+     * файл удаляется после записи документа. Каждый файл заменяется через {@link AtomicFiles},
+     * с обычным перемещением при отсутствии поддержки атомарного; общей транзакции двух файлов нет.
+     * При неудаче записи сессии новый план может остаться рядом со старым документом,
+     * а ошибка удаления плана возможна уже после сохранения нового документа. Отката нет.
+     * Успех сбрасывает {@link #lastError()}, ошибки ввода-вывода передаются исключением.
+     * @param snapshot снимок, не {@code null}
+     * @throws SessionStoreException если запись файла или удаление ненужного плана не удалось
+     */
     @Override
     public synchronized void save(SessionSnapshot snapshot) throws SessionStoreException {
         Objects.requireNonNull(snapshot, "snapshot");
@@ -164,6 +203,11 @@ public final class MarkdownSessionStore implements SessionStore {
         }
     }
 
+    /**
+     * Читает снимок и, при наличии ссылки для несохранённого плана, подставляет текст из {@link #planFile()}.
+     * @return снимок или пусто, если файла сессии либо снимка в нём нет
+     * @throws SessionStoreException если документ повреждён, не читается или требуемый файл плана отсутствует
+     */
     @Override
     public synchronized Optional<SessionSnapshot> load() throws SessionStoreException {
         String text = readText();
@@ -189,11 +233,20 @@ public final class MarkdownSessionStore implements SessionStore {
         }
     }
 
+    /**
+     * Получает время снимка из документа сессии без проверки отдельного файла плана.
+     * @return время или пусто при отсутствии снимка либо ошибке чтения или формата документа
+     */
     @Override
     public synchronized Optional<Instant> lastSavedAt() {
         return readQuietly().map(SessionDocument::snapshot).map(SessionSnapshot::savedAt);
     }
 
+    /**
+     * Последовательно удаляет файл сессии и файл плана, затем сбрасывает маркер в памяти.
+     * Отсутствующие файлы допустимы. При ошибке удаления отката нет, маркер в памяти
+     * не сбрасывается, а причина сохраняется в {@link #lastError()}.
+     */
     @Override
     public synchronized void clear() {
         try {
@@ -207,6 +260,12 @@ public final class MarkdownSessionStore implements SessionStore {
         }
     }
 
+    /**
+     * Возвращает сохранённую ошибку записи маркера или удаления файлов.
+     * Успешная запись маркера, сохранение снимка или очистка сбрасывает ошибку;
+     * чтение и операции без действия её не меняют.
+     * @return сообщение или пусто, если сохранённой ошибки нет
+     */
     @Override
     public synchronized Optional<String> lastError() {
         return Optional.ofNullable(lastError);

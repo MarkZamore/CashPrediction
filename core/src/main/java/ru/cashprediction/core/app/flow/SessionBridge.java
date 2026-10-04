@@ -4,9 +4,7 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.function.Consumer;
 import java.nio.file.Path;
-import java.nio.file.Files;
 import java.nio.file.InvalidPathException;
-import java.io.IOException;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -20,11 +18,12 @@ import ru.cashprediction.core.document.ViewState;
 import ru.cashprediction.core.document.ViewMode;
 import ru.cashprediction.core.document.PeriodChoice;
 import ru.cashprediction.core.forecast.WhatIf;
-import ru.cashprediction.core.io.PlanRepository;
+import ru.cashprediction.core.diagnostics.Severity;
+import ru.cashprediction.core.service.storage.FilePlanStorage;
+import ru.cashprediction.core.service.storage.PlanStorage;
 import ru.cashprediction.core.markdown.PlanMarkdownReader;
 import ru.cashprediction.core.markdown.PlanMarkdownWriter;
 import ru.cashprediction.core.markdown.ReadResult;
-import ru.cashprediction.core.markdown.MarkdownParseException;
 import ru.cashprediction.core.model.Plan;
 import ru.cashprediction.core.model.Money;
 import ru.cashprediction.core.ui.text.UiText;
@@ -127,21 +126,19 @@ public final class SessionBridge implements SnapshotSource, RestoreTarget {
             return;
         }
         if (file != null) {
-            try {
-                if (!Files.isRegularFile(file)) {
-                    warn.accept(UiText.get("restore.warn.planMissing", file));
-                } else {
-                    ReadResult result = new PlanRepository(context.environment().cashMemory())
-                            .load(file, context.environment().clock().today());
-                    replace(result, file, false);
-                    if (result.hasWarnings()) warn.accept(UiText.get("restore.warn.planDiag", file));
-                    return;
+            PlanStorage.Reference reference = FilePlanStorage.reference(file);
+            var read = context.planStorage().read(reference, context.environment().clock().today());
+            if (read.succeeded()) {
+                var snapshot = read.value();
+                context.document().replace(snapshot.plan(), file, false, snapshot.diagnostics());
+                // Запоминается версия прочитанного снимка, а не возможной следующей внешней правки.
+                context.externalChanges().remember(snapshot.reference(), snapshot.version());
+                if (snapshot.diagnostics().stream().anyMatch(value -> value.severity() != Severity.INFO)) {
+                    warn.accept(UiText.get("restore.warn.planDiag", file));
                 }
-            } catch (MarkdownParseException e) {
-                warn.accept(UiText.get("restore.warn.notPlan", file, e.getMessage()));
-            } catch (IOException e) {
-                warn.accept(UiText.get("restore.warn.readPlan", file, e.getMessage()));
+                return;
             }
+            warnStorageProblem(read.problem(), file, warn);
             warn.accept(UiText.get("restore.warn.emptyPlan", file));
         }
         context.document().replace(Plan.empty(UiText.get("plan.defaultName"),
@@ -149,7 +146,22 @@ public final class SessionBridge implements SnapshotSource, RestoreTarget {
         context.externalChanges().forget();
     }
 
-    /** Устанавливает прочитанный документ и базовую метку внешних изменений. */
+    /** Сохраняет прежние предупреждения чистого снимка, добавляя локализованную причину конфликта версии. */
+    private void warnStorageProblem(PlanStorage.Problem problem, Path file, Consumer<String> warn) {
+        String detail = problem.detail();
+        if (detail.isBlank()) {
+            detail = problem.code() == PlanStorage.Code.CONFLICT
+                    ? UiText.get("alert.external.header", PlanMarkdownReader.nameWithoutExtension(file))
+                    : UiText.get("err.generic");
+        }
+        switch (problem.code()) {
+            case MISSING -> warn.accept(UiText.get("restore.warn.planMissing", file));
+            case CORRUPT -> warn.accept(UiText.get("restore.warn.notPlan", file, detail));
+            case CONFLICT, IO_ERROR -> warn.accept(UiText.get("restore.warn.readPlan", file, detail));
+        }
+    }
+
+    /** Устанавливает план из сырого текста снимка; у хранилища только наблюдается версия, без загрузки плана и записи. */
     private void replace(ReadResult result, Path file, boolean dirty) {
         context.document().replace(result.plan(), file, dirty, result.diagnostics());
         context.externalChanges().remember(file);

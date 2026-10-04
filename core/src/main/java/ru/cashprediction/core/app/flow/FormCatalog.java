@@ -5,9 +5,19 @@ import ru.cashprediction.core.session.WindowState;
 import java.time.LocalDate;
 import java.util.Objects;
 import java.util.Set;
+import java.util.UUID;
+import java.nio.file.attribute.FileTime;
 import ru.cashprediction.core.session.WindowType;
 import ru.cashprediction.core.model.RuleId;
 import ru.cashprediction.core.model.TxId;
+import ru.cashprediction.core.io.PlanFileInfo;
+import ru.cashprediction.core.service.plan.PlanCommand;
+import ru.cashprediction.core.service.plan.PlanCommandRequest;
+import ru.cashprediction.core.service.plan.PlanCommandResult;
+import ru.cashprediction.core.service.plan.PlanCommands;
+import ru.cashprediction.core.service.storage.FilePlanStorage;
+import ru.cashprediction.core.service.storage.PlanStorage;
+import ru.cashprediction.core.text.Texts;
 import ru.cashprediction.core.ui.form.FormLogic;
 import ru.cashprediction.core.ui.forms.ops.AdjustmentForm;
 import ru.cashprediction.core.ui.forms.ops.OneTimeForm;
@@ -25,7 +35,7 @@ import ru.cashprediction.core.ui.alert.AlertCatalog;
 import ru.cashprediction.core.ui.form.*;
 import java.util.List;
 import java.util.Map;
-import ru.cashprediction.core.io.PlanRepository;
+import ru.cashprediction.core.ui.text.UiFormats;
 import ru.cashprediction.core.ui.text.UiText;
 import ru.cashprediction.core.ui.view.table.LazyTableModel;
 
@@ -49,7 +59,8 @@ import ru.cashprediction.core.ui.view.table.LazyTableModel;
  *   <tr><td>QUICK_EDIT_POPUP</td><td>{@code QuickEditForm} (строки нет в таблице — {@code restore.warn.rowHidden})</td></tr>
  * </table>
  *
- * <p>Класс без состояния, потокобезопасен.</p>
+ * <p>Класс не хранит состояния. Службы принадлежат контроллеру; вызов выполняется в его потоке.
+ * Предпросмотр использует службу прогноза владельца команд и не создаёт другой документ.</p>
  */
 public final class FormCatalog {
 
@@ -61,12 +72,16 @@ public final class FormCatalog {
      *
      * @param state окно из снимка
      * @param app   состояние приложения после загрузки плана
+     * @param commands общая служба команд текущего документа, включая внедрённый расчёт прогноза
+     * @param storage общая служба сохранённых планов
      * @return запрос открытия
-     * @throws IllegalArgumentException если окно восстановить нельзя; сообщение — готовый текст {@code restore.warn.*}
+     * @throws IllegalArgumentException если окно восстановить нельзя; сообщение берётся из общего каталога
      */
-    public static FormRequest forRestore(WindowState state, AppState app) {
+    public static FormRequest forRestore(WindowState state, AppState app, PlanCommands commands, PlanStorage storage) {
         Objects.requireNonNull(state, "state");
         Objects.requireNonNull(app, "app");
+        Objects.requireNonNull(commands, "commands");
+        Objects.requireNonNull(storage, "storage");
         if (state.type() == null) throw new IllegalArgumentException("state.type");
         FormLogic logic = switch (state.type()) {
             // JavaFX: Dialog → Swing: JDialog → Web: dialog
@@ -113,12 +128,12 @@ public final class FormCatalog {
                 String purpose = state.contextValue(WindowType.CONTEXT_PURPOSE);
                 // JavaFX: ChoiceDialog → Swing: JDialog → Web: dialog
                 if (ChoiceForms.PURPOSE_CURRENCY.equals(purpose)) yield ChoiceForms.currency();
-                if (OpenPlanForm.PURPOSE.equals(purpose)) yield new OpenPlanForm(new PlanRepository(app.plansFolder()).list());
+                if (OpenPlanForm.PURPOSE.equals(purpose)) yield openPlanChoice(app, storage);
                 throw failure("restore.warn.unknownPurpose", purpose);
             }
             case CSV_EXPORT -> new CsvExportForm();
             // JavaFX: Alert → Swing: JOptionPane → Web: dialog
-            case ALERT -> new ConfirmationLogic(confirmation(state, app));
+            case ALERT -> new ConfirmationLogic(confirmation(state, app, commands));
         };
         java.util.Map<String, String> fields = new java.util.LinkedHashMap<>();
         state.fields().forEach((id, value) -> fields.put(id,
@@ -127,7 +142,7 @@ public final class FormCatalog {
     }
 
     /** Пересоздаёт восстанавливаемое подтверждение из назначения и текущего плана. */
-    private static ConfirmForms.Confirmation confirmation(WindowState state, AppState app) {
+    private static ConfirmForms.Confirmation confirmation(WindowState state, AppState app, PlanCommands commands) {
         String purpose = state.contextValue(WindowType.CONTEXT_PURPOSE);
         String target = state.contextValue(WindowType.CONTEXT_TARGET_ID);
         return switch (purpose) {
@@ -142,15 +157,43 @@ public final class FormCatalog {
             case "actualize" -> {
                 if (!app.document().forecastAvailable() || !app.today().isAfter(app.document().plan().startDate()))
                     throw failure("s2.capture.actualizeUnavailable");
-                var draft = new ru.cashprediction.core.document.PlanDocument(app.document().plan(), null, app::today);
-                draft.actualize(app.today(), null);
-                yield new ConfirmForms.Confirmation(AlertCatalog.actualize(app.today(), draft.plan().startBalance(),
-                        app.document().plan().currency()), "actualize", "document.edit.actualize", plan -> draft.plan(), "status.msg.actualized");
+                PlanCommandRequest request;
+                PlanCommandResult preview;
+                try {
+                    request = new PlanCommandRequest(UUID.randomUUID(), commands.snapshot().revision(),
+                            Texts.get("document.edit.actualize", UiFormats.date(app.today())), new PlanCommand.Actualize(app.today(), null));
+                    preview = commands.preview(request);
+                } catch (RuntimeException error) {
+                    throw new IllegalArgumentException(UiText.get("s2.capture.actualizeUnavailable"), error);
+                }
+                if (preview == null || preview.status() != PlanCommandResult.Status.PREVIEW
+                        || !request.requestId().equals(preview.requestId())
+                        || preview.snapshot().revision() != request.expectedRevision()) {
+                    throw failure("s2.capture.actualizeUnavailable");
+                }
+                // JavaFX: Alert → Swing: JOptionPane → Web: dialog.
+                // Подтверждение хранит только описание; фабрика выполняет типизированную команду после ответа.
+                yield new ConfirmForms.Confirmation(AlertCatalog.actualize(app.today(), preview.snapshot().plan().startBalance(),
+                        app.document().plan().currency()), "actualize", "document.edit.actualize", null, "status.msg.actualized");
             }
             case "applyWhatIf" -> whatIfConfirmation(app);
             case "clearSnapshots" -> ConfirmForms.clearSnapshots();
             default -> throw failure("restore.warn.unknownPurpose", purpose);
         };
+    }
+
+    /** Преобразует непрозрачные ссылки только для прежней файловой формы; порядок и метаданные задаёт хранение. */
+    private static OpenPlanForm openPlanChoice(AppState app, PlanStorage storage) {
+        List<PlanFileInfo> plans;
+        try {
+            plans = storage.list(FilePlanStorage.collection(app.plansFolder())).requireValue().stream()
+                    .map(entry -> new PlanFileInfo(entry.name(), FilePlanStorage.path(entry.reference()),
+                            FileTime.from(entry.modifiedAt()))).toList();
+        } catch (RuntimeException error) {
+            throw new IllegalArgumentException(Texts.get("io.error.readPlansFolder", app.plansFolder()), error);
+        }
+        // JavaFX: ChoiceDialog → Swing: JDialog → Web: dialog.
+        return new OpenPlanForm(plans);
     }
 
     /** Использует те же подписи и порядок частей «что-если», что и поток инструментов. */

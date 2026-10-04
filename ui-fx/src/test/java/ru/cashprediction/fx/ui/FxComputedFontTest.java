@@ -129,11 +129,178 @@ class FxComputedFontTest {
         assertFalse(port.main.status.getChildren().isEmpty());
         for (Node node : port.main.status.getChildren()) label("status", (Label) node, FontToken.SMALL, false);
     }); }
-    /** Заголовки нативного скина таблицы используют BASE с жирностью заголовка. */
-    @Test void tableHeadersUseActualBoldBaseFont() throws Exception { onFx(() -> {
+    /** Все заголовки нативного скина используют обычный BASE; жирность баланса относится к ячейкам. */
+    @Test void tableHeadersUseActualNormalBaseFont() throws Exception { onFx(() -> {
         var headers = port.main.table.root.lookupAll(".column-header .label"); assertFalse(headers.isEmpty());
-        for (Node node : headers) label("table.header", (Label) node, FontToken.BASE, true);
+        assertEquals(port.main.table.model.columns().size(), headers.size());
+        for (Node node : headers) label("table.header", (Label) node, FontToken.BASE, false);
     }); }
+    /** Вычисленное выравнивание каждого заголовка следует ColumnSpec, включая правые суммы. */
+    @Test void tableHeadersFollowActualColumnAlignment() throws Exception { onFx(() -> {
+        var table = port.main.table;
+        for (var spec : table.model.columns()) {
+            var header = table.root.lookupAll(".column-header").stream()
+                    .filter(javafx.scene.control.skin.TableColumnHeader.class::isInstance)
+                    .map(javafx.scene.control.skin.TableColumnHeader.class::cast)
+                    .filter(h -> h.getTableColumn() == table.columns.get(spec.id())).findFirst().orElseThrow();
+            var painted = assertInstanceOf(Label.class, header.lookup(".label"));
+            assertEquals(switch (spec.align()) {
+                case LEFT -> javafx.geometry.Pos.CENTER_LEFT;
+                case CENTER -> javafx.geometry.Pos.CENTER;
+                case RIGHT -> javafx.geometry.Pos.CENTER_RIGHT;
+            }, painted.getAlignment(), spec.id());
+            assertEquals(spec.title(), painted.getText(), spec.id());
+        }
+    }); }
+    /** Настоящие ячейки продолжают применять ColumnSpec.bold независимо от обычного заголовка. */
+    @Test void columnBoldStillAppliesToActualCells() throws Exception { onFx(() -> {
+        var table = port.main.table;
+        int index = java.util.stream.IntStream.range(0, table.model.rowCount())
+                .filter(i -> !table.model.row(i).rowStyle().bold() && !table.model.row(i).rowStyle().italic()
+                        && table.model.row(i).cellStyles().values().stream().noneMatch(s -> s.bold() || s.italic()))
+                .findFirst().orElseThrow();
+        for (var spec : table.model.columns()) {
+            var column = table.columns.get(spec.id());
+            var cell = column.getCellFactory().call(column);
+            cell.updateTableView(table.root); cell.updateTableColumn(column); cell.updateIndex(index);
+            var painted = assertInstanceOf(Text.class, cell.getProperties().get("cp.paintText"));
+            font("table.cell." + spec.id(), painted.getFont(), FontToken.BASE, spec.bold());
+        }
+    }); }
+    /** Скрытая сцена проверяет только исходный prompt; физический фокус проверяет FxPolishDesktopTest. */
+    @Test void emptyFilterPromptUsesSharedTextAndColor() throws Exception { onFx(() -> {
+        var field = assertInstanceOf(TextField.class, port.main.toolbar.widgets.get("tb.filter"));
+        var model = port.main.model.toolbar().items().stream()
+                .filter(ru.cashprediction.core.ui.menu.ToolbarNode.FilterField.class::isInstance)
+                .map(ru.cashprediction.core.ui.menu.ToolbarNode.FilterField.class::cast).findFirst().orElseThrow();
+        assertEquals(ru.cashprediction.core.ui.text.UiText.get("toolbar.tb.filter.prompt"), model.prompt());
+        String original = field.getText();
+        try {
+            field.setText("");
+            for (int viewport : List.of(1200, 900)) {
+                css(port.main.root, viewport, 800);
+                var prompt = field.lookupAll(".text").stream().filter(Text.class::isInstance).map(Text.class::cast)
+                        .filter(t -> t.getText().equals(model.prompt())).findFirst().orElseThrow();
+                assertEquals(model.prompt(), field.getPromptText()); assertTrue(prompt.isVisible());
+                assertEquals(1, prompt.getOpacity());
+                assertEquals(javafx.scene.paint.Color.web(ru.cashprediction.core.ui.token.ColorToken.TEXT_MUTED.hex()), prompt.getFill());
+                font("filter.prompt", prompt.getFont(), FontToken.BASE, false);
+                assertTrue(prompt.getBoundsInParent().getWidth() > 0);
+                assertEquals(model.widthPx(), field.getWidth());
+            }
+            field.setText("filter-probe"); css(port.main.root, 1200, 800);
+            assertTrue(field.lookupAll(".text").stream().filter(Text.class::isInstance).map(Text.class::cast)
+                    .filter(t -> t.getText().equals(model.prompt())).noneMatch(Node::isVisible));
+            var entered = field.lookupAll(".text").stream().filter(Text.class::isInstance).map(Text.class::cast)
+                    .filter(t -> t.getText().equals(field.getText())).findFirst().orElseThrow();
+            assertTrue(entered.isVisible());
+            assertEquals(javafx.scene.paint.Color.web(ru.cashprediction.core.ui.token.ColorToken.TEXT_PRIMARY.hex()), entered.getFill());
+        } finally {
+            field.setText(original);
+            css(port.main.root, 1200, 800);
+        }
+    }); }
+    /** Общий PNG занимает ровно 16x16 в настоящих стрелках тулбара, сохраняя скин и обработчики. */
+    @Test void toolbarDropdownsUseActualSixteenPixelSharedArt() throws Exception { onFx(() -> {
+        for (String id : List.of("tb.add", "tb.period", "tb.whatIf")) {
+            // JavaFX: MenuButton/ SplitMenuButton → Swing: JButton + JPopupMenu → Web: button + div[role=menu]
+            var button = assertInstanceOf(MenuButton.class, port.main.toolbar.widgets.get(id));
+            var skin = button.getSkin(); var action = button.getOnAction();
+            var hit = assertInstanceOf(Region.class, button.lookup(".arrow-button"));
+            var pressed = hit.getOnMousePressed(); var released = hit.getOnMouseReleased();
+            FxIcons.skinGraphics(button); css(port.main.root, 1200, 800);
+            var arrow = assertInstanceOf(Region.class, button.lookup(".arrow"));
+            assertEquals(ru.cashprediction.core.ui.token.DesignTokens.INLINE_ICON_SIZE, arrow.getWidth(), id);
+            assertEquals(ru.cashprediction.core.ui.token.DesignTokens.INLINE_ICON_SIZE, arrow.getHeight(), id);
+            assertEquals("\u25be", arrow.getProperties().get("cp.icon"));
+            assertEquals(1, arrow.getBackground().getImages().size());
+            assertSharedPng(arrow.getBackground().getImages().getFirst().getImage(), "\u25be");
+            FxPolishDesktopTest.paintedPng(arrow, "\u25be");
+            FxPolishDesktopTest.contains(hit.localToScene(hit.getLayoutBounds()), arrow.localToScene(arrow.getLayoutBounds()));
+            assertSame(skin, button.getSkin()); assertSame(action, button.getOnAction());
+            assertSame(hit, button.lookup(".arrow-button"));
+            assertSame(pressed, hit.getOnMousePressed()); assertSame(released, hit.getOnMouseReleased());
+            assertTrue(hit.getWidth() >= arrow.getWidth());
+            FxIcons.skinGraphics(button); css(port.main.root, 1200, 800);
+            assertEquals(ru.cashprediction.core.ui.token.DesignTokens.INLINE_ICON_SIZE, arrow.getWidth(), id);
+        }
+    }); }
+    /** Выпадающие поля и строка подменю используют тот же PNG и размер, что стрелки тулбара. */
+    @Test void choiceAndSubmenuArrowsShareActualSixteenPixelGeometry() throws Exception { onFx(() -> {
+        int choices = 0;
+        for (var field : rule.fields.values()) if (field.root.isManaged() && field.control instanceof ComboBox<?> combo) {
+            FxIcons.skinGraphics(combo); css(rule.dialog.getDialogPane(), rule.spec.width(), 700);
+            var arrow = assertInstanceOf(Region.class, combo.lookup(".arrow"));
+            assertEquals(ru.cashprediction.core.ui.token.DesignTokens.INLINE_ICON_SIZE, arrow.getWidth());
+            assertEquals(ru.cashprediction.core.ui.token.DesignTokens.INLINE_ICON_SIZE, arrow.getHeight());
+            assertSharedPng(arrow.getBackground().getImages().getFirst().getImage(), "\u25be");
+            choices++;
+            FxPolishDesktopTest.paintedPng(arrow, "\u25be");
+            var hit = combo.lookup(".arrow-button"); assertNotNull(hit);
+            FxPolishDesktopTest.contains(hit.localToScene(hit.getLayoutBounds()), arrow.localToScene(arrow.getLayoutBounds()));
+        }
+        assertTrue(choices > 0);
+        var submenu = port.main.model.menuBar().menus().getFirst();
+        // JavaFX: ContextMenu + ContextMenuSkin → Swing: JPopupMenu → Web: div[role=menu]
+        var menu = port.menus.context(List.of(submenu), ru.cashprediction.core.ui.command.InvokeSource.MENU);
+        menu.setSkin(new javafx.scene.control.skin.ContextMenuSkin(menu));
+        var root = assertInstanceOf(Region.class, menu.getSkin().getNode());
+        if (root.getScene() == null) new Scene(root);
+        try {
+            root.applyCss(); menu.getItems().forEach(port.menus::hooks);
+            css(root, root.prefWidth(-1), root.prefHeight(root.prefWidth(-1)));
+            var row = menu.getItems().getFirst().getStyleableNode(); assertNotNull(row);
+            var arrow = assertInstanceOf(Region.class, row.lookup(".arrow"));
+            assertEquals(ru.cashprediction.core.ui.token.DesignTokens.INLINE_ICON_SIZE, arrow.getWidth());
+            assertEquals(ru.cashprediction.core.ui.token.DesignTokens.INLINE_ICON_SIZE, arrow.getHeight());
+            assertEquals("\u25b8", arrow.getProperties().get("cp.icon"));
+            assertSharedPng(arrow.getBackground().getImages().getFirst().getImage(), "\u25b8");
+            FxPolishDesktopTest.paintedPng(arrow, "\u25b8");
+            FxPolishDesktopTest.contains(row.localToScene(row.getLayoutBounds()), arrow.localToScene(arrow.getLayoutBounds()));
+        } finally { menu.hide(); }
+    }); }
+    /** Одинаковые ширины и зазор общего токена измеряются в полном и неполном последнем ряду. */
+    @Test void summaryCardsKeepEqualWidthAcrossEveryActualRow() throws Exception { onFx(() -> {
+        var summary = port.main.summary;
+        try {
+            assertEquals(6, ru.cashprediction.core.ui.token.DesignTokens.CARD_GAP);
+            assertEquals(ru.cashprediction.core.ui.token.DesignTokens.CARD_GAP, summary.getHgap());
+            assertEquals(ru.cashprediction.core.ui.token.DesignTokens.CARD_GAP, summary.getVgap());
+            assertEquals(9, summary.getChildren().size());
+            for (int viewport : List.of(1200, 900, 1000, 1200)) {
+                css(port.main.root, viewport, 800);
+                var cards = summary.getChildren().stream().map(Region.class::cast).toList();
+                var rows = new java.util.TreeMap<Double, List<Region>>();
+                double width = cards.getFirst().getWidth();
+                for (var card : cards) {
+                    assertEquals(width, card.getWidth(), 0.001);
+                    assertTrue(card.getWidth() >= ru.cashprediction.core.ui.token.DesignTokens.CARD_MIN_WIDTH);
+                    assertTrue(card.getLayoutX() + card.getWidth() <= summary.getWidth() - summary.getInsets().getRight());
+                    rows.computeIfAbsent(card.getLayoutY(), y -> new java.util.ArrayList<>()).add(card);
+                }
+                assertEquals(viewport == 1200 ? 1 : 2, rows.size());
+                if (rows.size() > 1) assertTrue(rows.lastEntry().getValue().size() < rows.firstEntry().getValue().size());
+                Region previousRow = null;
+                for (var row : rows.values()) {
+                    assertEquals(summary.getInsets().getLeft(), row.getFirst().getLayoutX(), 0.001);
+                    if (previousRow != null) assertEquals(summary.getVgap(),
+                            row.getFirst().getLayoutY() - previousRow.getLayoutY() - previousRow.getHeight(), 0.001);
+                    for (int i = 1; i < row.size(); i++) assertEquals(summary.getHgap(),
+                            row.get(i).getLayoutX() - row.get(i - 1).getLayoutX() - width, 0.001);
+                    previousRow = row.getFirst();
+                }
+            }
+        } finally { css(port.main.root, 1200, 800); }
+    }); }
+
+    /** Сравнивает все декодированные пиксели фактического фона с физическим PNG общего каталога. */
+    private static void assertSharedPng(javafx.scene.image.Image actual, String key) {
+        var expected = new javafx.scene.image.Image(new java.io.ByteArrayInputStream(
+                ru.cashprediction.core.ui.token.UiIcons.png(key, ru.cashprediction.core.ui.token.ColorToken.TEXT_PRIMARY).orElseThrow()));
+        assertFalse(actual.isError()); assertEquals(expected.getWidth(), actual.getWidth()); assertEquals(expected.getHeight(), actual.getHeight());
+        for (int y = 0; y < expected.getHeight(); y++) for (int x = 0; x < expected.getWidth(); x++)
+            assertEquals(expected.getPixelReader().getArgb(x, y), actual.getPixelReader().getArgb(x, y));
+    }
     /** Непустой заголовок настоящего редактора правила использует HEADER. */
     @Test void dialogHeaderUsesActualHeaderFont() throws Exception { onFx(() -> {
         assertFalse(rule.header.getText().isEmpty()); label("dialog.header", rule.header, FontToken.HEADER, true);

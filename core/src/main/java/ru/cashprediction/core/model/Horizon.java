@@ -1,7 +1,7 @@
 package ru.cashprediction.core.model;
 
 import java.time.LocalDate;
-import java.time.temporal.ChronoUnit;
+import java.time.temporal.ChronoField;
 import java.util.Objects;
 import ru.cashprediction.core.format.FormatWords;
 import ru.cashprediction.core.text.Texts;
@@ -42,11 +42,27 @@ public sealed interface Horizon permits Horizon.Months, Horizon.Years, Horizon.U
     /**
      * Приблизительная длина горизонта в месяцах: для слайдера меню и проверок.
      *
+     * <p>Полные месяцы считаются до дня после включительного конца горизонта.
+     * Этот день представлен номером месяца и днём месяца без создания даты,
+     * поэтому расчёт работает и для {@link LocalDate#MAX}.</p>
+     *
      * @param start дата начала плана
      * @return число полных месяцев, не меньше 1
      */
     default long approximateMonths(LocalDate start) {
-        return Math.max(1, ChronoUnit.MONTHS.between(start, endDate(start).plusDays(1)));
+        LocalDate end = endDate(start);
+        long exclusiveMonth = end.getLong(ChronoField.PROLEPTIC_MONTH);
+        int exclusiveDay = end.getDayOfMonth() + 1;
+        if (end.getDayOfMonth() == end.lengthOfMonth()) {
+            exclusiveMonth++;
+            exclusiveDay = 1;
+        }
+        long months = exclusiveMonth - start.getLong(ChronoField.PROLEPTIC_MONTH);
+        // Как у ChronoUnit.MONTHS: неполный последний месяц не учитывается.
+        if (exclusiveDay < start.getDayOfMonth()) {
+            months--;
+        }
+        return Math.max(1, months);
     }
 
     /**
@@ -62,11 +78,16 @@ public sealed interface Horizon permits Horizon.Months, Horizon.Years, Horizon.U
             }
         }
 
+        /**
+         * {@inheritDoc}
+         * <p>Прибавляет заданное число календарных месяцев и вычитает один день.</p>
+         */
         @Override
         public LocalDate endDate(LocalDate start) {
             return start.plusMonths(count).minusDays(1);
         }
 
+        /** {@inheritDoc} */
         @Override
         public String label() {
             return RuText.count(count, FormatWords.get("plan.unit.month.one"), FormatWords.get("plan.unit.month.few"),
@@ -87,11 +108,16 @@ public sealed interface Horizon permits Horizon.Months, Horizon.Years, Horizon.U
             }
         }
 
+        /**
+         * {@inheritDoc}
+         * <p>Прибавляет заданное число календарных лет и вычитает один день.</p>
+         */
         @Override
         public LocalDate endDate(LocalDate start) {
             return start.plusYears(count).minusDays(1);
         }
 
+        /** {@inheritDoc} */
         @Override
         public String label() {
             return RuText.count(count, FormatWords.get("plan.unit.year.one"), FormatWords.get("plan.unit.year.few"),
@@ -116,6 +142,7 @@ public sealed interface Horizon permits Horizon.Months, Horizon.Years, Horizon.U
             return end.isBefore(start) ? start : end;
         }
 
+        /** {@inheritDoc} */
         @Override
         public String label() {
             return FormatWords.get("plan.horizon.until") + " " + DateFormats.iso(end);

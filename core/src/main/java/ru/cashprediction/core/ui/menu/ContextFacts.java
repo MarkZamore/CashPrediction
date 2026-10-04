@@ -42,6 +42,12 @@ interface ContextFacts {
     /** Реализация через {@link SummaryBuilder} и {@link ChartLayout}. Без состояния, потокобезопасна. */
     final class Models implements ContextFacts {
 
+        /**
+         * Строит сводку рассчитанного прогноза и берёт дату карточки с указанным идентификатором.
+         * @param state состояние приложения
+         * @param cardId идентификатор карточки сводки
+         * @return дата или пусто, если прогноз недоступен, карточка не найдена либо не имеет даты
+         */
         @Override
         public Optional<LocalDate> cardDate(AppState state, String cardId) {
             if (!state.document().forecastAvailable()) {
@@ -53,6 +59,14 @@ interface ContextFacts {
                     .map(CardModel::date);
         }
 
+        /**
+         * Раскладывает график текущей ревизии в заданный размер и определяет день под указателем.
+         * Координата по горизонтали выбирает день, обе координаты проверяются на попадание
+         * в область построения, включая её границу.
+         * @param state состояние приложения с прогнозом
+         * @param chart координаты указателя и размер области рисования
+         * @return дата или пусто при недоступном прогнозе, отсутствующей области либо указателе вне неё
+         */
         @Override
         public Optional<LocalDate> chartDate(AppState state, ContextTarget.Chart chart) {
             if (!state.document().forecastAvailable()) {

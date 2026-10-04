@@ -35,7 +35,7 @@ public interface UiDriver {
     void execute(SelfTestCommand command) throws Exception;
 
     /**
-     * Ждёт, пока интерфейс обработает все события и таймеры задержек (фильтр 300 мс, спиннер 600 мс и т. п.).
+     * Ждёт, пока интерфейс обработает все события и таймеры задержек (спиннер 600 мс и т. п.).
      *
      * @param timeout наибольшее ожидание
      * @throws Exception если интерфейс не успокоился за время ожидания
@@ -58,4 +58,18 @@ public interface UiDriver {
      * @throws IOException если снимок не получен
      */
     byte[] screenshot(String step) throws IOException;
+
+    /**
+     * Получает согласованный дамп, исходный PNG и наблюдения реальной отрисовки.
+     * Обычные отдельные dump/screenshot не заменяют этот барьер: клиент обязан
+     * явно реализовать сбор фактических свойств и проверку стабильности кадра.
+     *
+     * @param request идентичность опыта, намерения ввода и предельное время захвата
+     * @return согласованный набор настоящих наблюдений
+     * @throws Exception если возможность отсутствует, кадр нестабилен или сбор не удался
+     */
+    default ru.cashprediction.core.ui.selftest.paint.WidgetCapture capture(
+            ru.cashprediction.core.ui.selftest.paint.PaintCaptureRequest request) throws Exception {
+        throw new UnsupportedOperationException("widget-paint-v1");
+    }
 }

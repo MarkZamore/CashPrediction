@@ -149,16 +149,37 @@ public final class CrashDetector {
          */
         static ProcessProbe system() {
             return new ProcessProbe() {
+                /**
+                 * Возвращает PID текущей JVM для исключения собственного процесса
+                 * из проверки второго экземпляра по маркеру сеанса.
+                 *
+                 * @return идентификатор текущего процесса из {@link ProcessHandle}
+                 */
                 @Override
                 public long currentPid() {
                     return ProcessHandle.current().pid();
                 }
 
+                /**
+                 * Проверяет существование и активность процесса средствами операционной системы.
+                 * Одна эта проверка не отличает прежний сеанс от повторного использования PID.
+                 *
+                 * @param pid идентификатор проверяемого процесса
+                 * @return {@code true}, если процесс найден и жив; {@code false}, если не найден или завершён
+                 */
                 @Override
                 public boolean isAlive(long pid) {
                     return ProcessHandle.of(pid).map(ProcessHandle::isAlive).orElse(false);
                 }
 
+                /**
+                 * Сравнивает пути исполняемых файлов текущего и указанного процессов без учёта регистра.
+                 * Неизвестная команда любого из процессов, в том числе из-за ограничений доступа,
+                 * не подтверждает второй экземпляр. Аргументы запуска и путь CashMemory не сравниваются.
+                 *
+                 * @param pid идентификатор процесса из маркера сеанса
+                 * @return {@code true}, только если обе команды известны и их пути совпадают
+                 */
                 @Override
                 public boolean sameExecutable(long pid) {
                     Optional<String> own = ProcessHandle.current().info().command();
@@ -168,6 +189,14 @@ public final class CrashDetector {
                     return own.isPresent() && other.isPresent() && own.get().equalsIgnoreCase(other.get());
                 }
 
+                /**
+                 * Получает системное время запуска процесса для проверки повторного использования PID.
+                 * Обнаружение сбоя сопоставляет это время с началом сеанса; отсутствие времени
+                 * не подтверждает, что прежний экземпляр всё ещё работает.
+                 *
+                 * @param pid идентификатор проверяемого процесса
+                 * @return момент запуска или пустое значение, если процесс не найден либо время недоступно
+                 */
                 @Override
                 public Optional<Instant> startInstant(long pid) {
                     return ProcessHandle.of(pid).flatMap(h -> h.info().startInstant());

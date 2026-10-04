@@ -27,7 +27,7 @@ public final class WebRealScenarioProbe {
                 "--module-path", web + ";" + core, "--module", "ru.cashprediction.web/ru.cashprediction.web.WebMain",
                 "--home", output.resolve("home").toString(), "--registry", "memory", "--today", "2026-09-13",
                 "--selftest", scenario, "--selftest-out", output.resolve("out").toString(),
-                "--ui", "core", "--no-browser", "--no-window", "--test-api")
+                "--no-browser", "--no-window", "--test-api")
                 .redirectError(output.resolve("stderr.log").toFile()).start();
         var address = new CompletableFuture<URI>();
         Thread reader = Thread.ofVirtual().start(() -> {

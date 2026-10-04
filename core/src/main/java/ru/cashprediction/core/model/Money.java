@@ -304,6 +304,13 @@ public record Money(long minor) implements Comparable<Money> {
         return Long.signum(minor);
     }
 
+    /**
+     * Сравнивает суммы по числу минимальных единиц без вычитания и риска переполнения.
+     * Порядок согласован с равенством записей: результат равен нулю только при одинаковом {@code minor}.
+     * @param other сравниваемая сумма, не {@code null}
+     * @return -1, если эта сумма меньше; 0, если суммы равны; 1, если эта сумма больше
+     * @throws NullPointerException если сравниваемая сумма равна {@code null}
+     */
     @Override
     public int compareTo(Money other) {
         return Long.compare(minor, other.minor);

@@ -141,6 +141,12 @@
 
 Цели контекстного меню (`ContextTarget`): `row{rowId}`, `total{rowId}`, `pastHeader{rowId}`, `card{cardId}`, `chart{x,y,width,height}`, `preview{windowId,index}`.
 
+`tooltip` возвращает `{"result":{"text":"…","iconPositions":[{"offset":42,"key":"✎"}]}}`.
+Смещение `offset` измеряется в кодовых единицах UTF-16 исходного `text`; позиции формируются ядром
+при добавлении служебных строк, а не поиском символов в названии или заметке пользователя.
+Для обычного текста список пуст. Java-контракт `tableTooltip` сохраняет прежнюю строку;
+`decoratedTableTooltip` передаёт те же позиции всем трём отрисовщикам.
+
 `chartHover` → `UiIntents.chartHover`: `{"result": ChartHover}` (вертикаль, точка на линии баланса, карточка дня - все координаты считает ядро) или `{"result": null}`, если указатель вне области построения; устаревшая ревизия - `stale`.
 
 Ответы:

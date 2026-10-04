@@ -44,6 +44,7 @@ public final class FxStyles {
     /** Измеряемая кнопка общего каркаса: собственная ширина текста, отступы и высота из токенов. */
     static void dialogButton(Button button) {
         text(button, ColorToken.TEXT_PRIMARY, FontToken.BASE);
+        FxIcons.decorate(button);
         button.setPadding(new javafx.geometry.Insets(DesignTokens.TOOLBAR_BUTTON_PAD_V, DesignTokens.TOOLBAR_BUTTON_PAD_H,
                 DesignTokens.TOOLBAR_BUTTON_PAD_V, DesignTokens.TOOLBAR_BUTTON_PAD_H));
         button.setMinWidth(DesignTokens.BUTTON_MIN_WIDTH);
@@ -53,12 +54,51 @@ public final class FxStyles {
 
     /** Создаёт подсказку с общей задержкой и переносом. */
     public static Tooltip tip(String text, FxClassUsageProbe probe) {
+        return createTip(text, probe, true);
+    }
+
+    /** Рисует табличные значки только в позициях, явно переданных ядром. */
+    public static Tooltip tip(ru.cashprediction.core.ui.view.table.DecoratedTooltip value, FxClassUsageProbe probe) {
+        // JavaFX: Tooltip → Swing: JToolTip → Web: div.tooltip
+        Tooltip tip = createTip(value.text(), probe, false);
+        if (value.iconPositions().isEmpty()) return tip;
+        javafx.scene.text.TextFlow flow = new javafx.scene.text.TextFlow();
+        flow.setMaxWidth(420); flow.setMouseTransparent(true);
+        flow.setAccessibleText(value.text());
+        int offset = 0;
+        for (var position : value.iconPositions()) {
+            appendTooltipText(flow, value.text().substring(offset, position.offset()), tip);
+            flow.getChildren().add(FxIcons.view(position.key(), DesignTokens.INLINE_ICON_SIZE, ColorToken.TOOLTIP_TEXT));
+            offset = position.offset() + position.key().length();
+        }
+        appendTooltipText(flow, value.text().substring(offset), tip);
+        tip.setGraphic(flow); tip.setContentDisplay(javafx.scene.control.ContentDisplay.GRAPHIC_ONLY);
+        return tip;
+    }
+
+    /** Добавляет обычный текст без анализа символов. */
+    private static void appendTooltipText(javafx.scene.text.TextFlow flow, String value, Tooltip tip) {
+        javafx.scene.text.Text text = new javafx.scene.text.Text(value);
+        text.fontProperty().bind(tip.fontProperty()); text.setFill(Color.web(ColorToken.TOOLTIP_TEXT.hex()));
+        flow.getChildren().add(text);
+    }
+
+    /** Создаёт общий каркас подсказки, при необходимости включая прежнее оформление обычных подсказок. */
+    private static Tooltip createTip(String text, FxClassUsageProbe probe, boolean decorate) {
         // JavaFX: Tooltip → Swing: JToolTip → Web: div.tooltip
         Tooltip tip = probe.created(new Tooltip(text));
         tip.getProperties().put("cp.popupKind", "tooltip");
         tip.setWrapText(true); tip.setMaxWidth(420);
         tip.setShowDelay(Duration.millis(600)); tip.setShowDuration(Duration.seconds(20));
-        tip.setStyle("-fx-background-color: #262C34; -fx-text-fill: #F5F7FA; -fx-font-size: 12px;");
+        tip.setStyle("-fx-background-color: " + ColorToken.TOOLTIP_BG.hex() + "; -fx-text-fill: "
+                + ColorToken.TOOLTIP_TEXT.hex() + "; -fx-font-size: 12px;");
+        if (decorate && FxIcons.parts(text, false).stream().anyMatch(FxIcons.Part::icon)) {
+            javafx.scene.control.Label painted = new javafx.scene.control.Label(text);
+            painted.setWrapText(true); painted.setMaxWidth(420);
+            painted.fontProperty().bind(tip.fontProperty()); painted.setTextFill(Color.web(ColorToken.TOOLTIP_TEXT.hex()));
+            FxIcons.decorate(painted); tip.setGraphic(painted);
+            tip.setContentDisplay(javafx.scene.control.ContentDisplay.GRAPHIC_ONLY);
+        }
         return tip;
     }
 
@@ -114,9 +154,16 @@ public final class FxStyles {
             + ".context-menu .menu-item { -fx-padding: 4px 9px; }"
             + ".context-menu .separator-menu-item { -fx-padding: 4px; }"
             + ".table-view .column-header, .table-view .filler { -fx-background-color: " + ColorToken.BG_ALT.hex() + "; -fx-size: 28px; }"
+            // Жирность ColumnSpec относится к ячейкам; заголовки используют обычный BASE.
+            + ".table-view .column-header .label { -fx-font-weight: normal; }"
+            + ".table-view .column-header.cp-column-left .label { -fx-alignment: center-left; }"
+            + ".table-view .column-header.cp-column-center .label { -fx-alignment: center; }"
+            + ".table-view .column-header.cp-column-right .label { -fx-alignment: center-right; }"
             + ".table-row-cell { -fx-background-color: " + ColorToken.BG_SURFACE.hex() + "; }"
             + ".table-cell { -fx-border-color: transparent; }"
             + ".cp-toolbar, .cp-summary, .cp-status { -fx-background-color: " + ColorToken.BG_WINDOW.hex() + "; }"
+            // Modena делает prompt прозрачным при фокусе; пустой фильтр сохраняет общую подсказку.
+            + ".cp-toolbar .cp-filter, .cp-toolbar .cp-filter:focused { -fx-prompt-text-fill: " + ColorToken.TEXT_MUTED.hex() + "; }"
             + ".cp-toolbar .menu-button, .cp-toolbar .split-menu-button { -fx-padding: 0; }"
             + ".cp-toolbar .menu-button > .label, .cp-toolbar .split-menu-button > .label { -fx-padding: " + DesignTokens.TOOLBAR_BUTTON_PAD_V + "px " + DesignTokens.TOOLBAR_BUTTON_PAD_H + "px; }"
             + ".cp-toolbar .menu-button > .arrow-button, .cp-toolbar .split-menu-button > .arrow-button { -fx-padding: 0; -fx-min-width: " + TOOLBAR_ARROW + "px; -fx-pref-width: " + TOOLBAR_ARROW + "px; -fx-max-width: " + TOOLBAR_ARROW + "px; }"

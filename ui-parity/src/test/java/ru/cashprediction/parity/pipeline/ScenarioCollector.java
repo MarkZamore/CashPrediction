@@ -23,7 +23,7 @@ public final class ScenarioCollector implements ParityPipeline.Collector {
                 ReactorLayout.fromSystemProperties().root());
         String node = RegistryNodeCleaner.newSelftestNode();
         var before = RegistryNodeCleaner.snapshotRealSessionNodes();
-        LaunchRequest request = LaunchRequest.forScenario(run, client, scenario, node).withUi("core");
+        LaunchRequest request = LaunchRequest.forScenario(run, client, scenario, node);
         try {
             try (ScenarioFixtures fixtures = ScenarioFixtures.prepare(request, timeout);
                  LaunchedClient launched = ClientLauncher.launch(target, request)) {

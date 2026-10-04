@@ -7,9 +7,18 @@ import java.io.*;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.FutureTask;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Function;
+import java.util.function.Supplier;
 import javax.imageio.ImageIO;
+import javax.imageio.stream.MemoryCacheImageOutputStream;
 import javax.swing.*;
 import javax.swing.text.JTextComponent;
 import ru.cashprediction.core.app.*;
@@ -17,6 +26,9 @@ import ru.cashprediction.core.ui.command.*;
 import ru.cashprediction.core.ui.dump.UiDump;
 import ru.cashprediction.core.ui.form.*;
 import ru.cashprediction.core.ui.selftest.*;
+import ru.cashprediction.core.ui.selftest.paint.PaintCaptureRequest;
+import ru.cashprediction.core.ui.selftest.paint.PaintObservation;
+import ru.cashprediction.core.ui.selftest.paint.WidgetCapture;
 
 /** Драйвер настоящего Swing-интерфейса, не вызывающий команды бизнес-контроллера вместо виджетов. */
 public final class SwingUiDriver implements UiDriver {
@@ -26,6 +38,7 @@ public final class SwingUiDriver implements UiDriver {
     private long settleMillis;
     private final AppController controller;
     private boolean startupReady;
+    private final AtomicBoolean capturing = new AtomicBoolean();
 
     /** Создаёт драйвер интерактивного рабочего стола. */
     public SwingUiDriver(SwingUiPort port, AppController controller, String scenario) throws AWTException {
@@ -183,6 +196,9 @@ public final class SwingUiDriver implements UiDriver {
     }
     /** Наводит физический указатель на видимый компонент, включая настоящий пункт раскрытого меню. */
     private void hoverActual(String target) throws Exception {
+        edt(() -> { port.frame.toFront(); port.frame.requestFocus(); return null; });
+        JComponent component = edt(() -> target.startsWith("menu:") ? find(port.frame.menus, target.substring(5))
+                : target.startsWith("card:") ? find(port.frame.summary, target.substring(5)) : port.frame.chart);
         Point point = edt(() -> {
             JComponent widget = target.startsWith("menu:") ? find(port.frame.menus, target.substring(5))
                     : target.startsWith("card:") ? find(port.frame.summary, target.substring(5)) : null;
@@ -197,6 +213,14 @@ public final class SwingUiDriver implements UiDriver {
             throw new UnsupportedOperationException("Hover " + target);
         });
         robot.mouseMove(point.x, point.y); robot.waitForIdle();
+        // waitForIdle опустошает EDT, но не гарантирует доставку нативного события мыши Windows.
+        // Проверяем реальное попадание в компонент, не вызывая его обработчики или показ попапа напрямую.
+        long deadline = System.nanoTime() + Duration.ofSeconds(3).toNanos();
+        while (!edt(() -> component != null && component.isShowing() && component.getMousePosition(true) != null)) {
+            if (System.nanoTime() >= deadline) throw new IllegalStateException("Physical hover did not reach " + target
+                    + "; requested=" + point + "; actual=" + MouseInfo.getPointerInfo().getLocation());
+            robot.mouseMove(point.x, point.y); robot.waitForIdle(); Thread.sleep(20);
+        }
     }
     private SwingFormDialog form(String name) { List<SwingFormDialog> forms = new ArrayList<>(port.forms.values()); if (name.equals("last") && !forms.isEmpty()) return forms.getLast(); return forms.stream().filter(f -> f.session.windowId().equals(name) || f.dialog.getTitle().equals(name) || SwingUiDumper.plain(f.header).equals(name) || f.spec.windowType().name().equals(name)).findFirst().orElseThrow(() -> new IllegalArgumentException("No form " + name)); }
     private SwingFieldWidgets.Binding field(String window, String label) { return binding(form(window), label); }
@@ -270,10 +294,17 @@ public final class SwingUiDriver implements UiDriver {
             startupReady = edt(() -> {
                 var recorder = controller.recorder();
                 if (port.exited || recorder != null && (!recorder.isEnabled() || recorder.isClosed())) return true;
-                if (snapshotWaitNotRequired(controller.state().recorder())) return true;
+                var status = controller.state().recorder();
+                boolean questionVisible = port.alerts.values().stream()
+                        .anyMatch(a -> a.showing() && startupDecision(a.spec.purpose()));
+                if (snapshotWaitNotRequired(status, questionVisible)) return true;
+                // PENDING_RESTORE без вопроса означает работающую цепочку показа,
+                // а не готовый интерфейс: ждём настоящего завершения восстановления.
+                if (status == RecorderStatus.PENDING_RESTORE) return false;
                 if (recorder == null && port.alerts.values().stream().anyMatch(a -> a.showing() && startupDecision(a.spec.purpose()))) return true;
                 if (recorder == null || !recorder.isStarted()) return false;
-                return startupStoresReady(recorder.stores().size(), controller.state().stores());
+                return startupStoresReady(recorder.stores().size(), controller.state().stores())
+                        && port.forms.values().stream().allMatch(SwingFormDialog::showing);
             });
             if (startupReady) break;
             if (System.nanoTime() >= deadline) throw new IllegalStateException("Snapshot status did not settle");
@@ -287,21 +318,393 @@ public final class SwingUiDriver implements UiDriver {
         return stores.size() == expected && stores.stream().allMatch(s -> s.savedAt() != null || !s.message().isEmpty());
     }
     /** До ответа на восстановление и во втором экземпляре запись намеренно не запускается. */
-    static boolean snapshotWaitNotRequired(RecorderStatus status) {
-        return status == RecorderStatus.PENDING_RESTORE || status == RecorderStatus.DISABLED_SECOND_INSTANCE;
+    static boolean snapshotWaitNotRequired(RecorderStatus status, boolean questionVisible) {
+        return status == RecorderStatus.DISABLED_SECOND_INSTANCE
+                || status == RecorderStatus.PENDING_RESTORE && questionVisible;
     }
     /** Видимый вопрос запуска должен получить ответ до установки регистратора. */
     static boolean startupDecision(String purpose) {
-        return "crashRecovery".equals(purpose) || "alreadyRunning".equals(purpose);
+        return "crashRecovery".equals(purpose) || "alreadyRunning".equals(purpose)
+                || "restoreReport".equals(purpose) || "recorderNotStarted".equals(purpose)
+                || "loadDiagnostics".equals(purpose);
     }
     /** Снимает настоящий дамп в EDT. */
     @Override public UiDump dump(String step) { try { return edt(() -> dumper.dump(step)); } catch (Exception e) { throw new IllegalStateException(e); } }
-    /** Снимает реальное содержимое главного окна и открытых окон через Robot. */
+
+    /**
+     * Возвращает только поддержанную пару; нынешний стандартный root не имеет painter hooks.
+     * Диагностический raw/PNG сохраняется в UnsupportedCapture вместо ложного успешного commit.
+     * @param request идентичность опыта и общий монотонный дедлайн
+     * @return подтверждённая пара, когда все необходимые hooks действительно подключены
+     * @throws Exception при неподдержанном захвате, ошибке или истечении дедлайна
+     */
+    @Override public WidgetCapture capture(PaintCaptureRequest request) throws Exception {
+        return captureDiagnostic(request).requireSupported(request);
+    }
+
+    /**
+     * Читает raw и обе границы геометрии на EDT, а экран Robot снимает на вызывающем worker.
+     * Журнал попытки не импортирует значки и не объявляет отсутствующие paint scopes завершёнными.
+     * @param request запрос опыта, включая намерения физического ввода
+     * @return фактическая диагностическая попытка, не разрешение на запись успешного commit
+     * @throws Exception при недоступном root, вводе, дедлайне или ошибке снимка
+     */
+    public CaptureResult captureDiagnostic(PaintCaptureRequest request) throws Exception {
+        Objects.requireNonNull(request); captureWorker(); remaining(request.deadlineNanos());
+        if (!port.environment.options().isSelftest()) throw new IllegalStateException("capture requires selftest");
+        if (!capturing.compareAndSet(false, true)) throw new IllegalStateException("capture already running");
+        CaptureTransaction[] opened = new CaptureTransaction[1];
+        try {
+            CaptureTransaction transaction = captureEdt(request.deadlineNanos(), () -> {
+                if (port.frame == null || !port.frame.root.isShowing()) throw new UnsupportedOperationException("main capture root unavailable");
+                JComponent root = port.frame.root;
+                var value = new CaptureTransaction(root, () -> port.frame == null ? null : port.frame.root,
+                        r -> dumper.dump(r.step()), () -> captureGeometry(root));
+                opened[0] = value; return value;
+            });
+            prepareCaptureInput(request, transaction);
+            return captureBracket(request, transaction, robot::createScreenCapture);
+        } finally {
+            // Очистка идёт после уже начавшегося задания; новый capture не обгоняет позднюю установку.
+            SwingUtilities.invokeLater(() -> {
+                try { if (opened[0] != null) opened[0].close(); }
+                finally { capturing.set(false); }
+            });
+        }
+    }
+
+    /** Физически уводит указатель, наводит целевую карточку и при необходимости проходит настоящий Tab. */
+    private void prepareCaptureInput(PaintCaptureRequest request, CaptureTransaction transaction) throws Exception {
+        JComponent target = captureEdt(request.deadlineNanos(), () -> {
+            JComponent active = null;
+            for (var entry : request.cardStates().entrySet()) {
+                JComponent card = find(port.frame.summary, entry.getKey());
+                if (card == null || !card.isShowing()) throw new UnsupportedOperationException("capture card unavailable: " + entry.getKey());
+                if (entry.getValue() != PaintCaptureRequest.CardState.NORMAL) active = card;
+            }
+            port.frame.toFront(); port.frame.requestFocus(); return active;
+        });
+        moveCapturePointer(request, transaction, captureEdt(request.deadlineNanos(), () -> {
+            Point point = transaction.root.getLocationOnScreen();
+            point.translate(transaction.root.getWidth() - 5, transaction.root.getHeight() - 5); return point;
+        }));
+        boolean focus = request.cardStates().containsValue(PaintCaptureRequest.CardState.FOCUS);
+        if (target != null && !focus) {
+            moveCapturePointer(request, transaction, captureEdt(request.deadlineNanos(), () -> {
+                Point point = target.getLocationOnScreen(); point.translate(target.getWidth() / 2, target.getHeight() / 2); return point;
+            }));
+        }
+        for (int count = 0; count < 128; count++) {
+            boolean reached = captureEdt(request.deadlineNanos(), () -> {
+                Component owner = KeyboardFocusManager.getCurrentKeyboardFocusManager().getFocusOwner();
+                if (focus) return owner != null && (owner == target || SwingUtilities.isDescendingFrom(owner, target)) && owner.isFocusOwner();
+                return owner == null || !SwingUtilities.isDescendingFrom(owner, port.frame.summary);
+            });
+            if (reached) return;
+            captureEdt(request.deadlineNanos(), () -> { transaction.input.armKey(); return null; });
+            try { robot.keyPress(KeyEvent.VK_TAB); }
+            finally { robot.keyRelease(KeyEvent.VK_TAB); }
+            awaitCaptureInput(request, transaction);
+        }
+        throw new UnsupportedOperationException("physical card focus traversal unavailable");
+    }
+
+    /** Подтверждает движение только доставленным событием, совпадающим с физической точкой ОС. */
+    private void moveCapturePointer(PaintCaptureRequest request, CaptureTransaction transaction, Point requested) throws Exception {
+        Point destination = captureEdt(request.deadlineNanos(), () -> {
+            PointerInfo pointer = MouseInfo.getPointerInfo();
+            Point point = new Point(requested);
+            if (pointer != null && pointer.getLocation().equals(point)) point.translate(-2, 0);
+            transaction.input.armPointer(point); return point;
+        });
+        remaining(request.deadlineNanos()); robot.mouseMove(destination.x, destination.y);
+        awaitCaptureInput(request, transaction);
+    }
+
+    /** Ждёт подтверждение события в пределах общего дедлайна, не блокируя EDT и не вызывая synthetic dispatch. */
+    private static void awaitCaptureInput(PaintCaptureRequest request, CaptureTransaction transaction) throws Exception {
+        while (!captureEdt(request.deadlineNanos(), transaction.input::acknowledged))
+            TimeUnit.NANOSECONDS.sleep(Math.min(remaining(request.deadlineNanos()), TimeUnit.MILLISECONDS.toNanos(5)));
+    }
+
+    /** Реальная неизменяемая граница root; Rectangle не отдаётся наружу по ссылке. */
+    record CaptureGeometry(Rectangle rectangle, PaintObservation.Transform deviceTransform, boolean showing) {
+        /** Копирует измеренные координаты и проверяет ненулевой размер. */
+        CaptureGeometry {
+            rectangle = new Rectangle(rectangle); Objects.requireNonNull(deviceTransform);
+            if (rectangle.width <= 0 || rectangle.height <= 0) throw new IllegalArgumentException("capture root size");
+        }
+        /** Возвращает копию экранного прямоугольника. */
+        @Override public Rectangle rectangle() { return new Rectangle(rectangle); }
+    }
+
+    /** Измеряет экранную точку и реальный device transform на EDT, без целевого профиля или округления масштаба. */
+    private static CaptureGeometry captureGeometry(JComponent root) {
+        Point point = root.getLocationOnScreen();
+        var config = root.getGraphicsConfiguration();
+        var transform = config == null ? new java.awt.geom.AffineTransform() : config.getDefaultTransform();
+        double[] values = new double[6]; transform.getMatrix(values);
+        return new CaptureGeometry(new Rectangle(point.x, point.y, root.getWidth(), root.getHeight()),
+                new PaintObservation.Transform(values[0], values[1], values[2], values[3], values[4], values[5]), root.isShowing());
+    }
+
+    /** Снимок worker; тестовый backend не считается доказательством native raster. */
+    @FunctionalInterface interface ScreenCapture {
+        /** Снимает исходный экранный прямоугольник вне EDT. */
+        BufferedImage capture(Rectangle rectangle) throws Exception;
+    }
+
+    /** Выполняет один bracket; для hooked root получает реальный paint, не объявляя его census полным. */
+    static CaptureResult captureBracket(PaintCaptureRequest request, CaptureTransaction transaction, ScreenCapture screen) throws Exception {
+        captureWorker(); Objects.requireNonNull(screen);
+        CaptureGeometry before = captureEdt(request.deadlineNanos(), () -> transaction.prepare(request));
+        remaining(request.deadlineNanos());
+        BufferedImage image = Objects.requireNonNull(screen.capture(before.rectangle()));
+        remaining(request.deadlineNanos());
+        byte[] png;
+        try (var bytes = new ByteArrayOutputStream(); var output = new MemoryCacheImageOutputStream(bytes)) {
+            if (!ImageIO.write(image, "png", output)) throw new IOException("PNG encoder unavailable");
+            output.flush(); png = bytes.toByteArray();
+        }
+        return captureEdt(request.deadlineNanos(), () -> transaction.finish(request, before, image, png));
+    }
+
+    /** Диагностическая пара с защитой PNG; неподдержанная запись не превращается в WidgetCapture. */
+    public record CaptureResult(UiDump raw, byte[] png, PaintObservation observation) {
+        /** Копирует оригинальный PNG и проверяет идентичность raw/observation. */
+        public CaptureResult {
+            Objects.requireNonNull(raw); Objects.requireNonNull(observation); Objects.requireNonNull(png);
+            if (png.length < 33 || png.length > ru.cashprediction.core.ui.selftest.paint.PaintObservationCodec.MAX_PNG_BYTES)
+                throw new IllegalArgumentException("capture PNG size");
+            png = png.clone();
+            var id = observation.identity();
+            if (raw.schema() != UiDump.SCHEMA || !raw.client().equals(id.client())
+                    || !raw.scenario().equals(id.scenario()) || !raw.step().equals(id.step()))
+                throw new IllegalArgumentException("capture raw identity");
+            // Здесь проверяется заголовок диагностического PNG; полный контракт проверит WidgetCapture только при поддержанном захвате.
+            var header = java.nio.ByteBuffer.wrap(png);
+            if (header.getLong(0) != 0x89504e470d0a1a0aL || header.getInt(8) != 13 || header.getInt(12) != 0x49484452
+                    || header.getInt(16) != observation.viewport().pngWidth() || header.getInt(20) != observation.viewport().pngHeight())
+                throw new IllegalArgumentException("capture PNG header");
+        }
+        /** Возвращает копию исходного снимка. */
+        @Override public byte[] png() { return png.clone(); }
+        /** Отказывает с диагностикой до создания успешной пары при unknown paint или нестабильном bracket. */
+        public WidgetCapture requireSupported(PaintCaptureRequest request) {
+            if (!observation.unsupported().isEmpty() || !observation.synchronization().stable()) throw new UnsupportedCapture(this);
+            WidgetCapture capture = new WidgetCapture(raw, png, observation); capture.requireRequest(request); return capture;
+        }
+    }
+
+    /** Отказ содержит снятую попытку, но не разрешает успешный manifest/commit. */
+    public static final class UnsupportedCapture extends UnsupportedOperationException {
+        private final CaptureResult result;
+        /** Сохраняет конкретные причины отказа и диагностический снимок. */
+        UnsupportedCapture(CaptureResult result) {
+            super("Swing capture unsupported: " + result.observation().unsupported() + "; changes=" + result.observation().synchronization().changes());
+            this.result = result;
+        }
+        /** Возвращает исходные raw, PNG и companion-наблюдение отказавшего опыта. */
+        public CaptureResult result() { return result; }
+    }
+
+    /** Временные listeners, manager и одноразовый collector bracket одного настоящего root. */
+    static final class CaptureTransaction implements AutoCloseable {
+        final JComponent root;
+        final NativeCaptureInput input;
+        private final Supplier<JComponent> currentRoot;
+        private final Function<PaintCaptureRequest, UiDump> rawReader;
+        private final Supplier<CaptureGeometry> geometry;
+        private final SwingPaintJournal journal;
+        private final SwingPaintContext paintContext;
+        private final SwingCaptureRepaintManager manager;
+        private final SwingPaintCollector collector;
+        private SwingPaintCollector.Bracket bracket;
+        private UiDump raw;
+        private boolean closed;
+
+        /** Подключает root-local наблюдение до ввода; частичная установка очищается немедленно на EDT. */
+        CaptureTransaction(JComponent root, Supplier<JComponent> currentRoot, Function<PaintCaptureRequest, UiDump> rawReader,
+                           Supplier<CaptureGeometry> geometry) {
+            requireCaptureEdt(); this.root = Objects.requireNonNull(root); this.currentRoot = Objects.requireNonNull(currentRoot);
+            this.rawReader = Objects.requireNonNull(rawReader); this.geometry = Objects.requireNonNull(geometry);
+            paintContext = root instanceof SwingPaintRoot hooked ? hooked.context() : null;
+            journal = paintContext == null ? new SwingPaintJournal(root) : paintContext.journal();
+            manager = SwingCaptureRepaintManager.install(root, journal);
+            SwingPaintCollector watching = null; NativeCaptureInput nativeInput = null;
+            try { watching = new SwingPaintCollector(root, journal); nativeInput = new NativeCaptureInput(root); }
+            catch (RuntimeException | Error failure) {
+                try { if (watching != null) watching.close(); }
+                catch (RuntimeException | Error cleanup) { failure.addSuppressed(cleanup); }
+                try { manager.close(); }
+                catch (RuntimeException | Error cleanup) { failure.addSuppressed(cleanup); }
+                throw failure;
+            }
+            collector = watching; input = nativeInput;
+        }
+
+        /** Открывает bracket ДО raw/geometry; их побочные изменения остаются внутри наблюдения. */
+        CaptureGeometry prepare(PaintCaptureRequest request) {
+            live(); if (bracket != null) throw new IllegalStateException("capture bracket already open");
+            if (currentRoot.get() != root) throw new IllegalStateException("capture root replaced before bracket");
+            manager.synchronizeJournal();
+            if (paintContext != null) {
+                manager.beginEpoch();
+                boolean returned = false;
+                try {
+                    paintContext.paintPass(() -> root.paintImmediately(0, 0, root.getWidth(), root.getHeight()));
+                    returned = true;
+                } finally {
+                    if (returned) manager.finishEpoch(); else manager.abortEpoch();
+                }
+                paintContext.validateSources();
+            }
+            bracket = collector.prepare(request, collector.observeInteraction(input.modality, input.sequence, input.acknowledged()));
+            raw = rawReader.apply(request); return geometry.get();
+        }
+
+        /** Закрывает bracket после Robot, добавляя смену root/экранной геометрии и пробел census в companion. */
+        CaptureResult finish(PaintCaptureRequest request, CaptureGeometry before, BufferedImage image, byte[] png) {
+            live(); if (bracket == null) throw new IllegalStateException("no capture bracket");
+            List<String> changes = new ArrayList<>();
+            if (currentRoot.get() != root) changes.add("content root replaced during capture");
+            if (!before.equals(geometry.get())) changes.add("screen geometry or device transform changed");
+            try { manager.synchronizeJournal(); }
+            catch (IllegalStateException replaced) { changes.add("capture repaint manager ownership lost"); }
+            boolean sourcesCurrent = paintContext == null || paintContext.validateSources();
+            var environment = new PaintObservation.Environment(System.getProperty("os.name") + " " + System.getProperty("os.version"),
+                    System.getProperty("java.runtime.version"), "AWT Robot.createScreenCapture", Math.hypot(before.deviceTransform().a(), before.deviceTransform().b()),
+                    "font-load certification and artifact digests unavailable", Map.of());
+            var handle = bracket; bracket = null;
+            PaintObservation observed = collector.finish(handle, image.getWidth(), image.getHeight(), environment);
+            List<PaintObservation.Unsupported> unsupported = new ArrayList<>(observed.unsupported());
+            unsupported.add(new PaintObservation.Unsupported(journal.identity(root), "paint-hooks", paintContext == null
+                    ? "full root/owner painter hooks are not connected"
+                    : "root/owner callbacks connected; full UI delegate image/text/shape census and external occlusion are unsupported"));
+            if (!sourcesCurrent)
+                unsupported.add(new PaintObservation.Unsupported(journal.identity(root), "image-source", "original decoded image chain changed during capture"));
+            if (!input.acknowledged()) unsupported.add(new PaintObservation.Unsupported(journal.identity(root), "native-input", "last physical gesture no longer acknowledged"));
+            var old = observed.synchronization(); changes.addAll(old.changes());
+            var synchronization = new PaintObservation.Synchronization(old.mode(), old.epochBefore(), old.epochAfter(), old.layoutRevisionBefore(), old.layoutRevisionAfter(),
+                    old.paintRevisionBefore(), old.paintRevisionAfter(), old.renderGenerationBefore(), old.renderGenerationAfter(), old.frameId(),
+                    old.fingerprintBefore(), old.fingerprintAfter(), old.startNanos(), old.endNanos(), old.settled(), changes);
+            var diagnostic = new PaintObservation(observed.schema(), observed.kind(), observed.identity(), observed.viewport(), observed.environment(), synchronization,
+                    observed.interaction(), observed.surfaces(), observed.assets(), observed.icons(), observed.cards(), unsupported);
+            return new CaptureResult(raw, png, diagnostic);
+        }
+
+        /** Снимает listeners и восстанавливает только всё ещё принадлежащий попытке manager. */
+        @Override public void close() {
+            requireCaptureEdt(); if (closed) return; closed = true;
+            try { if (bracket != null) { collector.abort(bracket); bracket = null; } }
+            finally { try { input.close(); } finally { try { collector.close(); } finally { manager.close(); } } }
+        }
+
+        /** Запрещает повторное использование закрытой транзакции и чтение компонентов с worker. */
+        private void live() { requireCaptureEdt(); if (closed) throw new IllegalStateException("capture transaction closed"); }
+    }
+
+    /** Подтверждает только доставленные после команды события и актуальную физическую точку/активное окно. */
+    static final class NativeCaptureInput implements AutoCloseable {
+        private final JComponent root;
+        private final AWTEventListener mouse = this::mouseEvent;
+        private final KeyEventDispatcher keyboard = this::keyEvent;
+        private Point requested;
+        private long since;
+        private boolean delivered;
+        private boolean closed;
+        private String modality = "none";
+        private long sequence;
+
+        /** Подключает наблюдение без dispatchEvent, processKeyBindings или изменения состояния виджета. */
+        NativeCaptureInput(JComponent root) {
+            requireCaptureEdt(); this.root = root;
+            Toolkit.getDefaultToolkit().addAWTEventListener(mouse, AWTEvent.MOUSE_MOTION_EVENT_MASK);
+            try { KeyboardFocusManager.getCurrentKeyboardFocusManager().addKeyEventDispatcher(keyboard); }
+            catch (RuntimeException | Error failure) { Toolkit.getDefaultToolkit().removeAWTEventListener(mouse); throw failure; }
+        }
+        /** Начинает новую последовательность движения; совпадение физической точки без события недостаточно. */
+        void armPointer(Point point) { requireCaptureEdt(); requested = new Point(point); since = System.currentTimeMillis(); delivered = false; modality = "pointer"; sequence++; }
+        /** Начинает новую последовательность Tab; старая доставка не подтверждает следующий жест. */
+        void armKey() { requireCaptureEdt(); since = System.currentTimeMillis(); delivered = false; modality = "keyboard"; sequence++; }
+        /** Принимает только реально доставленное движение к текущей физической точке внутри root. */
+        private void mouseEvent(AWTEvent event) {
+            if (closed || !"pointer".equals(modality) || !(event instanceof MouseEvent move) || move.getID() != MouseEvent.MOUSE_MOVED
+                    || move.getWhen() < since || !inside(move.getComponent()) || requested == null) return;
+            PointerInfo pointer = GraphicsEnvironment.isHeadless() ? null : MouseInfo.getPointerInfo();
+            delivered = requested.equals(move.getLocationOnScreen()) && pointer != null && requested.equals(pointer.getLocation());
+        }
+        /** Наблюдает отпускание настоящего Tab до штатной focus traversal, ничего не потребляя. */
+        private boolean keyEvent(KeyEvent event) {
+            if (!closed && "keyboard".equals(modality) && event.getID() == KeyEvent.KEY_RELEASED && event.getKeyCode() == KeyEvent.VK_TAB
+                    && event.getWhen() >= since && inside(event.getComponent())) delivered = true;
+            return false;
+        }
+        /** Возвращает факт доставки и физической активности; не объявляет желаемое состояние карточки наблюдением. */
+        boolean acknowledged() {
+            requireCaptureEdt(); if (closed || !delivered) return false;
+            Window window = SwingUtilities.getWindowAncestor(root);
+            if (window == null || !window.isActive() || !window.isFocused()) return false;
+            if ("pointer".equals(modality)) {
+                PointerInfo pointer = GraphicsEnvironment.isHeadless() ? null : MouseInfo.getPointerInfo();
+                return pointer != null && requested.equals(pointer.getLocation());
+            }
+            return inside(KeyboardFocusManager.getCurrentKeyboardFocusManager().getFocusOwner());
+        }
+        /** Проверяет физическое дерево компонентов, а не маркер или планируемый focus id. */
+        private boolean inside(Component component) { return component != null && (component == root || SwingUtilities.isDescendingFrom(component, root)); }
+        /** Удаляет оба наблюдателя; прежние dispatcher продолжают обычную работу. */
+        @Override public void close() {
+            requireCaptureEdt(); if (closed) return; closed = true;
+            Toolkit.getDefaultToolkit().removeAWTEventListener(mouse);
+            KeyboardFocusManager.getCurrentKeyboardFocusManager().removeKeyEventDispatcher(keyboard);
+        }
+    }
+
+    /** Ограничивает ожидание EDT; отменённое ещё не начатое задание не подключает listeners позже. */
+    static <T> T captureEdt(long deadline, Callable<T> action) throws Exception {
+        captureWorker(); remaining(deadline);
+        FutureTask<T> task = new FutureTask<>(() -> { remaining(deadline); return action.call(); });
+        SwingUtilities.invokeLater(task);
+        try { return task.get(remaining(deadline), TimeUnit.NANOSECONDS); }
+        catch (ExecutionException failure) {
+            if (failure.getCause() instanceof Exception cause) throw cause;
+            if (failure.getCause() instanceof Error cause) throw cause;
+            throw new IllegalStateException(failure.getCause());
+        } catch (TimeoutException | InterruptedException failure) { task.cancel(false); throw failure; }
+    }
+    /** Проверяет общий монотонный дедлайн до и после потенциально долгой native операции. */
+    private static long remaining(long deadline) throws TimeoutException {
+        long left = deadline - System.nanoTime(); if (left <= 0) throw new TimeoutException("Swing capture deadline exceeded"); return left;
+    }
+    /** Запрещает Robot capture и ожидания очереди на EDT. */
+    private static void captureWorker() { if (SwingUtilities.isEventDispatchThread()) throw new IllegalStateException("capture requires worker thread"); }
+    /** Запрещает чтение Swing компонентов или lifecycle транзакции вне EDT. */
+    private static void requireCaptureEdt() { if (!SwingUtilities.isEventDispatchThread()) throw new IllegalStateException("capture transaction requires EDT"); }
+    /** Снимает реальное содержимое главного окна либо единственного видимого окна запуска через Robot. */
     @Override public byte[] screenshot(String step) throws IOException {
         try {
-            Rectangle bounds = edt(() -> { Point p = port.frame.root.getLocationOnScreen(); return new Rectangle(p.x, p.y, port.frame.root.getWidth(), port.frame.root.getHeight()); });
+            Rectangle bounds = edt(() -> {
+                Component root = captureRoot();
+                Point p = root.getLocationOnScreen();
+                if (root.getWidth() <= 0 || root.getHeight() <= 0) throw new IllegalStateException("Visible capture target has no size");
+                return new Rectangle(p.x, p.y, root.getWidth(), root.getHeight());
+            });
             BufferedImage image = robot.createScreenCapture(bounds); ByteArrayOutputStream bytes = new ByteArrayOutputStream(); ImageIO.write(image, "png", bytes); return bytes.toByteArray();
         } catch (Exception e) { throw new IOException("Screenshot", e); }
+    }
+
+    /** Не создаёт фиктивное главное окно ради снимка вопроса восстановления или второго экземпляра. */
+    private Component captureRoot() {
+        if (port.frame != null && port.frame.root.isShowing()) return port.frame.root;
+        Component visible = null;
+        for (SwingAlerts alert : port.alerts.values())
+            if (alert.showing()) visible = alert.dialog.getContentPane();
+        if (visible != null) return visible;
+        for (SwingFormDialog form : port.forms.values())
+            if (form.showing()) visible = form.content;
+        if (visible == null) throw new IllegalStateException("No actual visible window to capture");
+        return visible;
     }
     private static <T> T edt(Callable<T> action) throws Exception { if (SwingUtilities.isEventDispatchThread()) return action.call(); FutureTask<T> task = new FutureTask<>(action); SwingUtilities.invokeAndWait(task); return task.get(); }
 }

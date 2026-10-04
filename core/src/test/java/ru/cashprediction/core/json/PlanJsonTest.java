@@ -259,7 +259,9 @@ class PlanJsonTest {
         assertTrue(read.diagnostics().isEmpty(), () -> read.diagnostics().toString());
         Plan fromJson = PlanJson.planFrom(viaText(PlanJson.plan(read.plan())));
         assertEquals(read.plan(), fromJson);
-        assertEquals(FAMILY_BUDGET, PlanMarkdownWriter.write(fromJson));
+        // Вход версии 1 остаётся историческим образцом, писатель выпускает каноническую версию 2.
+        assertEquals(FAMILY_BUDGET.replace("CashPrediction 1", "CashPrediction 2"),
+                PlanMarkdownWriter.write(fromJson));
     }
 
     @Test

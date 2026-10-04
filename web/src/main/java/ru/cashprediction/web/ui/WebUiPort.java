@@ -38,6 +38,10 @@ public final class WebUiPort implements UiPort {
     // Завершение читают поток остановки сервера и shutdown hook, не только поток контроллера.
     private volatile ExitKind exitKind;
     private volatile int exitCode;
+    private Runnable mainReady = () -> { };
+
+    /** Подключает готовность основной модели до запуска контроллера. */
+    public void onMainReady(Runnable callback) { mainReady = java.util.Objects.requireNonNull(callback); }
 
     /** Создаёт порт; все его операции выполняются на переданном потоке. */
     public WebUiPort(ControllerThread thread, EffectLog log, boolean testApi) {
@@ -118,6 +122,7 @@ public final class WebUiPort implements UiPort {
         thread.check(); if (screen != null) throw new IllegalStateException("showMain twice");
         if (restored != null) geometry = new MainGeometry(restored.bounds(), restored.maximized());
         screen = model; log.append(new WebEffect.Inert(false)); log.append(new WebEffect.Screen(model, EnumSet.allOf(ScreenPart.class)));
+        mainReady.run();
     }
     /** {@inheritDoc} */
     @Override public void render(MainScreenModel model, EnumSet<ScreenPart> changed) {

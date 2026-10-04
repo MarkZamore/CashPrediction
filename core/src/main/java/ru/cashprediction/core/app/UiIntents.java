@@ -156,6 +156,12 @@ public interface UiIntents {
      */
     String tableTooltip(long revision, int index, String columnId);
 
+    /** Запрашивает подсказку таблицы с явными позициями служебных значков. */
+    default ru.cashprediction.core.ui.view.table.DecoratedTooltip decoratedTableTooltip(
+            long revision, int index, String columnId) {
+        return ru.cashprediction.core.ui.view.table.DecoratedTooltip.plain(tableTooltip(revision, index, columnId));
+    }
+
     /**
      * Запрос: сцена графика для размера области рисования.
      *

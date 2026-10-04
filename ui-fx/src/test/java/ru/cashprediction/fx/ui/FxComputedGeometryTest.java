@@ -26,6 +26,74 @@ import static org.junit.jupiter.api.Assertions.*;
 /** Изолированная проверка реальной раскладки CSS без видимых окон; наследует уже работающий нативный стенд. */
 @EnabledIfSystemProperty(named = "fx.geometryProof", matches = "true")
 class FxComputedGeometryTest extends FxComputedFontTest {
+    /** Повторное использование настоящей ячейки удаляет старый текст доступности и графику. */
+    @Test void recycledTableCellClearsActualAccessibility() throws Exception { onFx(() -> {
+        var table = port.main.table;
+        var column = table.columns.values().iterator().next();
+        var cell = column.getCellFactory().call(column);
+        cell.updateTableView(table.root); cell.updateTableColumn(column);
+        cell.updateIndex(0);
+        String logical = table.model.row(0).cells().getFirst();
+        assertFalse(logical.isEmpty()); assertEquals(logical, cell.getAccessibleText());
+        assertEquals(logical, cell.getProperties().get("cp.logicalText")); assertNotNull(cell.getGraphic());
+        cell.updateIndex(-1);
+        assertTrue(cell.isEmpty()); assertNull(cell.getAccessibleText()); assertNull(cell.getGraphic());
+        assertNull(cell.getTooltip()); assertFalse(cell.getProperties().containsKey("cp.logicalText"));
+        assertFalse(cell.getProperties().containsKey("cp.paintText"));
+        cell.updateIndex(0);
+        assertEquals(logical, cell.getAccessibleText()); assertNotNull(cell.getGraphic());
+    }); }
+
+    /** Каждый физический переключатель формы и его обновлённая отметка используют общий PNG. */
+    @Test void formRadioButtonsUseSharedSkinWhenOptionsAreRebuilt() throws Exception { onFx(() -> {
+        var controller = (AppController) port.intents;
+        var wizard = form(new ru.cashprediction.core.ui.forms.plan.PlanSettingsForm(), WindowType.PLAN_SETTINGS,
+                "icons-radio", Map.of(), controller);
+        var field = wizard.physicalFields.stream().filter(f -> f.spec.kind() == FieldKind.RADIO).findFirst().orElseThrow();
+        for (var radio : field.radioButtons()) {
+            assertEquals(true, radio.getProperties().get("cp.iconSkin"));
+            radio.setSelected(true); FxIcons.skinGraphics(radio); radio.applyCss();
+            var dot = radio.lookup(".dot"); assertNotNull(dot);
+            assertEquals("\u25cf", dot.getProperties().get("cp.icon"));
+            assertTrue(dot.getStyle().contains(FxIcons.imageCss("\u25cf", ColorToken.ACCENT)));
+            radio.setSelected(false); assertTrue(dot.getStyle().contains("-fx-background-image: none;"));
+        }
+        var replacement = List.of(Option.of("replacement", field.spec.options().getFirst().text()));
+        field.update(new FieldView("replacement", true, true, false, null, replacement, null), null);
+        css(wizard.dialog.getDialogPane(), wizard.spec.width(), 700);
+        var rebuilt = field.radioButtons().getFirst();
+        assertEquals(true, rebuilt.getProperties().get("cp.iconSkin")); assertTrue(rebuilt.isSelected());
+        FxIcons.skinGraphics(rebuilt);
+        assertEquals("\u25cf", rebuilt.lookup(".dot").getProperties().get("cp.icon"));
+    }); }
+
+    /** Цвет подписи меняет общий PNG, но сохраняет исходный текст и размеры по спецификации. */
+    @Test void sharedInlineIconsFollowActualTextColorAndKeepLogicalText() throws Exception { onFx(() -> {
+        Label label = new Label("\u26a0 Problem"); FxIcons.decorate(label);
+        for (ColorToken token : List.of(ColorToken.ACCENT, ColorToken.WHATIF, ColorToken.EXPENSE,
+                ColorToken.INCOME, ColorToken.TEXT_PRIMARY, ColorToken.TEXT_MUTED,
+                ColorToken.WARN, ColorToken.TOOLTIP_TEXT, ColorToken.TEXT_PAST)) {
+            FxStyles.text(label, token, FontToken.SMALL);
+            var flow = assertInstanceOf(javafx.scene.text.TextFlow.class, label.getGraphic());
+            var icon = assertInstanceOf(javafx.scene.image.ImageView.class, flow.getChildren().getFirst());
+            assertSame(FxIcons.image("\u26a0", token).orElseThrow(), icon.getImage());
+            assertEquals(DesignTokens.INLINE_ICON_SIZE, icon.getFitWidth());
+            assertEquals(DesignTokens.INLINE_ICON_SIZE, icon.getFitHeight());
+            assertEquals("\u26a0 Problem", label.getText()); assertEquals(label.getText(), label.getAccessibleText());
+        }
+        var wizard = form(new NewPlanWizardForm(), WindowType.NEW_PLAN_WIZARD, "icons-header", Map.of(), (AppController) port.intents);
+        var header = assertInstanceOf(javafx.scene.image.ImageView.class, wizard.glyph.getGraphic());
+        assertEquals(DesignTokens.DIALOG_ICON_SIZE, header.getFitWidth());
+        assertSame(FxIcons.image(wizard.spec.glyph(), ColorToken.ACCENT).orElseThrow(), header.getImage());
+        // JavaFX: Tooltip → Swing: JToolTip → Web: div.tooltip
+        var tip = FxStyles.tip("\u26a0 Problem", port.probe);
+        var painted = assertInstanceOf(Label.class, tip.getGraphic());
+        var flow = assertInstanceOf(javafx.scene.text.TextFlow.class, painted.getGraphic());
+        var icon = assertInstanceOf(javafx.scene.image.ImageView.class, flow.getChildren().getFirst());
+        assertSame(FxIcons.image("\u26a0", ColorToken.TOOLTIP_TEXT).orElseThrow(), icon.getImage());
+        assertEquals("\u26a0 Problem", tip.getText());
+    }); }
+
     /** Настоящий Skin контекстного меню использует строки 28, разделитель 9 и отдельную CSS-сцену. */
     @Test void menuSkinMeasuresRowsAndSeparatorWithoutShowingWindow() throws Exception { onFx(() -> {
         var file = (ru.cashprediction.core.ui.menu.MenuNode.Submenu) port.main.model.menuBar().menus().getFirst();
@@ -79,7 +147,7 @@ class FxComputedGeometryTest extends FxComputedFontTest {
             String legendImage = System.getProperty("fx.legendProofPng");
             if (legendImage != null) try {
                 java.nio.file.Files.write(java.nio.file.Path.of(legendImage),
-                        ru.cashprediction.fx.action.PngEncoder.encode(port.main.chartPane.snapshot(null, null)));
+                        ru.cashprediction.fx.ui.PngEncoder.encode(port.main.chartPane.snapshot(null, null)));
             } catch (java.io.IOException e) { throw new java.io.UncheckedIOException(e); }
             System.out.println("GEOMETRY_NATIVE chart origin=" + canvas.getMinY() + " centerOrigin=" + box.getMinY()
                     + " legend=" + port.main.legend.getHeight());
@@ -242,7 +310,7 @@ class FxComputedGeometryTest extends FxComputedFontTest {
         String directory = System.getProperty("fx.sparkProofDir"); if (directory == null) return;
         try {
             java.nio.file.Files.write(java.nio.file.Path.of(directory, "hidden-spark-" + name + ".png"),
-                    ru.cashprediction.fx.action.PngEncoder.encode(content.snapshot(null, null)));
+                    ru.cashprediction.fx.ui.PngEncoder.encode(content.snapshot(null, null)));
         } catch (java.io.IOException error) { throw new java.io.UncheckedIOException(error); }
     }
 
@@ -438,7 +506,7 @@ class FxComputedGeometryTest extends FxComputedFontTest {
             // Снимок настоящего узла включает вычисленную тень, но не требует показа Popup или Stage.
             var parameters = new javafx.scene.SnapshotParameters(); parameters.setFill(javafx.scene.paint.Color.TRANSPARENT);
             var image = popup.content.snapshot(parameters, null);
-            try { java.nio.file.Files.write(java.nio.file.Path.of(imagePath), ru.cashprediction.fx.action.PngEncoder.encode(image)); }
+            try { java.nio.file.Files.write(java.nio.file.Path.of(imagePath), ru.cashprediction.fx.ui.PngEncoder.encode(image)); }
             catch (java.io.IOException e) { throw new java.io.UncheckedIOException(e); }
             System.out.println("POPUP_HIDDEN_SCENE_PNG " + imagePath + " " + image.getWidth() + "x" + image.getHeight());
         }
@@ -473,6 +541,10 @@ class FxComputedGeometryTest extends FxComputedFontTest {
         var session = new AlertSession("geometry-alert", "main", spec, host);
         var alert = new FxAlerts(spec, session, id -> { throw new AssertionError(id); }, port); alert.close();
         var pane = alert.alert.getDialogPane(); new Scene(pane); css(pane, spec.minWidth(), pane.prefHeight(spec.minWidth()));
+        var glyph = assertInstanceOf(javafx.scene.image.ImageView.class, alert.glyph.getGraphic());
+        assertEquals(DesignTokens.ALERT_ICON_SIZE, glyph.getFitWidth());
+        assertEquals(DesignTokens.ALERT_ICON_SIZE, glyph.getFitHeight());
+        assertSame(FxIcons.image(spec.kind().webGlyph(), ColorToken.WARN).orElseThrow(), glyph.getImage());
         var overwrite = alert.buttons.get("overwrite"); var reload = alert.buttons.get("reload"); var cancel = alert.buttons.get("cancel");
         assertFalse(ButtonBar.isButtonUniformSize(overwrite)); assertFalse(ButtonBar.isButtonUniformSize(cancel));
         assertEquals(DesignTokens.BUTTON_MIN_WIDTH, cancel.getWidth()); assertTrue(overwrite.getWidth() > cancel.getWidth());

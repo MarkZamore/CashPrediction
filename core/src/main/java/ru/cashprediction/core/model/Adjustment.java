@@ -47,6 +47,7 @@ public record Adjustment(OccurrenceKey key, Action action, String note) {
 
     /** Событие не произойдёт (например, «в октябре продукты не покупаем — в отпуске»). */
     public record Skip() implements Action {
+        /** @return слово «пропустить» из грамматики {@link FormatWords} для записи отмены события в файл плана */
         @Override
         public String label() {
             return FormatWords.get("plan.action.skip");
@@ -64,11 +65,13 @@ public record Adjustment(OccurrenceKey key, Action action, String note) {
             Objects.requireNonNull(amount, "amount");
         }
 
+        /** @return слово «изменить» из грамматики {@link FormatWords} для записи изменения суммы в файл плана */
         @Override
         public String label() {
             return FormatWords.get("plan.action.change");
         }
 
+        /** @return непустое значение с заданной новой суммой; дата события этим действием не меняется */
         @Override
         public Optional<Money> newAmount() {
             return Optional.of(amount);
@@ -87,11 +90,13 @@ public record Adjustment(OccurrenceKey key, Action action, String note) {
             Objects.requireNonNull(date, "date");
         }
 
+        /** @return слово «перенести» из грамматики {@link FormatWords} для записи переноса события в файл плана */
         @Override
         public String label() {
             return FormatWords.get("plan.action.move");
         }
 
+        /** @return непустое значение с точной новой датой события, к которой не применяется сдвиг с выходных */
         @Override
         public Optional<LocalDate> newDate() {
             return Optional.of(date);
@@ -111,16 +116,19 @@ public record Adjustment(OccurrenceKey key, Action action, String note) {
             Objects.requireNonNull(date, "date");
         }
 
+        /** @return слово «заменить» из грамматики {@link FormatWords} для записи изменения суммы и даты в файл плана */
         @Override
         public String label() {
             return FormatWords.get("plan.action.replace");
         }
 
+        /** @return непустое значение с новой суммой события, применяемой вместе с новой датой */
         @Override
         public Optional<Money> newAmount() {
             return Optional.of(amount);
         }
 
+        /** @return непустое значение с точной новой датой события, применяемой вместе с новой суммой */
         @Override
         public Optional<LocalDate> newDate() {
             return Optional.of(date);

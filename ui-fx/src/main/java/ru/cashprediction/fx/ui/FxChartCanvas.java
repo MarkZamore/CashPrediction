@@ -55,7 +55,7 @@ public final class FxChartCanvas {
                 case ChartPrimitive.Label p -> {
                     g.setFill(Color.web(p.color().hex())); g.setFont(Font.font(p.font().primaryFamily(), p.font().bold() ? FontWeight.BOLD : FontWeight.NORMAL, p.font().sizePx()));
                     g.setTextAlign(switch (p.anchor()) { case START -> TextAlignment.LEFT; case MIDDLE -> TextAlignment.CENTER; case END -> TextAlignment.RIGHT; });
-                    g.fillText(p.text(), p.x(), p.y());
+                    FxIcons.paint(g, p.text(), p.x(), p.y());
                     // Протокол реально выполненных команд рисования: Canvas не имеет дочерних текстовых узлов.
                     if (p.y() > scene.plot().plotY() + scene.plot().plotHeight()) xLabels.add(p.text());
                     else if (p.x() < scene.plot().plotX()) yLabels.add(p.text()); else lineLabels.add(p.text());
@@ -63,7 +63,7 @@ public final class FxChartCanvas {
             }
             g.restore();
         }
-        if (!scene.emptyText().isEmpty()) { g.setFill(Color.web(scene.emptyColor().hex())); g.setTextAlign(TextAlignment.CENTER); g.fillText(scene.emptyText(), scene.width() / 2, scene.height() / 2); }
+        if (!scene.emptyText().isEmpty()) { g.setFill(Color.web(scene.emptyColor().hex())); g.setTextAlign(TextAlignment.CENTER); FxIcons.paint(g, scene.emptyText(), scene.width() / 2, scene.height() / 2); }
         canvas.getProperties().put("cp.drawn", new UiDump.Chart(List.of(), xLabels, yLabels, lineLabels, markers, bars, scene.emptyText()));
     }
 

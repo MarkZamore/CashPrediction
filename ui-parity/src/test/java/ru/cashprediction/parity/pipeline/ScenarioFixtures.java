@@ -55,7 +55,7 @@ public final class ScenarioFixtures implements AutoCloseable {
     /** Записывает исходные файлы и настоящий маркер сеанса через штатные кодеки ядра. */
     private void snapshot() throws Exception {
         var env = AppEnvironment.from(LaunchOptions.parse("--home", request.home().toString(),
-                "--registry-node", request.registryNodePrefix(), "--today", request.today().toString(), "--ui", "core"));
+                "--registry-node", request.registryNodePrefix(), "--today", request.today().toString()));
         var plan = SamplePlan.create(request.today());
         Path file = env.cashMemory().resolve(plan.name() + ".md");
         Files.writeString(file, PlanMarkdownWriter.write(plan));

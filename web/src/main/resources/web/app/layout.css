@@ -8,7 +8,7 @@ button { background: var(--cp-bg-surface); border: 1px solid var(--cp-border); b
 button:disabled { opacity: 0.55; cursor: default; }
 button:hover:enabled, button:focus-visible { border-color: var(--cp-accent); }
 input, select, textarea { border: 1px solid var(--cp-border-strong); border-radius: 4px; background: var(--cp-bg-surface); padding: 3px 6px; min-width: 0; max-width: 100%; }
-input[type=radio], input[type=checkbox] { min-height: 0; width: 13px; height: 13px; padding: 0; margin: 0; }
+input[type=radio], input[type=checkbox] { min-height: 0; width: var(--cp-inline-icon-size); height: var(--cp-inline-icon-size); padding: 0; margin: 0; }
 :focus-visible { outline: 1px solid var(--cp-accent); outline-offset: 1px; }
 #main { display: flex; flex-direction: column; height: 100%; min-width: 0; }
 #menuBar { height: 28px; display: flex; border-bottom: 1px solid var(--cp-border); flex-shrink: 0; overflow-x: auto; }
@@ -31,14 +31,17 @@ input[type=radio], input[type=checkbox] { min-height: 0; width: 13px; height: 13
 .toggle[aria-pressed=true] { background: var(--cp-accent-weak); }
 .ACCENT { color: var(--cp-accent); font-weight: 700; }
 .DANGER { color: var(--cp-expense); }
-#summary { display: flex; flex-wrap: wrap; gap: 6px; padding: 6px 8px; flex-shrink: 0; }
-.card { display: flex; flex-direction: column; gap: var(--cp-card-content-gap); flex: 1 0 var(--cp-card-min-width); min-width: var(--cp-card-min-width); border: 1px solid var(--cp-border); background: var(--cp-bg-card); border-radius: var(--cp-radius); padding: 6px 10px; }
+/* Число колонок рассчитывается по ширине панели; неполный ряд сохраняет ту же сетку. */
+#summary { display: grid; grid-template-columns: repeat(var(--cp-summary-columns, 1), minmax(0, 1fr)); gap: var(--cp-card-gap); padding: 6px 8px; flex-shrink: 0; }
+.summary-unavailable { grid-column: 1 / -1; min-width: 0; overflow-wrap: anywhere; color: var(--cp-expense); }
+.card { display: flex; flex-direction: column; gap: var(--cp-card-content-gap); min-width: 0; border: 1px solid var(--cp-border); background: var(--cp-bg-card); border-radius: var(--cp-radius); padding: 6px 10px; }
 .card:hover, .card:focus-visible { border-color: var(--cp-accent); }
 .card-title, .card-caption { font-size: 11px; color: var(--cp-text-muted); }
 .card-value { font-size: var(--cp-font-card-size); line-height: var(--cp-card-value-line-height); font-weight: 700; white-space: nowrap; }
 .card-title { line-height: var(--cp-card-title-line-height); }
+/* Ниже минимума карточка сужается вместе с панелью; три строки не переносятся и не выходят наружу. */
+.card-title, .card-value, .card-caption { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .card-caption { line-height: var(--cp-card-caption-line-height); }
-.card-caption { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 #center { flex: 1; min-height: 0; min-width: 0; background: var(--cp-bg-surface); position: relative; }
 #table, #chart { height: 100%; position: relative; min-width: 0; }
 .table-header { display: flex; height: var(--cp-header-height); background: var(--cp-bg-alt); overflow: hidden; border: 1px solid var(--cp-border); border-top: 0; }
@@ -90,7 +93,22 @@ dialog { padding: 0; color: var(--cp-text-primary); background: var(--cp-bg-surf
 dialog::backdrop { background: transparent; }
 .window-title { padding: 6px 12px; background: var(--cp-bg-window); border-bottom: 1px solid var(--cp-border); display: flex; justify-content: space-between; align-items: center; }
 .window-header { display: flex; gap: 12px; align-items: center; padding: 12px 16px; border-bottom: 1px solid var(--cp-border); font-size: 14px; font-weight: 700; white-space: pre-wrap; }
-.window-glyph { font-size: 26px; }
+.window-glyph { display: flex; align-items: center; }
+.window-glyph .shared-icon { display: block; width: var(--cp-dialog-icon-size); height: var(--cp-dialog-icon-size); }
+.alert-window .window-glyph .shared-icon { width: var(--cp-alert-icon-size); height: var(--cp-alert-icon-size); }
+.shared-icon { width: var(--cp-inline-icon-size); height: var(--cp-inline-icon-size); object-fit: contain; vertical-align: middle; flex-shrink: 0; }
+.icon-semantic { display: none; }
+select:not([size]), input[list] { appearance: none; background-repeat: no-repeat; background-position: right 6px center; background-size: var(--cp-inline-icon-size); padding-right: 24px; }
+input[type=checkbox], input[type=radio] { appearance: none; border: 1px solid var(--cp-border-strong); background-repeat: no-repeat; background-position: center; background-size: var(--cp-inline-icon-size); }
+input[type=radio] { border-radius: 50%; }
+input[type=checkbox]:not(:checked), input[type=radio]:not(:checked) { background-image: none !important; }
+input[type=number] { appearance: textfield; -moz-appearance: textfield; }
+input[type=number]::-webkit-inner-spin-button, input[type=number]::-webkit-outer-spin-button { appearance: none; margin: 0; }
+input[list]::-webkit-calendar-picker-indicator { display: none !important; }
+/* Две стрелки делят высоту настоящего контрола; размер PNG не увеличивает строку формы. */
+.spinner-arrows { display: inline-flex; flex-direction: column; flex-shrink: 0; height: var(--cp-control-height); }
+.spinner-arrows button { min-height: 0; height: 50%; padding: 0 3px; display: flex; align-items: center; overflow: hidden; }
+.spinner-arrows button .shared-icon { flex-shrink: 0; }
 .form-body { padding: 16px; }
 /* Каркас формы использует два шага сетки по вертикали; сообщения и popup сохраняют свои отступы. */
 dialog:not(.alert-window):not(#screens) > .window-header,
@@ -146,7 +164,6 @@ dialog:not(.alert-window) .form-grid .hint { line-height: 16px; }
   .form-grid { grid-template-columns: minmax(0, 1fr); }
   .field-label { text-align: left; }
   .window-buttons { flex-wrap: wrap; }
-  .card { flex-basis: 120px; }
   #status { overflow-x: auto; }
   #toolbar .toolbar-node.Spacer { display: none; }
 }

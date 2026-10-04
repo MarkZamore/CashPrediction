@@ -10,6 +10,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.function.Predicate;
 import ru.cashprediction.core.app.AppState;
 import ru.cashprediction.core.app.DocumentView;
 import ru.cashprediction.core.document.ViewState;
@@ -120,6 +121,12 @@ public final class LazyTableModel implements TableModel {
 
     /** LRU-кэш готовых строк по видимому индексу; доступ только под его монитором. */
     private final Map<Integer, TableRowView> cache = new LinkedHashMap<>(256, 0.75f, true) {
+        /**
+         * Разрешает удалить наименее недавно использованную строку после превышения ёмкости кэша.
+         * Порядок обращений поддерживает {@link LinkedHashMap}; проверка вызывается после вставки.
+         * @param eldest запись, к которой обращались раньше остальных
+         * @return {@code true}, если число записей стало больше {@value LazyTableModel#CACHE_SIZE}
+         */
         @Override
         protected boolean removeEldestEntry(Map.Entry<Integer, TableRowView> eldest) {
             return size() > CACHE_SIZE;
@@ -228,21 +235,42 @@ public final class LazyTableModel implements TableModel {
         return TOTAL_ROW_ID_PREFIX + month;
     }
 
+    /**
+     * Возвращает ревизию, заданную при построении модели таблицы.
+     * @return номер для отбрасывания ответов от устаревшей модели
+     */
     @Override
     public long revision() {
         return revision;
     }
 
+    /**
+     * Возвращает общую раскладку колонок, сохранённую при построении модели.
+     * @return восемь колонок в порядке отображения
+     */
     @Override
     public List<ColumnSpec> columns() {
         return columns;
     }
 
+    /**
+     * Возвращает размер индекса видимых строк без построения их текстов.
+     * @return число строк, включая начальную строку, заголовок прошедших и видимые итоги;
+     *         для модели пустого состояния ноль
+     */
     @Override
     public int rowCount() {
         return codes.length;
     }
 
+    /**
+     * Получает готовую строку из LRU-кэша либо строит её по коду видимого индекса и кэширует.
+     * Построение выполняется вне монитора кэша, поэтому параллельные запросы могут
+     * независимо создать равные строки одного индекса.
+     * @param index видимый индекс от нуля до {@code rowCount() - 1}
+     * @return модель строки события, заголовка группы или месячного итога
+     * @throws IndexOutOfBoundsException если индекс вне диапазона видимых строк
+     */
     @Override
     public TableRowView row(int index) {
         Objects.checkIndex(index, codes.length);
@@ -261,20 +289,41 @@ public final class LazyTableModel implements TableModel {
         return built;
     }
 
+    /**
+     * Возвращает текст подсказки ячейки из модели подсказки с позициями служебных значков.
+     * Для события учитывает колонку, для заголовка прошедших и месячного итога даёт подсказку строки.
+     * @param index видимый индекс строки
+     * @param columnId идентификатор колонки
+     * @return текст подсказки, возможно пустой или многострочный
+     * @throws IndexOutOfBoundsException если индекс вне диапазона видимых строк
+     */
     @Override
     public String tooltip(int index, String columnId) {
+        return decoratedTooltip(index, columnId).text();
+    }
+
+    /** Возвращает явные позиции служебных значков только для строк событий. */
+    @Override
+    public DecoratedTooltip decoratedTooltip(int index, String columnId) {
         Objects.checkIndex(index, codes.length);
         int code = codes[index];
         if (code >= 0) {
-            return rows.eventTooltip(forecastRows.get(code), columnId);
+            return rows.decoratedEventTooltip(forecastRows.get(code), columnId);
         }
         if (code == CODE_PAST_HEADER) {
-            return TableRows.pastHeaderTooltip(pastExpanded);
+            return DecoratedTooltip.plain(TableRows.pastHeaderTooltip(pastExpanded));
         }
         YearMonth month = monthOf(CODE_TOTAL_BASE - code);
-        return rows.totalTooltip(month, totalsOf(month));
+        return DecoratedTooltip.plain(rows.totalTooltip(month, totalsOf(month)));
     }
 
+    /**
+     * Ищет видимый индекс заголовка группы, итога месяца или строки прогноза по идентификатору.
+     * События находит по дате, учитывая сдвиг выходных и перенос корректировкой,
+     * затем переводит индекс прогноза в индекс видимой строки.
+     * @param rowId идентификатор строки; {@code null} и пустая строка допустимы
+     * @return видимый индекс либо -1, если строка не найдена или скрыта текущим видом
+     */
     @Override
     public int indexOf(String rowId) {
         if (rowId == null || rowId.isEmpty() || codes.length == 0) {
@@ -296,16 +345,31 @@ public final class LazyTableModel implements TableModel {
         return forecastIndex < 0 ? -1 : visibleOf[forecastIndex];
     }
 
+    /**
+     * Возвращает выделение из снимка состояния приложения, не проверяя видимость строки.
+     * @return сохранённый идентификатор выделенной строки или пустая строка при отсутствии выделения
+     */
     @Override
     public String selectedRowId() {
         return selectedRowId;
     }
 
+    /**
+     * Возвращает рассчитанную при построении цель прокрутки: начальную строку, если начало
+     * прогноза не раньше сегодня, иначе первое видимое событие с датой не раньше сегодня.
+     * Заголовок группы и итоги месяцев целями не становятся; выделение метод не меняет.
+     * @return идентификатор строки или пустая строка, если подходящей строки нет
+     */
     @Override
     public String scrollToRowId() {
         return scrollToRowId;
     }
 
+    /**
+     * Возвращает описание пустого состояния вместо строк таблицы.
+     * @return состояние ошибки прогноза, нового плана или отсутствия событий после фильтров;
+     *         {@code null}, если модель содержит строки
+     */
     @Override
     public Placeholder placeholder() {
         return placeholder;
@@ -330,6 +394,7 @@ public final class LazyTableModel implements TableModel {
     /** @return раскладка или {@code null}, если не видно ни одной строки события */
     private static Layout layout(AppState state, Forecast forecast) {
         ViewState view = state.view();
+        Predicate<ForecastRow> rowFilter = view.rowFilter();
         LocalDate today = state.today();
         List<ForecastRow> all = forecast.rows();
         LocalDate periodEnd = view.periodEnd(forecast.plan(), forecast.anchor());
@@ -345,7 +410,7 @@ public final class LazyTableModel implements TableModel {
             if (row.date().isAfter(periodEnd)) {
                 break;
             }
-            if (row.origin() == Origin.START || !view.accepts(row)) {
+            if (row.origin() == Origin.START || !rowFilter.test(row)) {
                 continue;
             }
             accepted[acceptedCount++] = i;

@@ -76,16 +76,43 @@ public final class XmlSnapshotCodec implements SnapshotCodec<String> {
     public XmlSnapshotCodec() {
     }
 
+    /**
+     * Возвращает название XML-формата для сообщений о снимке.
+     *
+     * @return {@code XML}
+     */
     @Override
     public String formatName() {
         return "XML";
     }
 
+    /**
+     * Записывает XML-документ со снимком и его версией схемы, без маркера сеанса.
+     * Включает состояния окон и текст плана, экранируя атрибуты и разделяя CDATA
+     * для сохранения текста; недопустимые символы XML 1.0 заменяет на U+FFFD.
+     *
+     * @param snapshot снимок для последующего восстановления
+     * @return XML-текст с декларацией UTF-8, переводами строк LF и завершающим переводом строки
+     */
     @Override
     public String encode(SessionSnapshot snapshot) {
         return encodeDocument(new SessionDocument(snapshot.client(), null, snapshot));
     }
 
+    /**
+     * Разбирает защищённым XML-парсером документ с корнем {@code session} и требует
+     * элемент {@code main} со снимком. Проверяет версию схемы, обязательные атрибуты,
+     * значения и инварианты состояний; DOCTYPE запрещён. Неизвестные элементы и атрибуты
+     * игнорируются, неизвестный тип окна становится {@code null}. Возвращает данные
+     * для восстановления, но не открывает окна и не читает файл плана.
+     *
+     * @param encoded XML-текст файла сессии
+     * @return разобранный снимок с текстом плана и состояниями окон
+     * @throws SnapshotFormatException если текст пуст, XML повреждён или содержит DOCTYPE,
+     *                                 схема не поддерживается, значения некорректны
+     *                                 либо документ не содержит снимка; сообщение локализовано
+     * @throws IllegalStateException если XML-парсер JDK не поддерживает защищённый режим
+     */
     @Override
     public SessionSnapshot decode(String encoded) throws SnapshotFormatException {
         SessionSnapshot snapshot = decodeDocument(encoded).snapshot();
@@ -328,16 +355,37 @@ public final class XmlSnapshotCodec implements SnapshotCodec<String> {
             DocumentBuilder builder = secureFactory().newDocumentBuilder();
             // Без своего обработчика парсер печатает «[Fatal Error]» в stderr, а ошибка и так станет исключением.
             builder.setErrorHandler(new ErrorHandler() {
+                /**
+                 * Игнорирует предупреждение XML-парсера, позволяя продолжить разбор снимка.
+                 *
+                 * @param exception предупреждение с местом и причиной, не выводимое в stderr
+                 */
                 @Override
                 public void warning(SAXParseException exception) {
                     // Предупреждения парсера не мешают разобрать снимок.
                 }
 
+                /**
+                 * Прерывает разбор при ошибке XML, передавая исходное исключение наружу.
+                 * Метод разбора преобразует его в локализованную ошибку формата снимка
+                 * с номером строки и столбца, сохраняя исходную причину.
+                 *
+                 * @param exception ошибка XML-парсера
+                 * @throws SAXException всегда выбрасывается переданное {@code exception}
+                 */
                 @Override
                 public void error(SAXParseException exception) throws SAXException {
                     throw exception;
                 }
 
+                /**
+                 * Прерывает разбор при фатальной ошибке XML, включая запрещённый DOCTYPE.
+                 * Передаёт исходное исключение методу разбора для локализованной ошибки
+                 * формата снимка с номером строки и столбца, без печати в stderr.
+                 *
+                 * @param exception фатальная ошибка XML-парсера
+                 * @throws SAXException всегда выбрасывается переданное {@code exception}
+                 */
                 @Override
                 public void fatalError(SAXParseException exception) throws SAXException {
                     throw exception;

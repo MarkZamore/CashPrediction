@@ -13,6 +13,7 @@ import java.lang.reflect.Type;
 import org.junit.jupiter.api.Test;
 import ru.cashprediction.core.json.JsonParser;
 import ru.cashprediction.core.ui.text.UiText;
+import ru.cashprediction.core.ui.token.UiIcons;
 
 /** Доказывает узкую область исключений §10 и отсутствие масок для строк вне данных дампа. */
 class ClosedAllowancesTest {
@@ -96,6 +97,80 @@ class ClosedAllowancesTest {
                 "/chooserRequests/0/folder", "/chooserRequests/0/name", "/menuBar/$order/0", "/alerts/$order/0")) {
             var difference = new DumpDiff.Difference(pointer, "a", "b");
             assertEquals(List.of(difference), allowed.filter("web", List.of(difference)), pointer);
+        }
+        assertEquals(allowed.entries(), allowed.unused());
+    }
+
+    /** Системные исключения не скрывают глифы, типы сообщений и значки в семантических подписях. */
+    @Test
+    void applicationIconSemanticsStayVisibleForEveryClient() throws IOException {
+        var allowed = AllowedDiffs.parse(resource());
+        var differences = List.of(
+                new DumpDiff.Difference("/windows/RULE_EDITOR/glyph", "\u21bb", "\u2261"),
+                new DumpDiff.Difference("/windows/FILE_BROWSER/glyph", "folder", ""),
+                new DumpDiff.Difference("/windows/RULE_EDITOR/problem", "\u2716 problem", "problem"),
+                new DumpDiff.Difference("/windows/RULE_EDITOR/detailsLink", "details \u25b8", "details \u25be"),
+                new DumpDiff.Difference("/windows/RULE_EDITOR/preview/0", "date \u270e note", "date note"),
+                new DumpDiff.Difference("/toolbar/items/undo/text", "\u21b6", "\u21b7"),
+                new DumpDiff.Difference("/toolbar/items/filter.clear/text", "\u2715", ""),
+                new DumpDiff.Difference("/menuBar/view/children/view.past/text", "\u25b8 past", "\u25be past"),
+                new DumpDiff.Difference("/table/rows/event/cells/7", "\u21c4", "\u270e"),
+                new DumpDiff.Difference("/status/dirty/text", "\u25cf dirty", "dirty"),
+                new DumpDiff.Difference("/status/whatIf/text", "\u0394 whatIf", "whatIf"),
+                new DumpDiff.Difference("/popups/calendar/lines/0", "\u25c0 month \u25b6", "month"));
+        for (String client : List.of("fx", "swing", "web")) {
+            assertEquals(differences, allowed.filter(client, differences), client);
+            for (String purpose : List.of("about", "simulateHalt", "lastSnapshot", "alreadyRunning",
+                    "uncaught", "crashRecovery", "replaceFile")) {
+                for (var difference : List.of(
+                        new DumpDiff.Difference("/alerts/" + purpose + "/glyph", "\u27f2", ""),
+                        new DumpDiff.Difference("/alerts/" + purpose + "/glyph", "alert.warning", "alert.error"),
+                        new DumpDiff.Difference("/alerts/" + purpose + "/kind", "WARNING", "ERROR"),
+                        new DumpDiff.Difference("/alerts/" + purpose + "/detailsLink", "details \u25b8", "details \u25be"))) {
+                    assertEquals(List.of(difference), allowed.filter(client, List.of(difference)),
+                            client + ": " + difference.pointer());
+                }
+            }
+        }
+        assertEquals(allowed.entries(), allowed.unused());
+    }
+
+    /** Ни один известный значок не исчезает из проверяемых подписей после перехода на PNG. */
+    @Test
+    void everyKnownIconRemainsOutsideClosedAllowances() throws IOException {
+        var allowed = AllowedDiffs.parse(resource());
+        for (String client : List.of("fx", "swing", "web")) {
+            for (String key : UiIcons.manifest().keySet()) {
+                for (String pointer : List.of("/windows/RULE_EDITOR/glyph", "/alerts/about/glyph",
+                        "/toolbar/items/undo/text", "/menuBar/view/children/view.table/text",
+                        "/status/dirty/text", "/table/rows/event/cells/7")) {
+                    var difference = new DumpDiff.Difference(pointer, key, "");
+                    assertEquals(List.of(difference), allowed.filter(client, List.of(difference)),
+                            client + ": " + pointer + ": " + key);
+                }
+            }
+        }
+        assertEquals(allowed.entries(), allowed.unused());
+    }
+
+    /** Изображение точки не заменяет логические значения радио-полей и ID пунктов меню. */
+    @Test
+    void radioImagesCannotHideLogicalValuesIdsOrSelection() throws IOException {
+        var allowed = AllowedDiffs.parse(resource());
+        var differences = List.of(
+                new DumpDiff.Difference("/windows/ONE_TIME_EDITOR/fields/kind/id", "kind", "\u25cf"),
+                new DumpDiff.Difference("/windows/ONE_TIME_EDITOR/fields/kind/text", "INCOME", "\u25cf"),
+                new DumpDiff.Difference("/windows/RULE_EDITOR/fields/kind/text", "EXPENSE", "\u25cf"),
+                new DumpDiff.Difference("/windows/PLAN_SETTINGS/fields/horizonKind/text", "MONTHS", "\u25cf"),
+                new DumpDiff.Difference("/windows/CSV_EXPORT/fields/range/text", "PERIOD", "\u25cf"),
+                new DumpDiff.Difference("/menuBar/view/children/view.table/id", "view.table", "\u25cf"),
+                new DumpDiff.Difference("/menuBar/view/children/view.table/checked", true, false),
+                new DumpDiff.Difference("/menuBar/recovery/children/recovery.store.registry/id",
+                        "recovery.store.registry", "\u25cf"),
+                new DumpDiff.Difference("/menuBar/recovery/children/recovery.store.registry/text", "caption", "\u25cf"),
+                new DumpDiff.Difference("/menuBar/recovery/children/recovery.store.registry/checked", true, false));
+        for (String client : List.of("fx", "swing", "web")) {
+            assertEquals(differences, allowed.filter(client, differences), client);
         }
         assertEquals(allowed.entries(), allowed.unused());
     }

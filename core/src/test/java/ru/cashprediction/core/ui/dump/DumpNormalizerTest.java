@@ -8,6 +8,9 @@ import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
+import ru.cashprediction.core.io.AppInfo;
+import ru.cashprediction.core.text.Texts;
+import ru.cashprediction.core.ui.text.UiText;
 
 /** Проверяет переносимость эталонов без потери текстов, порядка и точности данных. */
 class DumpNormalizerTest {
@@ -81,5 +84,105 @@ class DumpNormalizerTest {
                 normalized.alerts().getFirst().content());
         assertEquals(a.content(), normalized.alerts().getLast().content());
         assertEquals(normalized, DumpNormalizer.normalize(normalized, HOME, NODE));
+    }
+
+    @Test
+    void developmentAndReleaseHelpersReplaceOnlyTheVersionSlot() {
+        for (String version : versions()) {
+            String content = about(version, "client " + version, "folder/" + version);
+            String expected = about("<app-version>", "client " + version, "folder/" + version);
+            assertEquals(expected, DumpNormalizer.normalizeAboutAppVersion(content, version));
+            assertEquals(expected, DumpNormalizer.normalizeAboutAppVersion(expected, version));
+        }
+    }
+
+    @Test
+    void staleFakeAndPartialVersionsRemainVisible() {
+        for (String current : versions()) {
+            for (String actual : versions()) {
+                if (current.equals(actual)) continue;
+                String content = about(actual, "client " + current, "folder/" + current);
+                assertEquals(content, DumpNormalizer.normalizeAboutAppVersion(content, current));
+            }
+            for (String fake : List.of("", "fake", current + " extra", "extra " + current,
+                    current + "\n", current.toUpperCase(java.util.Locale.ROOT))) {
+                String content = about(fake, current, current);
+                assertEquals(content, DumpNormalizer.normalizeAboutAppVersion(content, current));
+            }
+        }
+    }
+
+    @Test
+    void versionRequiresTheCompleteLocalizedTemplateAtItsExpectedPosition() {
+        String version = AppInfo.displayVersion();
+        String content = about(version, "client", "folder");
+        String description = UiText.template("alert.about.content").orElseThrow()
+                .split("\\{1\\}", 2)[0].substring("{0}".length());
+        for (String altered : List.of(version, "prefix " + content, "\n" + content,
+                content.replace(description, "\n\nchanged description\n\n"),
+                content.replace(", Java ", ", Runtime "), content.replace("\n", "\r\n"))) {
+            assertEquals(altered, DumpNormalizer.normalizeAboutAppVersion(altered, version));
+        }
+        // Служебное значение сравнивается буквально, включая метасимволы регулярных выражений.
+        String special = "release [12].+ ($1) \\E";
+        assertEquals(about("<app-version>", "client", "folder"),
+                DumpNormalizer.normalizeAboutAppVersion(about(special, "client", "folder"), special));
+        String fake = about("release 12x ($1) \\E", "client", "folder");
+        assertEquals(fake, DumpNormalizer.normalizeAboutAppVersion(fake, special));
+    }
+
+    @Test
+    void productionNormalizesCurrentAboutContentAndPreservesOtherFieldsAndUserText() {
+        String version = AppInfo.displayVersion();
+        String content = about(version, "client " + version, "folder/" + version);
+        // JavaFX: Alert → Swing: JOptionPane → Web: dialog
+        var about = new UiDump.Alert("about", "about", "INFORMATION", version, "", 460,
+                version, content, version, version, false, List.of());
+        // JavaFX: Alert → Swing: JOptionPane → Web: dialog
+        var other = new UiDump.Alert("other", "other", "INFORMATION", version, "", 460,
+                version, content, version, version, false, List.of());
+        var original = alertDump(List.of(about, other));
+        var normalized = DumpNormalizer.normalize(original, HOME, NODE);
+        // JavaFX: Alert → Swing: JOptionPane → Web: dialog
+        assertEquals(new UiDump.Alert("about", "about", "INFORMATION", version, "", 460,
+                version, about("<app-version>", "client " + version, "folder/" + version)
+                        .replace("Java 25.0.3.", "Java <java>."),
+                version, version, false, List.of()), normalized.alerts().getFirst());
+        assertEquals(other, normalized.alerts().getLast());
+        assertEquals(content, original.alerts().getFirst().content());
+        assertEquals(content, DumpNormalizer.normalizeText(content, HOME, NODE));
+        assertEquals(normalized, DumpNormalizer.normalize(normalized, HOME, NODE));
+    }
+
+    @Test
+    void productionDoesNotHideAFalseAboutVersionEvenWhenCurrentVersionAppearsElsewhere() {
+        String current = AppInfo.displayVersion();
+        for (String fake : List.of("fake", current + " extra", Texts.get("appinfo.version.release", 999999))) {
+            String content = about(fake, "client " + current, "folder/" + current);
+            // JavaFX: Alert → Swing: JOptionPane → Web: dialog
+            var alert = new UiDump.Alert("about", "about", "INFORMATION", "title", "", 460,
+                    "header", content, "", "", false, List.of());
+            assertEquals(content.replace("Java 25.0.3.", "Java <java>."),
+                    DumpNormalizer.normalize(alertDump(List.of(alert)), HOME, NODE).alerts().getFirst().content());
+        }
+    }
+
+    /** Строки разработки и релизов с разными номерами и хешами из общего каталога. */
+    private static List<String> versions() {
+        return List.of(Texts.get("appinfo.version.dev"), Texts.get("appinfo.version.release", 12),
+                Texts.get("appinfo.version.releaseCommit", 12, "a1b2c3d"),
+                Texts.get("appinfo.version.releaseCommit", 12, "d4e5f6a"),
+                Texts.get("appinfo.version.releaseCommit", 13, "a1b2c3d"));
+    }
+
+    /** Формирует настоящее локализованное содержимое без обращения к клиентам. */
+    private static String about(String version, String client, String path) {
+        return UiText.get("alert.about.content", version, client, "25.0.3", path);
+    }
+
+    /** Минимальный дамп сообщений для проверки производственного обхода. */
+    private static UiDump alertDump(List<UiDump.Alert> alerts) {
+        return new UiDump(1, "model", "s", "step", null, List.of(), null, null, null, null,
+                List.of(), List.of(), List.of(), alerts, List.of(), List.of(), List.of(), Map.of(), Map.of());
     }
 }

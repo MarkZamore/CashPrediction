@@ -11,14 +11,18 @@ class SwingStartupBarrierTest {
     @Test void onlyStartupQuestionsReleaseRecorderInstallationWait() {
         assertTrue(SwingUiDriver.startupDecision("alreadyRunning"));
         assertTrue(SwingUiDriver.startupDecision("crashRecovery"));
+        assertTrue(SwingUiDriver.startupDecision("restoreReport"));
+        assertTrue(SwingUiDriver.startupDecision("recorderNotStarted"));
+        assertTrue(SwingUiDriver.startupDecision("loadDiagnostics"));
         assertFalse(SwingUiDriver.startupDecision("clearSnapshots"));
         assertFalse(SwingUiDriver.startupDecision("about"));
     }
     @Test void pendingRestoreAndDisabledInstanceDoNotWaitForImpossibleSnapshot() {
-        assertTrue(SwingUiDriver.snapshotWaitNotRequired(ru.cashprediction.core.app.RecorderStatus.PENDING_RESTORE));
-        assertTrue(SwingUiDriver.snapshotWaitNotRequired(ru.cashprediction.core.app.RecorderStatus.DISABLED_SECOND_INSTANCE));
-        assertFalse(SwingUiDriver.snapshotWaitNotRequired(ru.cashprediction.core.app.RecorderStatus.NOT_STARTED));
-        assertFalse(SwingUiDriver.snapshotWaitNotRequired(ru.cashprediction.core.app.RecorderStatus.RECORDING));
+        assertTrue(SwingUiDriver.snapshotWaitNotRequired(ru.cashprediction.core.app.RecorderStatus.PENDING_RESTORE, true));
+        assertFalse(SwingUiDriver.snapshotWaitNotRequired(ru.cashprediction.core.app.RecorderStatus.PENDING_RESTORE, false));
+        assertTrue(SwingUiDriver.snapshotWaitNotRequired(ru.cashprediction.core.app.RecorderStatus.DISABLED_SECOND_INSTANCE, false));
+        assertFalse(SwingUiDriver.snapshotWaitNotRequired(ru.cashprediction.core.app.RecorderStatus.NOT_STARTED, true));
+        assertFalse(SwingUiDriver.snapshotWaitNotRequired(ru.cashprediction.core.app.RecorderStatus.RECORDING, true));
     }
     @Test void waitsForAllActualSnapshotResults() {
         var saved = new StoreStatus("registry", true, Instant.EPOCH, "");

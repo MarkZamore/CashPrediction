@@ -46,7 +46,7 @@ public final class NativeAllowanceReferenceTest {
         var expected = SelfTestScript.parse("native-allowances", text);
         var target = ClientJarSnapshot.copy(client.equals("fx") ? ClientTarget.fx(layout) : ClientTarget.swing(layout), output);
         var request = new LaunchRequest(client, "native-allowances", output.resolve("home"), node,
-                LaunchRequest.PARITY_TODAY, script.toString(), dumps, "core", List.of(), List.of());
+                LaunchRequest.PARITY_TODAY, script.toString(), dumps, List.of(), List.of());
         try {
             try (var launched = ClientLauncher.launch(target, request)) {
                 Path log = dumps.resolve("selftest.log");

@@ -3,7 +3,8 @@
   Модуль core: всё, что не зависит от UI-библиотек.
   Здесь живут доменная модель, движок прогноза, чтение/запись Markdown-файлов CashMemory,
   мини-JSON, модель снимка сессии и три хранилища снимков (реестр, XML, серверный Markdown).
-  Модуль требует только java.prefs (реестр Windows) и java.xml (XML-снимок).
+  Модуль использует java.prefs (реестр Windows), java.xml (XML-снимок)
+  и java.net.http (тихая подготовка обновлений).
 -->
 <project xmlns="http://maven.apache.org/POM/4.0.0"
          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
@@ -48,10 +49,13 @@
             <configuration>
               <!-- Разбор исходников в тестовом сканере локализации использует публичный API компилятора JDK.
                    Доступ нужен только тестам: runtime и основной module-info остаются неизменными. -->
-              <compilerArgs>
+              <compilerArgs combine.children="append">
                 <arg>--add-modules</arg><arg>jdk.compiler</arg>
                 <arg>--add-reads</arg><arg>ru.cashprediction.core=java.compiler</arg>
                 <arg>--add-reads</arg><arg>ru.cashprediction.core=jdk.compiler</arg>
+                <!-- Локальный сервер проверяет updater без обращения к GitHub; в runtime ядра его нет. -->
+                <arg>--add-modules</arg><arg>jdk.httpserver</arg>
+                <arg>--add-reads</arg><arg>ru.cashprediction.core=jdk.httpserver</arg>
               </compilerArgs>
             </configuration>
           </execution>
@@ -61,7 +65,7 @@
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-surefire-plugin</artifactId>
         <configuration>
-          <argLine>-Dfile.encoding=UTF-8 -Duser.language=ru -Duser.country=RU -XX:-UsePerfData --add-modules=jdk.compiler</argLine>
+          <argLine>-Dfile.encoding=UTF-8 -Duser.language=ru -Duser.country=RU -XX:-UsePerfData --add-modules=jdk.compiler,jdk.httpserver</argLine>
           <!-- Стандартные шаблоны surefire плюс *IT: интеграционный тест реестра Windows
                (RegistrySessionStoreIT) должен выполняться при каждой сборке. На не-Windows он пропускает себя сам. -->
           <includes>

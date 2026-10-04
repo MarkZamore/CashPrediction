@@ -1826,7 +1826,7 @@
           "prompt": "Фильтр… (Ctrl+F)",
           "tooltip": "Показывать строки, где название, категория или заметка содержат текст",
           "widthPx": 220,
-          "debounceMs": 300,
+          "debounceMs": 0,
           "clearVisible": false,
           "clearTooltip": "Очистить фильтр"
         },

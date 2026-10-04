@@ -15,7 +15,7 @@ function stroke(model) {
 }
 
 /** Переводит точки сцены в атрибут SVG. */
-function points(values) { return values.map(point => `${point.x},${point.y}`).join(' '); }
+function points(values) { return values.map(/** Преобразует точку сцены в пару координат для атрибута SVG. */ point => `${point.x},${point.y}`).join(' '); }
 
 /** Рисует один примитив, сохраняя порядок модели. */
 export function primitive(model) {
@@ -39,15 +39,18 @@ export class Chart {
   /** Подключает только действия указателя. */
   constructor(app) {
     this.app = app; this.root = document.getElementById('chart'); this.epoch = 0;
-    this.root.addEventListener('contextmenu', event => {
+    this.root.addEventListener('contextmenu', /** Открывает меню ядра для точки графика под указателем. */ event => {
       event.preventDefault(); const p = this.position(event);
       app.menus.context({kind: 'chart', x: p.x, y: p.y, width: this.root.clientWidth, height: this.root.clientHeight}, event.clientX, event.clientY);
     });
-    this.root.addEventListener('pointermove', event => this.hover(event));
-    this.root.addEventListener('pointerleave', () => this.clearHover());
-    this.root.addEventListener('dblclick', async event => {
+    this.root.addEventListener('pointermove', /** Передаёт движение указателя обработчику наведения графика. */ event => this.hover(event));
+    this.root.addEventListener('pointerleave', /** Убирает подсветку и карточку дня при выходе указателя с графика. */ () => this.clearHover());
+    this.root.addEventListener('dblclick', /** Выполняет первое доступное действие точки графика, если ответ относится к текущей сцене. */ async event => {
+      if (this.generation !== app.transport.generation) return;
+      const generation = app.transport.generation; const epoch = this.epoch;
       const p = this.position(event);
       const response = await app.transport.query({type: 'contextMenu', target: {kind: 'chart', x: p.x, y: p.y, width: this.root.clientWidth, height: this.root.clientHeight}});
+      if (!app.transport.current(generation) || epoch !== this.epoch) return;
       const action = response.result?.[0]; if (action?.enabled) app.command(action.command, action.args, 'MAIN');
     });
   }
@@ -63,11 +66,14 @@ export class Chart {
 
   /** Применяет новую сцену только к соответствующей ревизии и размеру. */
   async update(model) {
+    const generation = this.app.transport.generation;
+    this.generation = generation;
+    this.clearHover();
     this.model = model;
     const area = this.root.hidden ? document.getElementById('center') : this.root;
     const epoch = ++this.epoch;
     const response = await this.app.transport.query({type: 'chartScene', rev: model.revision, w: area.clientWidth, h: area.clientHeight});
-    if (epoch !== this.epoch) return;
+    if (!this.app.transport.current(generation) || epoch !== this.epoch) return;
     if (response.stale) { this.app.resync(); return; }
     const scene = response.result; if (!scene || !scene.primitives) return;
     const svg = svgNode('svg', {viewBox: `0 0 ${scene.width} ${scene.height}`});
@@ -93,11 +99,12 @@ export class Chart {
 
   /** Отображает координаты наведения, вычисленные ядром. */
   async hover(event) {
-    if (!this.model) return;
+    if (!this.model || this.generation !== this.app.transport.generation) return;
+    const generation = this.app.transport.generation; const sceneEpoch = this.epoch;
     const epoch = this.hoverEpoch = (this.hoverEpoch || 0) + 1;
     const p = this.position(event);
     const response = await this.app.transport.query({type: 'chartHover', rev: this.model.revision, x: p.x, y: p.y, w: this.root.clientWidth, h: this.root.clientHeight});
-    if (epoch !== this.hoverEpoch) return;
+    if (!this.app.transport.current(generation) || sceneEpoch !== this.epoch || epoch !== this.hoverEpoch || !this.scene) return;
     this.root.querySelector('.chart-hover')?.remove();
     const hover = response.result;
     if (!hover) { this.app.popups.hide('dayCard'); return; }

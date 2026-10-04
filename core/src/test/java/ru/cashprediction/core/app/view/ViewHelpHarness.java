@@ -16,6 +16,8 @@ import ru.cashprediction.core.document.AppSettings;
 import ru.cashprediction.core.document.PlanDocument;
 import ru.cashprediction.core.forecast.Forecast;
 import ru.cashprediction.core.model.Plan;
+import ru.cashprediction.core.service.plan.LocalPlanCommands;
+import ru.cashprediction.core.service.plan.PlanCommands;
 import ru.cashprediction.core.session.WindowType;
 import ru.cashprediction.core.ui.alert.AlertSpec;
 import ru.cashprediction.core.ui.form.*;
@@ -25,6 +27,8 @@ final class ViewHelpHarness {
     static final LocalDate TODAY = LocalDate.of(2026, 10, 15);
     final FakeUiPort port;
     final PlanDocument document;
+    /** Единственная служба команд и ревизий этого документа. */
+    final PlanCommands planCommands;
     final AppEnvironment environment;
     final FlowContext context;
     final ViewFlow views;
@@ -52,6 +56,7 @@ final class ViewHelpHarness {
     ViewHelpHarness(Plan plan, Path home, ClientProfile profile) {
         port = new FakeUiPort(profile);
         document = new PlanDocument(plan, null, () -> TODAY);
+        planCommands = new LocalPlanCommands(document);
         environment = AppEnvironment.from(LaunchOptions.parse(new String[]{"--home", home.toString(),
                 "--today", TODAY.toString(), "--registry", "memory"}));
         context = (FlowContext) Proxy.newProxyInstance(FlowContext.class.getClassLoader(),
@@ -68,6 +73,7 @@ final class ViewHelpHarness {
             case "port": return port;
             case "environment": return environment;
             case "document": return document;
+            case "planCommands": return planCommands;
             case "state": return state();
             case "edits": return edits;
             case "views": return views;

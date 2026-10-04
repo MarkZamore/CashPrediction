@@ -3,10 +3,9 @@ package ru.cashprediction.core.app.flow;
 import java.time.LocalDate;
 import java.util.Objects;
 import java.util.Map;
+import java.util.UUID;
 import java.util.function.Consumer;
-import java.util.function.UnaryOperator;
 import ru.cashprediction.core.app.Placement;
-import ru.cashprediction.core.document.PlanDocument;
 import ru.cashprediction.core.forecast.ForecastRow;
 import ru.cashprediction.core.forecast.Origin;
 import ru.cashprediction.core.model.Adjustment;
@@ -15,6 +14,9 @@ import ru.cashprediction.core.model.OccurrenceKey;
 import ru.cashprediction.core.model.OneTimeTransaction;
 import ru.cashprediction.core.model.RecurringRule;
 import ru.cashprediction.core.model.RuleId;
+import ru.cashprediction.core.service.plan.PlanCommand;
+import ru.cashprediction.core.service.plan.PlanCommandRequest;
+import ru.cashprediction.core.service.plan.PlanCommandResult;
 import ru.cashprediction.core.session.WindowType;
 import ru.cashprediction.core.text.Texts;
 import ru.cashprediction.core.ui.alert.AlertCatalog;
@@ -37,7 +39,7 @@ import ru.cashprediction.core.model.Plan;
  * Меню «Правка» и действия строк таблицы (спецификация v2, §3.2, §5.2 «Контекстное меню строки», §5.6.1, §6.2–§6.5,
  * §6.7, §6.11, §6.23, §6.25; тексты отмены §8.4, статусы §8.2).
  *
- * <p><b>Единая точка правки:</b> {@link #edit(String, String, UnaryOperator)} — {@code document.edit(undoText, change)};
+ * <p><b>Единая точка правки:</b> {@link #edit(String, String, PlanCommand)} вызывает валидирующую службу команд;
  * исключение модели показывается в строке проблем открытой формы или сообщением {@code err.editFailed}; после
  * успеха — статус. <b>{@code edit.edit} по видам строк:</b> RULE → редактор правила; ONE_TIME → разовая; START →
  * «Параметры плана»; WHAT_IF → {@code status.hint.whatIfRow}.</p>
@@ -49,6 +51,8 @@ public final class EditFlow {
     private final FlowContext context;
     /** Ошибку результата формы показывает сам FormSession, сохраняя поля и окно. */
     private boolean formResult;
+    /** Ревизия, по которой открыта текущая форма; null означает немедленную команду. */
+    private Long formExpectedRevision;
 
     /**
      * Создаёт поток.
@@ -69,29 +73,43 @@ public final class EditFlow {
      *
      * @param undoText  описание для «Отменить: {0}» (готовый текст {@code undo.*})
      * @param statusKey статус после успеха ({@code status.msg.*}) или пустая строка
-     * @param change    изменение плана
+     * @param change    типизированное изменение плана
      * <p>Равный план не создаёт историю и статус. В обработчике результата формы исключение передаётся
      * {@code FormSession}, который сохраняет окно и показывает строку проблем; вне формы показывается
-     * {@code err.editFailed}, документ и история при исключении функции изменения остаются прежними.</p>
+     * {@code err.editFailed}; отказ службы оставляет документ, историю и ревизию прежними.</p>
      *
      * @return {@code true}, если план изменился; {@code false} при равном плане или ошибке вне формы
      */
-    public boolean edit(String undoText, String statusKey, UnaryOperator<Plan> change) {
-        Plan before = context.document().plan();
+    public boolean edit(String undoText, String statusKey, PlanCommand change) {
+        long expected = formExpectedRevision == null ? context.planCommands().snapshot().revision() : formExpectedRevision;
+        return execute(new PlanCommandRequest(UUID.randomUUID(), expected, undoText, change), statusKey).changed();
+    }
+
+    /**
+     * Применяет запрос с уже зафиксированной ревизией и переводит отказ в прежний путь сообщения формы.
+     *
+     * @param request команда и ревизия исходного плана
+     * @param statusKey статус изменившегося плана или пустая строка
+     * @return типизированный результат для статусов сверки и очистки
+     */
+    public PlanCommandResult execute(PlanCommandRequest request, String statusKey) {
+        PlanCommandResult result;
         try {
-            context.document().edit(undoText, change);
+            result = context.planCommands().execute(request);
+            if (!result.accepted()) throw commandFailure(result);
         } catch (RuntimeException error) {
             if (formResult) throw error; // FormSession оставляет окно открытым и показывает строку проблем.
             // JavaFX: Alert → Swing: JOptionPane → Web: dialog.
             context.showAlert(AlertCatalog.error("editFailed", error), null);
-            return false;
+            // Неожиданное исключение остаётся исключением; структурированный отказ возвращается вызывающему потоку.
+            if (!(error instanceof CommandFailure failure)) throw error;
+            return failure.result;
         }
-        boolean changed = !before.equals(context.document().plan());
-        if (changed) {
+        if (result.changed()) {
             context.refresh();
             if (statusKey != null && !statusKey.isBlank()) context.status(StatusLevel.INFO, statusKey);
         }
-        return changed;
+        return result;
     }
 
     /**
@@ -115,7 +133,7 @@ public final class EditFlow {
         if (date != null) values.put(OneTimeForm.CONTEXT_DATE, FieldCodec.date(date));
         open(new OneTimeForm(), WindowType.ONE_TIME_EDITOR, values, result -> {
             if (result instanceof OneTimeTransaction tx)
-                edit(UiText.get("undo.oneTimeAdd", tx.title()), "status.msg.oneTimeAdded", p -> p.withOneTimeAdded(tx));
+                edit(UiText.get("undo.oneTimeAdd", tx.title()), "status.msg.oneTimeAdded", new PlanCommand.AddOneTime(tx));
         });
     }
 
@@ -133,11 +151,7 @@ public final class EditFlow {
                     Map.of(WindowType.CONTEXT_MODE, WindowType.MODE_EDIT, WindowType.CONTEXT_TX_ID, row.txId().value()),
                     result -> {
                         if (result instanceof OneTimeTransaction tx)
-                            edit(UiText.get("undo.oneTimeEdit", tx.title()), "status.msg.oneTimeChanged", p -> {
-                                if (p.findOneTime(tx.id()).isEmpty())
-                                    throw new IllegalArgumentException(UiText.get("err.notFound.content", tx.id()));
-                                return p.withOneTimeReplaced(tx);
-                            });
+                            edit(UiText.get("undo.oneTimeEdit", tx.title()), "status.msg.oneTimeChanged", new PlanCommand.ReplaceOneTime(tx));
                     });
             case START -> planSettings();
             case WHAT_IF -> hint("status.hint.whatIfRow");
@@ -155,20 +169,22 @@ public final class EditFlow {
         if (row.origin() == Origin.RULE) {
             RecurringRule rule = context.document().plan().findRule(row.ruleId()).orElse(null);
             if (rule == null) return;
+            PlanCommandRequest request = request(UiText.get("undo.ruleDelete", rule.title()), new PlanCommand.RemoveRule(rule.id()));
             // JavaFX: Alert → Swing: JOptionPane → Web: dialog.
             context.showAlert(AlertCatalog.deleteRule(rule.id().value(), rule.title(), rule.amount(),
                     context.document().plan().currency(), rule.recurrence().toRussian(),
                     context.document().plan().adjustmentsOf(rule.id()).size()), button -> {
-                if ("delete".equals(button) && edit(UiText.get("undo.ruleDelete", rule.title()), "", p -> p.withRuleRemoved(rule.id())))
+                if ("delete".equals(button) && execute(request, "").changed())
                     context.status(StatusLevel.INFO, "status.msg.ruleDeleted", rule.title());
             });
         } else if (row.origin() == Origin.ONE_TIME) {
             OneTimeTransaction tx = context.document().plan().findOneTime(row.txId()).orElse(null);
             if (tx == null) return;
+            PlanCommandRequest request = request(UiText.get("undo.oneTimeDelete", tx.title()), new PlanCommand.RemoveOneTime(tx.id()));
             // JavaFX: Alert → Swing: JOptionPane → Web: dialog.
             context.showAlert(AlertCatalog.deleteOneTime(tx.id().value(), tx.title(), tx.date(), tx.amount(),
                     context.document().plan().currency()), button -> {
-                if ("delete".equals(button) && edit(UiText.get("undo.oneTimeDelete", tx.title()), "", p -> p.withOneTimeRemoved(tx.id())))
+                if ("delete".equals(button) && execute(request, "").changed())
                     context.status(StatusLevel.INFO, "status.msg.oneTimeDeleted", tx.title());
             });
         } else hint("status.hint.noOperation");
@@ -199,7 +215,7 @@ public final class EditFlow {
         String note = context.document().plan().findAdjustment(key).map(Adjustment::note).orElse("");
         edit(UiText.get("undo.skip", UiFormats.date(row.originalDate())),
                 context.state().view().showSkipped() ? "status.msg.skipped" : "status.msg.skippedHidden",
-                p -> p.withAdjustmentPut(new Adjustment(key, new Adjustment.Skip(), note)));
+                new PlanCommand.PutAdjustment(new Adjustment(key, new Adjustment.Skip(), note)));
     }
 
     /**
@@ -216,7 +232,7 @@ public final class EditFlow {
         OccurrenceKey key = OccurrenceKey.parseRowId(reference.rowId());
         if (context.document().plan().findAdjustment(key).isEmpty()) { hint("status.hint.noAdjustment"); return; }
         edit(UiText.get("undo.reset", UiFormats.date(key.originalDate())), "status.msg.adjustReset",
-                p -> p.withAdjustmentRemoved(key));
+                new PlanCommand.RemoveAdjustment(key));
     }
 
     /**
@@ -238,10 +254,11 @@ public final class EditFlow {
             return;
         }
         context.singleInstance(WindowType.QUICK_EDIT_POPUP.name()).ifPresent(FormSession::closeRequested);
+        long[] expected = {context.planCommands().snapshot().revision()};
         // JavaFX: Popup → Swing: PopupFactory → Web: div.
         context.openForm(FormRequest.fresh(new QuickEditForm(), WindowType.QUICK_EDIT_POPUP, false,
                 occurrenceContext(row)), Placement.underCell(rowId, columnId), result ->
-                formResult(() -> applyAdjustment(result, row, true)));
+                submitForm(expected, () -> applyAdjustment(result, row, true)));
     }
 
     /**
@@ -264,7 +281,7 @@ public final class EditFlow {
         if (row == null) return;
         RecurringRule rule = context.document().plan().findRule(row.ruleId()).orElse(null);
         if (rule != null && edit(UiText.get("undo.ruleDisable", rule.title()), "",
-                p -> p.withRuleReplaced(p.findRule(rule.id()).orElseThrow().withEnabled(false))))
+                new PlanCommand.ReplaceRule(rule.withEnabled(false))))
             context.status(StatusLevel.INFO, "status.msg.ruleDisabled", rule.title());
     }
 
@@ -288,28 +305,25 @@ public final class EditFlow {
 
     /** {@code edit.undo}: {@code status.msg.undone}. */
     public void undo() {
-        var text = context.document().undoDescription();
+        var text = context.planCommands().snapshot().undoDescription();
         if (text.isEmpty()) { hint("status.hint.nothingToUndo"); return; }
-        context.document().undo();
-        context.refresh();
-        context.status(StatusLevel.INFO, "status.msg.undone", text.get());
+        if (execute(request("", new PlanCommand.Undo()), "").changed())
+            context.status(StatusLevel.INFO, "status.msg.undone", text.get());
     }
 
     /** {@code edit.redo}: {@code status.msg.redone}. */
     public void redo() {
-        var text = context.document().redoDescription();
+        var text = context.planCommands().snapshot().redoDescription();
         if (text.isEmpty()) { hint("status.hint.nothingToRedo"); return; }
-        context.document().redo();
-        context.refresh();
-        context.status(StatusLevel.INFO, "status.msg.redone", text.get());
+        if (execute(request("", new PlanCommand.Redo()), "").changed())
+            context.status(StatusLevel.INFO, "status.msg.redone", text.get());
     }
 
     /** {@code edit.planSettings}: форма §6.2. */
     public void planSettings() {
         open(new PlanSettingsForm(), WindowType.PLAN_SETTINGS, Map.of(), result -> {
             if (result instanceof Plan value) edit(UiText.get("undo.planSettings"), "status.msg.settings",
-                    p -> new Plan(value.name(), value.note(), value.currency(), value.startDate(), value.startBalance(),
-                            value.horizon(), value.cushion(), value.goal(), p.rules(), p.oneTimes(), p.adjustments(), p.rawBlocks()));
+                    new PlanCommand.UpdateSettings(PlanCommand.Settings.from(value)));
         });
     }
 
@@ -323,16 +337,13 @@ public final class EditFlow {
             return;
         }
         try {
-            PlanDocument preview = new PlanDocument(plan, null, () -> today);
-            preview.actualize(today, null);
+            PlanCommandRequest request = request(Texts.get("document.edit.actualize", UiFormats.date(today)),
+                    new PlanCommand.Actualize(today, null));
+            PlanCommandResult preview = context.planCommands().preview(request);
+            if (!preview.accepted()) throw commandFailure(preview);
             // JavaFX: Alert → Swing: JOptionPane → Web: dialog.
-            context.showAlert(AlertCatalog.actualize(today, preview.plan().startBalance(), plan.currency()), button -> {
-                if ("actualize".equals(button)) edit(Texts.get("document.edit.actualize", UiFormats.date(today)),
-                        "status.msg.actualized", p -> {
-                            PlanDocument draft = new PlanDocument(p, null, () -> today);
-                            draft.actualize(today, null);
-                            return draft.plan();
-                        });
+            context.showAlert(AlertCatalog.actualize(today, preview.snapshot().plan().startBalance(), plan.currency()), button -> {
+                if ("actualize".equals(button)) execute(request, "status.msg.actualized");
             });
         } catch (RuntimeException error) {
             // JavaFX: Alert → Swing: JOptionPane → Web: dialog.
@@ -352,15 +363,11 @@ public final class EditFlow {
         open(TextInputForms.reconcile(), WindowType.TEXT_INPUT,
                 Map.of(WindowType.CONTEXT_PURPOSE, TextInputForms.PURPOSE_RECONCILE), result -> {
                     if (!(result instanceof Money actual)) return;
-                    Money[] difference = {Money.ZERO};
-                    boolean changed = edit(Texts.get("document.reconcile.title"), "", p -> {
-                        PlanDocument draft = new PlanDocument(p, null, () -> today);
-                        difference[0] = actual.minus(draft.forecast().balanceAt(today));
-                        draft.reconcile(today, actual);
-                        return draft.plan();
-                    });
-                    if (changed) context.status(StatusLevel.INFO, "status.msg.reconciled",
-                            difference[0].formatSigned() + " " + context.document().plan().currency());
+                    long expected = formExpectedRevision == null ? context.planCommands().snapshot().revision() : formExpectedRevision;
+                    PlanCommandResult applied = execute(new PlanCommandRequest(UUID.randomUUID(), expected,
+                            Texts.get("document.reconcile.title"), new PlanCommand.Reconcile(today, actual)), "");
+                    if (applied.changed()) context.status(StatusLevel.INFO, "status.msg.reconciled",
+                            applied.effect().reconciliationDifference().formatSigned() + " " + applied.snapshot().plan().currency());
                 });
     }
     /** Открывает редактор правила, сохраняя режим и идентификатор в снимке. */
@@ -371,19 +378,16 @@ public final class EditFlow {
         open(new RuleEditorForm(), WindowType.RULE_EDITOR, values, result -> {
             if (result instanceof RecurringRule rule) edit(UiText.get(id == null ? "undo.ruleAdd" : "undo.ruleEdit", rule.title()),
                     id == null ? "status.msg.ruleAdded" : "status.msg.ruleChanged",
-                    p -> {
-                        if (id != null && p.findRule(id).isEmpty())
-                            throw new IllegalArgumentException(UiText.get("err.notFound.content", id));
-                        return id == null ? p.withRuleAdded(rule) : p.withRuleReplaced(rule);
-                    });
+                    id == null ? new PlanCommand.AddRule(rule) : new PlanCommand.ReplaceRule(rule));
         });
     }
 
     /** Открывает модальную форму; исключения применения остаются в строке проблем формы. */
     private void open(FormLogic logic, WindowType type, Map<String, String> values, Consumer<Object> result) {
+        long[] expected = {context.planCommands().snapshot().revision()};
         // JavaFX: Dialog → Swing: JDialog → Web: dialog.
         context.openForm(FormRequest.fresh(logic, type, true, values), null,
-                value -> formResult(() -> result.accept(value)));
+                value -> submitForm(expected, () -> result.accept(value)));
     }
 
     /** Ограничивает режим обработки исключений одним синхронным результатом формы. */
@@ -391,6 +395,14 @@ public final class EditFlow {
         boolean previous = formResult;
         formResult = true;
         try { action.run(); } finally { formResult = previous; }
+    }
+
+    /** Применяет результат восстановленной формы относительно ревизии, сохранённой при её открытии. */
+    void formResult(long expectedRevision, Runnable action) {
+        Long previous = formExpectedRevision;
+        formExpectedRevision = expectedRevision;
+        try { formResult(action); }
+        finally { formExpectedRevision = previous; }
     }
 
     /** Находит событие текущего прогноза; служебные строки не являются событиями. */
@@ -427,11 +439,34 @@ public final class EditFlow {
                 : UiText.get(result.adjustment() == null ? "undo.adjustReset" : "undo.adjust",
                         row.title(), UiFormats.date(result.key().originalDate()));
         edit(undo, quick ? "status.msg.quickAmount" : result.adjustment() == null ? "status.msg.adjustReset" : "status.msg.adjustSaved",
-                p -> {
-                    if (p.findRule(result.key().ruleId()).isEmpty())
-                        throw new IllegalArgumentException(UiText.get("err.notFound.content", result.key().ruleId()));
-                    return result.adjustment() == null ? p.withAdjustmentRemoved(result.key()) : p.withAdjustmentPut(result.adjustment());
-                });
+                result.adjustment() == null ? new PlanCommand.RemoveAdjustment(result.key()) : new PlanCommand.PutAdjustment(result.adjustment()));
+    }
+
+    /** Сохраняет ревизию формы; после отказа пользователь может повторить применение к уже обновлённому контексту. */
+    private void submitForm(long[] expected, Runnable action) {
+        try { formResult(expected[0], action); }
+        finally {
+            expected[0] = context.planCommands().snapshot().revision();
+        }
+    }
+
+    /** Фиксирует исходную ревизию до показа подтверждения. */
+    private PlanCommandRequest request(String description, PlanCommand command) {
+        return new PlanCommandRequest(UUID.randomUUID(), context.planCommands().snapshot().revision(), description, command);
+    }
+
+    /** Переводит структурированные проблемы службы в существующее объяснение открытой формы. */
+    private static CommandFailure commandFailure(PlanCommandResult result) { return new CommandFailure(result); }
+
+    /** Локальное исключение адаптера формы; контракт службы возвращает только данные. */
+    private static final class CommandFailure extends IllegalArgumentException {
+        private final PlanCommandResult result;
+
+        /** Сохраняет типизированный отказ и уже локализованные объяснения. */
+        private CommandFailure(PlanCommandResult result) {
+            super(String.join("\n", result.problems().stream().map(problem -> problem.message()).toList()));
+            this.result = result;
+        }
     }
 
     /** Копирует тексты модели таблицы, не воспроизводя форматирование в потоке. */

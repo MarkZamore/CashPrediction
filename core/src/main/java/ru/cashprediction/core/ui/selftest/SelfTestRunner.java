@@ -7,7 +7,11 @@ import java.io.IOException;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.HashSet;
 import java.util.Objects;
+import ru.cashprediction.core.ui.selftest.paint.PaintCaptureRequest;
+import ru.cashprediction.core.ui.selftest.paint.PaintCaptureFiles;
 import ru.cashprediction.core.ui.dump.DumpNormalizer;
 import ru.cashprediction.core.ui.json.UiJson;
 import ru.cashprediction.core.ui.text.UiText;
@@ -64,6 +68,7 @@ public final class SelfTestRunner {
     private final UiDriver driver;
     private final Path outDir;
     private final ru.cashprediction.core.app.AppEnvironment environment;
+    private final Map<Integer, PaintCaptureRequest> paintCaptures;
 
     /**
      * Создаёт раннер.
@@ -83,9 +88,32 @@ public final class SelfTestRunner {
      * @param environment окружение приложения
      */
     public SelfTestRunner(UiDriver driver, Path outDir, ru.cashprediction.core.app.AppEnvironment environment) {
+        this(driver, outDir, environment, Map.of());
+    }
+
+    /**
+     * Создаёт раннер с заранее замороженным строгим планом захвата отрисовки.
+     * Непустой план обязан покрывать каждый Shot сценария; возврат к раздельным
+     * dump/screenshot в таком прогоне запрещён. Ожидаемые пиксели план не содержит.
+     *
+     * @param driver драйвер настоящего клиента
+     * @param outDir отдельный каталог доказательств
+     * @param environment окружение запуска
+     * @param paintCaptures запросы по номерам строк сценария, пусто для обычных сценариев
+     */
+    public SelfTestRunner(UiDriver driver, Path outDir,
+            ru.cashprediction.core.app.AppEnvironment environment,
+            Map<Integer, PaintCaptureRequest> paintCaptures) {
         this.driver = Objects.requireNonNull(driver, "driver");
         this.outDir = Objects.requireNonNull(outDir, "outDir");
         this.environment = Objects.requireNonNull(environment, "environment");
+        this.paintCaptures = Map.copyOf(paintCaptures);
+        var identities = new HashSet<java.util.UUID>();
+        this.paintCaptures.forEach((line, request) -> {
+            if (line != request.commandNumber() || !identities.add(request.captureId())) {
+                throw new IllegalArgumentException("capture plan identity");
+            }
+        });
     }
 
     /** @return драйвер клиента */
@@ -106,6 +134,7 @@ public final class SelfTestRunner {
      */
     public Report run(SelfTestScript script) {
         Objects.requireNonNull(script, "script");
+        validateCapturePlan(script);
         Path root = outDir.toAbsolutePath().normalize();
         Path scenario = child(root, script.name());
         List<StepResult> results = new ArrayList<>();
@@ -138,12 +167,19 @@ public final class SelfTestRunner {
                         value = ModelDump.label(value, script.name(), dump.step());
                         Files.writeString(child(scenario, dump.step() + ".json"), UiJson.write(value), StandardCharsets.UTF_8);
                     } else if (command instanceof SelfTestCommand.Shot shot) {
-                        driver.awaitIdle(Duration.ofSeconds(5));
-                        // Снимок проверяют по исходным пикселям: округление x и ширины по отдельности
-                        // может вынести правую границу за viewport, хотя настоящий виджет помещается.
-                        var measured = ModelDump.label(driver.dump(shot.step()), script.name(), shot.step());
-                        Files.writeString(child(scenario, shot.step() + ".raw.json"), UiJson.write(measured), StandardCharsets.UTF_8);
-                        Files.write(child(scenario, shot.step() + ".png"), driver.screenshot(shot.step()));
+                        if (!paintCaptures.isEmpty()) {
+                            var request = paintCaptures.get(line.number());
+                            var capture = driver.capture(request);
+                            // commit появляется лишь после сохранения и проверки полного связанного набора.
+                            PaintCaptureFiles.write(scenario, request, capture);
+                        } else {
+                            driver.awaitIdle(Duration.ofSeconds(5));
+                            // Снимок проверяют по исходным пикселям: округление x и ширины по отдельности
+                            // может вынести правую границу за viewport, хотя настоящий виджет помещается.
+                            var measured = ModelDump.label(driver.dump(shot.step()), script.name(), shot.step());
+                            Files.writeString(child(scenario, shot.step() + ".raw.json"), UiJson.write(measured), StandardCharsets.UTF_8);
+                            Files.write(child(scenario, shot.step() + ".png"), driver.screenshot(shot.step()));
+                        }
                     } else if (command instanceof SelfTestCommand.Menus menus) {
                         driver.awaitIdle(Duration.ofSeconds(5));
                         Files.writeString(child(scenario, menus.path()), UiJson.write(driver.dump("menus").menuBar()), StandardCharsets.UTF_8);
@@ -168,6 +204,22 @@ public final class SelfTestRunner {
             throw new IllegalStateException(UiText.get("s2.selftest.output", outDir), e);
         }
         return new Report(script.name(), results);
+    }
+
+    /** Отклоняет лишние, неполные или относящиеся к другому сценарию запросы до первого ввода. */
+    private void validateCapturePlan(SelfTestScript script) {
+        if (paintCaptures.isEmpty()) return;
+        var seen = new HashSet<Integer>();
+        for (var line : script.lines()) {
+            var request = paintCaptures.get(line.number());
+            if (line.command() instanceof SelfTestCommand.Shot shot) {
+                if (request == null || !script.name().equals(request.scenario()) || !shot.step().equals(request.step())) {
+                    throw new IllegalArgumentException("capture plan step");
+                }
+                seen.add(line.number());
+            } else if (request != null) throw new IllegalArgumentException("capture plan non-shot");
+        }
+        if (!seen.equals(paintCaptures.keySet())) throw new IllegalArgumentException("capture plan unused");
     }
 
     /** Разрешает только имена внутри папки вывода, исключая перезапись чужих файлов. */

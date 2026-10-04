@@ -10,10 +10,14 @@
  * экспортом.
  */
 module ru.cashprediction.core {
+    // Тихое обновление использует только стандартный HTTP-клиент JDK.
+    requires java.net.http;
     // Реестр Windows через java.util.prefs.Preferences (пользовательский корень HKCU).
     requires java.prefs;
     // XML-снимок сессии: чтение защищённым DOM-парсером (запись выполняется собственным форматтером).
     requires java.xml;
+    // Безопасное переподключение исходной web-вкладки после перезапуска сервера.
+    exports ru.cashprediction.core.web.reconnect;
 
     // Доменная модель: деньги, правила, разовые операции, корректировки, план.
     exports ru.cashprediction.core.model;
@@ -25,12 +29,16 @@ module ru.cashprediction.core {
     exports ru.cashprediction.core.recurrence;
     // Движок прогноза, сводка, калькулятор цели, данные графика.
     exports ru.cashprediction.core.forecast;
+    exports ru.cashprediction.core.forecast.service;
     // Диагностика и проверка плана.
     exports ru.cashprediction.core.diagnostics;
     // Чтение и запись плана и настроек в Markdown.
     exports ru.cashprediction.core.markdown;
     // Документ плана с undo/redo, состояние вида, настройки приложения.
     exports ru.cashprediction.core.document;
+    // Открытые сервисные контракты модульного монолита, без UI и сетевого транспорта.
+    exports ru.cashprediction.core.service.plan;
+    exports ru.cashprediction.core.service.storage;
     // Мини-JSON (без внешних библиотек) и JSON-представление плана для web-клиента.
     exports ru.cashprediction.core.json;
     // Снимок сессии, запись, обнаружение сбоя и восстановление окон.
@@ -84,4 +92,11 @@ module ru.cashprediction.core {
     exports ru.cashprediction.core.ui.dump;
     // Сценарии самотеста и драйверы.
     exports ru.cashprediction.core.ui.selftest;
+    exports ru.cashprediction.core.ui.selftest.paint;
+    // Общие манифесты, дельты и невидимый жизненный цикл всех трёх клиентов.
+    exports ru.cashprediction.core.update.model;
+    exports ru.cashprediction.core.update.tree;
+    exports ru.cashprediction.core.update.net;
+    exports ru.cashprediction.core.update.install;
+    exports ru.cashprediction.core.update.lifecycle;
 }

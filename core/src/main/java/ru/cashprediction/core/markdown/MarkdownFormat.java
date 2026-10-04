@@ -23,7 +23,7 @@ import ru.cashprediction.core.text.Texts;
 public final class MarkdownFormat {
 
     /** Версия формата файла плана, которую пишет эта программа. */
-    public static final int FORMAT_VERSION = 1;
+    public static final int FORMAT_VERSION = 2;
 
     /** Название формата в параметре «Формат»: {@code CashPrediction 1} (слово формата {@code plan.format.name}). */
     public static final String FORMAT_NAME = FormatWords.get("plan.format.name");

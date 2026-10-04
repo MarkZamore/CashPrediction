@@ -25,7 +25,7 @@ final class SwingSparkCaption extends JLabel {
             FontRenderContext context = graphics.getFontRenderContext();
             for (String paragraph : text.split("\n", -1)) {
                 if (paragraph.isEmpty()) { if (!text.isEmpty()) lines.add(null); continue; }
-                AttributedString attributed = new AttributedString(paragraph); attributed.addAttribute(TextAttribute.FONT, getFont());
+                AttributedString attributed = SwingIcons.attributed(paragraph, getFont(), color);
                 LineBreakMeasurer measure = new LineBreakMeasurer(attributed.getIterator(), context);
                 while (measure.getPosition() < paragraph.length()) lines.add(measure.nextLayout(textWidth));
             }

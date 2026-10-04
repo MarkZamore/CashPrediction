@@ -11,6 +11,7 @@ import java.util.Optional;
 import ru.cashprediction.core.app.DirectoryChooserSpec;
 import ru.cashprediction.core.app.FileChooserSpec;
 import ru.cashprediction.core.io.FolderListing;
+import ru.cashprediction.core.io.CashMemoryLayout;
 import ru.cashprediction.core.session.WindowType;
 import ru.cashprediction.core.ui.form.ButtonRole;
 import ru.cashprediction.core.ui.form.ButtonSpecs;
@@ -66,6 +67,9 @@ public final class FileBrowserForm implements FormLogic {
         Result result = read(state.value("path"));
         boolean validName = !saving() || validFileName(state.value("name"));
         boolean enabled = result.problem == null && (directories() || saving() ? validName : selectedFile(result, state.value("value")) != null);
+        Path candidate = candidate(result, state);
+        String protectedProblem = candidate == null ? null : protectedProblem(candidate);
+        if (protectedProblem != null) enabled = false;
         Map<String, FieldView> fields = new java.util.LinkedHashMap<>();
         fields.put("root", new FieldView(state.value("root"), true, true, false, null, roots(), null));
         fields.put("path", FieldView.of(state.value("path")));
@@ -74,6 +78,7 @@ public final class FileBrowserForm implements FormLogic {
         if (saving()) fields.put("name", FieldView.of(state.value("name")));
         Problem problem = result.problem != null ? Problem.error(result.problem)
                 : !validName ? Problem.error(UiText.get(state.value("name").isBlank() ? "dialog.file.nameRequired" : "dialog.file.nameInvalid"))
+                : protectedProblem != null ? Problem.error(protectedProblem)
                 : result.truncated ? Problem.warning(UiText.get("dialog.file.truncated", listing.maxEntries())) : Problem.NONE;
         return new FormView(0, 0, "", fields, problem, Map.of("ok", enabled ? ru.cashprediction.core.ui.form.ButtonView.ENABLED : ru.cashprediction.core.ui.form.ButtonView.DISABLED), List.of(), List.of(), "", false);
     }
@@ -122,9 +127,28 @@ public final class FileBrowserForm implements FormLogic {
         if (result.problem != null) return new FormOutcome.Stay(Problem.error(result.problem));
         Path folder = result.folder;
         if (directories()) return new FormOutcome.Close(folder);
+        Path candidate = candidate(result, state);
+        String problem = candidate == null ? null : protectedProblem(candidate);
+        if (problem != null) return new FormOutcome.Stay(Problem.error(problem));
         if (saving()) { String name = state.value("name").strip(); if (name.isEmpty()) return new FormOutcome.Stay(Problem.error(UiText.get("dialog.file.nameRequired"))); if (!validFileName(name)) return new FormOutcome.Stay(Problem.error(UiText.get("dialog.file.nameInvalid"))); return new FormOutcome.Close(folder.resolve(withExtension(name))); }
         FolderListing.Entry selected = selectedFile(result, state.value("value"));
         return selected == null ? new FormOutcome.Stay(Problem.error(UiText.get("dialog.file.nameRequired"))) : new FormOutcome.Close(selected.path());
+    }
+    /** Проверяет raw выбор независимо от видимости элемента и дописывает расширение до проверки SAVE. */
+    private Path candidate(Result result, FormState state) {
+        if (directories() || result.problem != null) return null;
+        if (saving()) return validFileName(state.value("name"))
+                ? result.folder.resolve(withExtension(state.value("name").strip())) : null;
+        String raw = state.value("value");
+        if (raw.isBlank()) return null;
+        try { return Path.of(raw).toAbsolutePath().normalize(); }
+        catch (RuntimeException invalid) { return null; }
+    }
+    /** Отказывает закрытым путям и ошибкам разрешения без передачи содержимого или технических деталей. */
+    private String protectedProblem(Path candidate) {
+        try { return CashMemoryLayout.isProtectedUserPath(listing.cashMemory(), candidate)
+                ? UiText.get("dialog.file.protected") : null; }
+        catch (IOException | RuntimeException denied) { return UiText.get("dialog.file.denied", candidate); }
     }
     private FolderListing.Entry selectedFile(Result result, String value) {
         return result.entries.stream().filter(entry -> !entry.directory() && entry.path().toString().equals(value)).findFirst().orElse(null);

@@ -39,7 +39,14 @@ public final class FxAlerts implements WindowHandle {
         link.setOnAction(e -> { boolean expanded = !details.isVisible(); details.setVisible(expanded); details.setManaged(expanded); link.setText(UiText.get(expanded ? "details.hide" : "details.show")); });
         alert.getDialogPane().setContent(new VBox(8, content, link, details));
         alert.setOnCloseRequest(e -> { if (!closing) { e.consume(); specCancel(); } });
-        alert.setOnShown(e -> { if (session != null) session.shown(); });
+        alert.setOnShown(e -> {
+            if (session != null) {
+                if (session.restoredBounds() != null)
+                    FxFormDialog.applyBounds(alert.getDialogPane().getScene().getWindow(), session.restoredBounds());
+                // Регистрация и продолжение восстановления видят уже применённую геометрию окна.
+                session.shown();
+            }
+        });
         updateAlert(spec);
         Platform.runLater(() -> { if (!closing) alert.show(); });
     }
@@ -53,11 +60,19 @@ public final class FxAlerts implements WindowHandle {
     /** Отображает новое содержимое сообщения в настоящих виджетах. */
     @Override public void updateAlert(AlertSpec next) {
         spec = next; alert.setTitle(next.windowTitle()); alert.setHeaderText(next.header()); content.setText(next.content());
-        glyph.setText(next.glyph()); if (!next.glyph().isEmpty()) alert.setGraphic(glyph);
+        glyph.setText(next.glyph());
+        glyph.setTextFill(javafx.scene.paint.Color.web(switch (next.kind()) {
+            case ERROR -> ru.cashprediction.core.ui.token.ColorToken.EXPENSE.hex();
+            case WARNING -> ru.cashprediction.core.ui.token.ColorToken.WARN.hex();
+            default -> ru.cashprediction.core.ui.token.ColorToken.ACCENT.hex();
+        }));
+        FxIcons.icon(glyph, next.glyph().isEmpty() ? next.kind().webGlyph() : next.glyph(), ru.cashprediction.core.ui.token.DesignTokens.ALERT_ICON_SIZE);
+        alert.setGraphic(glyph);
         alert.getDialogPane().setMinWidth(next.minWidth()); alert.getDialogPane().setPrefWidth(next.minWidth());
         content.setMinWidth(0); content.setPrefWidth(next.minWidth() - 24);
         details.setText(next.details()); details.setVisible(next.detailsExpanded()); details.setManaged(next.detailsExpanded());
         link.setText(UiText.get(next.detailsExpanded() ? "details.hide" : "details.show")); link.setVisible(!next.details().isEmpty()); link.setManaged(!next.details().isEmpty());
+        FxIcons.decorate(link);
         buttons.clear(); alert.getButtonTypes().clear();
         for (var b : next.buttons()) {
             // JavaFX: ButtonType → Swing: JButton → Web: button.dialog-action

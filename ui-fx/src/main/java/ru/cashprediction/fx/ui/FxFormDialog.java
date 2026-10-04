@@ -25,7 +25,7 @@ public final class FxFormDialog implements WindowHandle {
     final HBox formBody = new HBox(10);
     final Label header = new Label();
     final Label glyph = new Label();
-    private final HBox heading = new HBox(10, glyph, header);
+    private final HBox heading = new FxFormHeading(glyph, header);
     final Label problem = new Label();
     final VBox results = new VBox(0);
     final List<Label> sections = new ArrayList<>();
@@ -43,34 +43,29 @@ public final class FxFormDialog implements WindowHandle {
     public FxFormDialog(FormSession session, FormSpec spec, FormView initial, Placement placement, FxUiPort port) {
         this.session = session; this.spec = spec; this.port = port; this.placement = placement;
         if (spec.presentation() == Presentation.TEXT_INPUT) {
-            // JavaFX: TextInputDialog → Swing: SwingTextInputDialog → Web: dialog.text-input
+            // JavaFX: TextInputDialog → Swing: SwingTextInput → Web: dialog.text-input
             dialog = (Dialog<Object>) (Dialog<?>) port.probe.created(new TextInputDialog());
         } else if (spec.presentation() == Presentation.CHOICE) {
-            // JavaFX: ChoiceDialog → Swing: SwingChoiceDialog → Web: dialog.choice
+            // JavaFX: ChoiceDialog → Swing: SwingChoice → Web: dialog.choice
             dialog = (Dialog<Object>) (Dialog<?>) port.probe.created(new ChoiceDialog<>());
         } else if (spec.presentation() == Presentation.CONFIRM) {
-            // JavaFX: Alert → Swing: SwingAlert → Web: dialog.alert
+            // JavaFX: Alert → Swing: SwingAlerts → Web: dialog.alert
             dialog = (Dialog<Object>) (Dialog<?>) port.probe.created(new Alert(Alert.AlertType.CONFIRMATION));
         } else {
-            // JavaFX: Dialog → Swing: SwingDialog → Web: dialog.form
+            // JavaFX: Dialog → Swing: SwingFormDialog → Web: dialog.form
             dialog = port.probe.created(new Dialog<>());
         }
         specializedEditor = (Object) dialog instanceof TextInputDialog input ? input.getEditor()
                 : (Object) dialog instanceof ChoiceDialog<?> ? findChoice(dialog.getDialogPane().getContent()) : null;
         if (specializedEditor != null && specializedEditor.getParent() instanceof Pane parent) parent.getChildren().remove(specializedEditor);
-        // JavaFX: DialogPane → Swing: SwingDialogPane → Web: div.dialog-pane
+        // JavaFX: DialogPane → Swing: JPanel → Web: div.dialog-pane
         DialogPane pane = port.probe.created(new FxFormPane()); dialog.setDialogPane(pane);
         FxStyles.root(pane); dialog.setTitle(spec.windowTitle()); dialog.setResizable(spec.resizable());
         Window owner = port.owner(placement.ownerId()); dialog.initOwner(owner);
         dialog.initModality(spec.modal() ? Modality.APPLICATION_MODAL : Modality.NONE);
         header.setWrapText(true); FxStyles.text(header, ColorToken.TEXT_PRIMARY, FontToken.HEADER);
-        glyph.setText(spec.glyph()); FxStyles.text(glyph, ColorToken.ACCENT, FontToken.HEADER); glyph.setStyle("-fx-font-size: 26px;");
-        HBox.setHgrow(header, Priority.ALWAYS); header.setMinWidth(0);
-        // Общий каркас: внешний отступ задаёт панель; строка значка сохраняет текстовую высоту настольного заголовка.
-        glyph.setPadding(new javafx.geometry.Insets(DesignTokens.SPACING / 2.0, 0, DesignTokens.SPACING / 2.0, 0));
-        heading.setPadding(javafx.geometry.Insets.EMPTY);
-        heading.setAlignment(javafx.geometry.Pos.CENTER_LEFT);
-        heading.setStyle("-fx-border-color: " + ColorToken.BORDER.fxLookup() + "; -fx-border-width: 0 0 1 0;");
+        glyph.setText(spec.glyph()); FxStyles.text(glyph, ColorToken.ACCENT, FontToken.HEADER);
+        if (!spec.glyph().isEmpty()) FxIcons.icon(glyph, spec.glyph(), DesignTokens.DIALOG_ICON_SIZE);
         content.setPadding(new javafx.geometry.Insets(DesignTokens.FORM_VGAP, 0, 0, 0));
         formRows.setPadding(new javafx.geometry.Insets(DesignTokens.SPACING, 0, DesignTokens.SPACING, 0));
         pane.setHeader(heading); pane.setContent(content); pane.setMinWidth(spec.width()); pane.setPrefWidth(spec.width());
@@ -164,13 +159,14 @@ public final class FxFormDialog implements WindowHandle {
         if (root instanceof javafx.scene.Parent parent) for (var child : parent.getChildrenUnmodifiable()) { Control found = findChoice(child); if (found != null) return found; }
         return null;
     }
-    private Button button(String id, String text, String tip) { Button b = FxStyles.id(new Button(text), id); b.setMinHeight(DesignTokens.CONTROL_HEIGHT); b.setPrefHeight(DesignTokens.CONTROL_HEIGHT); b.setMaxHeight(DesignTokens.CONTROL_HEIGHT); b.setTooltip(FxStyles.tip(tip, port.probe)); b.setOnAction(e -> session.buttonPressed(id)); buttons.put(id, b); return b; }
+    private Button button(String id, String text, String tip) { Button b = FxStyles.id(new Button(text), id); FxIcons.decorate(b); b.setMinHeight(DesignTokens.CONTROL_HEIGHT); b.setPrefHeight(DesignTokens.CONTROL_HEIGHT); b.setMaxHeight(DesignTokens.CONTROL_HEIGHT); b.setTooltip(FxStyles.tip(tip, port.probe)); b.setOnAction(e -> session.buttonPressed(id)); buttons.put(id, b); return b; }
 
     /** Обновляет только виджеты, оставляя незавершённый ввод при null. */
     @Override public void update(FormView view) {
         boolean pageChanged = page != view.page();
         if (page != view.page()) rebuild(view);
         header.setText(view.header()); problem.setText(view.problem().display()); FxStyles.text(problem, view.problem().color(), FontToken.SMALL);
+        FxIcons.decorate(problem);
         // Одно-полевые модели без шапки не резервируют высоту пустого значка и пустого Label.
         dialog.getDialogPane().setHeader(view.header().isEmpty() && spec.glyph().isEmpty() ? null : heading);
         physicalFields.forEach(f -> f.update(view.fields().get(f.spec.id()), view));
@@ -185,6 +181,7 @@ public final class FxFormDialog implements WindowHandle {
         details.setText(view.details()); details.setVisible(view.detailsExpanded()); details.setManaged(view.detailsExpanded());
         detailsLink.setVisible(!view.details().isEmpty()); detailsLink.setManaged(!view.details().isEmpty());
         detailsLink.setText(UiText.get(view.detailsExpanded() ? "details.hide" : "details.show"));
+        FxIcons.decorate(detailsLink);
         if (pageChanged && dialog.isShowing() && placement.bounds() == null) Platform.runLater(() -> {
             if (closing || !dialog.isShowing()) return;
             var pane = dialog.getDialogPane(); pane.applyCss();

@@ -4,6 +4,8 @@ import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.nio.ByteBuffer;
+import java.nio.charset.CodingErrorAction;
 import java.security.MessageDigest;
 import java.time.Duration;
 import java.util.ArrayList;
@@ -15,6 +17,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.function.IntSupplier;
 import ru.cashprediction.core.app.AppController;
+import ru.cashprediction.core.web.reconnect.ReconnectAuthenticator;
 import ru.cashprediction.core.json.*;
 import ru.cashprediction.core.ui.command.InvokeSource;
 import ru.cashprediction.core.ui.form.FormSession;
@@ -24,6 +27,12 @@ import ru.cashprediction.web.*;
 
 /** Четыре HTTP-маршрута UI: безопасность существующего API и сериализация действий на потоке ядра. */
 public final class UiApi implements HttpHandler {
+    /** Заголовок токена обычных запросов; reconnect использует отдельное доказательство. */
+    public static final String TOKEN_HEADER = "X-Token";
+    /** Параметр первоначального адреса страницы и обычных запросов. */
+    public static final String TOKEN_PARAM = "t";
+    /** MIME-тип JSON-ответов защищённого API. */
+    public static final String JSON = "application/json; charset=utf-8";
     private final ControllerThread thread;
     private final AppController controller;
     private final WebUiPort port;
@@ -31,14 +40,21 @@ public final class UiApi implements HttpHandler {
     private final byte[] token;
     private final IntSupplier serverPort;
     private final WebSelfTestBridge tests;
+    private final ReconnectAuthenticator reconnect;
     // Последняя ревизия вкладки по полю: эхо другой вкладки не отменяет ввод этой.
     private final Map<String, Map<String, Long>> clientRevisions = new LinkedHashMap<>();
 
     /** Создаёт защищённый обработчик; тестовый мост может отсутствовать. */
     public UiApi(ControllerThread thread, AppController controller, WebUiPort port, EffectLog log,
             String token, IntSupplier serverPort, WebSelfTestBridge tests) {
+        this(thread, controller, port, log, token, serverPort, tests, null);
+    }
+    /** Создаёт обработчик с независимым доказательством reconnect; null отключает только reconnect. */
+    public UiApi(ControllerThread thread, AppController controller, WebUiPort port, EffectLog log,
+            String token, IntSupplier serverPort, WebSelfTestBridge tests, ReconnectAuthenticator reconnect) {
         this.thread = thread; this.controller = controller; this.port = port; this.log = log;
         this.token = token.getBytes(StandardCharsets.UTF_8); this.serverPort = serverPort; this.tests = tests;
+        this.reconnect = reconnect;
     }
     /** {@inheritDoc} */
     @Override public void handle(HttpExchange exchange) throws IOException {
@@ -52,10 +68,13 @@ public final class UiApi implements HttpHandler {
             catch (InterruptedException error) { Thread.currentThread().interrupt(); status = 503; result = Map.of("busy", true); }
             catch (Exception error) { status = 500; result = Map.of("error", UiText.get("err.generic")); }
             byte[] body = JsonWriter.write(UiJson.toTree(result)).getBytes(StandardCharsets.UTF_8);
-            HttpUtil.send(exchange, status, ApiResponse.JSON, body, false);
+            HttpUtil.send(exchange, status, JSON, body, false);
         }
     }
     private Object dispatch(HttpExchange exchange) throws Exception {
+        String route = exchange.getRequestURI().getPath();
+        if (route.equals("/api/ui/reconnect/challenge") || route.equals("/api/ui/reconnect/complete"))
+            return reconnect(exchange, route);
         Map<String, String> query = HttpUtil.parseQuery(exchange.getRequestURI());
         checkSecurity(exchange, query);
         String path = exchange.getRequestURI().getPath(), method = exchange.getRequestMethod();
@@ -81,7 +100,9 @@ public final class UiApi implements HttpHandler {
                 WebBootstrap bootstrap = port.bootstrap();
                 // Первый шаг находится в bootstrap.seq + 1, поэтому не теряется между bootstrap и events.
                 if (tests != null) tests.connected(tab);
-                return UiJson.toTree(bootstrap);
+                Map<String, Object> tree = new LinkedHashMap<>(Json.asObject(UiJson.toTree(bootstrap), "bootstrap"));
+                if (reconnect != null) tree.put("reconnect", reconnect.bootstrapMetadata());
+                return tree;
             });
         }
         if (!method.equals("POST")) throw ApiException.notFound(UiText.get("json.error.uiField", "route"));
@@ -114,6 +135,53 @@ public final class UiApi implements HttpHandler {
             return call(() -> { tests.receive(path, body); return Map.of("ok", true); });
         }
         throw ApiException.notFound(UiText.get("json.error.uiField", "route"));
+    }
+    /** Проверяет источник до чтения ограниченного тела, не раскрывая детали доказательства в ошибке. */
+    private Object reconnect(HttpExchange exchange, String route) throws Exception {
+        String error = UiText.get("json.error.uiField", "request");
+        for (var values : exchange.getRequestHeaders().values())
+            if (values.size() != 1) throw ApiException.forbidden(error);
+        String host = exchange.getRequestHeaders().getFirst("Host");
+        int actualPort = serverPort.getAsInt();
+        if (!("127.0.0.1:" + actualPort).equals(host) && !("localhost:" + actualPort).equals(host)
+                && !("[::1]:" + actualPort).equals(host)) throw ApiException.forbidden(error);
+        String origin = exchange.getRequestHeaders().getFirst("Origin");
+        if (!("http://" + host).equals(origin)
+                || !"1".equals(exchange.getRequestHeaders().getFirst("X-CP-Reconnect"))
+                || exchange.getRequestURI().getRawQuery() != null) throw ApiException.forbidden(error);
+        if (!"POST".equals(exchange.getRequestMethod())) throw new ApiException(405, error, null);
+        if (reconnect == null) throw ApiException.forbidden(error);
+        String type = exchange.getRequestHeaders().getFirst("Content-Type");
+        if (type == null || !type.matches("(?i)application/json(?:\\s*;\\s*charset=utf-8)?"))
+            throw ApiException.badRequest(error);
+        try {
+            String length = exchange.getRequestHeaders().getFirst("Content-Length");
+            if (length != null && (!length.matches("[0-9]+") || Long.parseLong(length) > 2048))
+                throw new IllegalArgumentException("body");
+            byte[] bytes;
+            try (var input = exchange.getRequestBody()) { bytes = input.readNBytes(2049); }
+            if (bytes.length > 2048) throw new IllegalArgumentException("body");
+            String text = StandardCharsets.UTF_8.newDecoder().onMalformedInput(CodingErrorAction.REPORT)
+                    .onUnmappableCharacter(CodingErrorAction.REPORT).decode(ByteBuffer.wrap(bytes)).toString();
+            Map<String, Object> body = Json.asObject(JsonParser.parse(text), "body");
+            if (route.endsWith("/challenge")) {
+                exactReconnectFields(body, "installationId", 32, "clientNonce", 64);
+                return reconnect.challenge(origin, body);
+            }
+            exactReconnectFields(body, "challengeId", 32, "clientProof", 64);
+            return reconnect.complete(origin, body);
+        } catch (Exception rejected) {
+            // Ни идентификаторы, ни доказательства, ни ключи не отражаются клиенту или журналу.
+            throw ApiException.badRequest(error);
+        }
+    }
+    /** Допускает только два ожидаемых поля с каноническими шестнадцатеричными значениями. */
+    private static void exactReconnectFields(Map<String, Object> body, String first, int firstLength,
+            String second, int secondLength) {
+        if (!body.keySet().equals(java.util.Set.of(first, second))
+                || !(body.get(first) instanceof String a) || !a.matches("[0-9a-f]{" + firstLength + "}")
+                || !(body.get(second) instanceof String b) || !b.matches("[0-9a-f]{" + secondLength + "}"))
+            throw new IllegalArgumentException("request");
     }
     private <T> T call(java.util.concurrent.Callable<T> action) throws Exception {
         try { return thread.submit(action).get(5, TimeUnit.SECONDS); }
@@ -181,7 +249,7 @@ public final class UiApi implements HttpHandler {
         if (requested != null && (screen == null || requested != actual)) return Map.of("stale", true, "rev", actual);
         Object result = switch (request) {
             case WebQuery.ContextMenu menu -> controller.contextMenu(menu.target());
-            case WebQuery.Tooltip tooltip -> controller.tableTooltip(tooltip.rev(), tooltip.index(), tooltip.columnId());
+            case WebQuery.Tooltip tooltip -> controller.decoratedTableTooltip(tooltip.rev(), tooltip.index(), tooltip.columnId());
             case WebQuery.Rows rows -> {
                 var values = new ArrayList<Object>();
                 int end = (int) Math.min((long) screen.table().rowCount(), (long) rows.from() + rows.count());
@@ -202,8 +270,8 @@ public final class UiApi implements HttpHandler {
         int port = serverPort.getAsInt();
         if (!value.equals("127.0.0.1:" + port) && !value.equals("localhost:" + port) && !value.equals("[::1]:" + port))
             throw ApiException.forbidden(UiText.get("json.error.uiField", "Host"));
-        String header = exchange.getRequestHeaders().getFirst(ApiHandler.TOKEN_HEADER);
-        String given = header != null && !header.isBlank() ? header.strip() : query.get(ApiHandler.TOKEN_PARAM);
+        String header = exchange.getRequestHeaders().getFirst(TOKEN_HEADER);
+        String given = header != null && !header.isBlank() ? header.strip() : query.get(TOKEN_PARAM);
         if (given == null || !MessageDigest.isEqual(token, given.getBytes(StandardCharsets.UTF_8)))
             throw ApiException.forbidden(UiText.get("json.error.uiField", "token"));
     }

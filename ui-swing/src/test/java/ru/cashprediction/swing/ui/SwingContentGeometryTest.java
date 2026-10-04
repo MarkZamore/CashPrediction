@@ -76,7 +76,7 @@ class SwingContentGeometryTest {
     private void withApplication(Check check) throws Exception {
         assumeFalse(GraphicsEnvironment.isHeadless()); SwingUiPort[] ports = new SwingUiPort[1]; AppController[] apps = new AppController[1];
         SwingUtilities.invokeAndWait(() -> {
-            SwingLook.install(); var env = AppEnvironment.from(LaunchOptions.parse("--home", directory.toString(), "--registry", "memory", "--today", "2026-09-13", "--selftest", "s05-forms-plan", "--ui", "core"));
+            SwingLook.install(); var env = AppEnvironment.from(LaunchOptions.parse("--home", directory.toString(), "--registry", "memory", "--today", "2026-09-13", "--selftest", "s05-forms-plan"));
             ports[0] = new SwingUiPort(env); apps[0] = new AppController(ports[0], env); ports[0].bind(apps[0]); apps[0].start();
         });
         try {

@@ -53,7 +53,7 @@ public final class SwingUiDumper {
         List<UiDump.Window> windows = new ArrayList<>();
         for (SwingFormDialog form : port.forms.values()) if (form.showing()) windows.add(window(form));
         List<UiDump.Alert> alerts = new ArrayList<>();
-        for (SwingAlerts alert : port.alerts.values()) if (alert.showing()) alerts.add(new UiDump.Alert(alert.id, alert.spec.purpose(), alert.spec.kind().name(), alert.dialog.getTitle(), alert.glyph.getText(), alert.dialog.getContentPane().getMinimumSize().width,
+        for (SwingAlerts alert : port.alerts.values()) if (alert.showing()) alerts.add(new UiDump.Alert(alert.id, alert.spec.purpose(), alert.spec.kind().name(), alert.dialog.getTitle(), string(alert.glyph, "cp.glyph"), alert.dialog.getContentPane().getMinimumSize().width,
                 plain(alert.header), plain(alert.content), alert.details.getText(), alert.detailsLink.isVisible() ? alert.detailsLink.getText() : "", alert.details.isShowing(), buttons(alert.buttonBar, alert.dialog.getRootPane())));
         List<UiDump.Popup> popups = new ArrayList<>();
         if (port.popups.content != null && port.popups.content.isShowing()) popups.add(new UiDump.Popup(port.popups.kind, labels(port.popups.content), contentBounds(port.popups.content, port.frame.root)));
@@ -97,7 +97,10 @@ public final class SwingUiDumper {
         for (Component child : toolbar.getComponents()) {
             if (!(child instanceof JComponent c) || id(c) == null) continue;
             String kind = string(c, "cp.kind"), text = "", prompt = "", tooltip = tip(c); boolean selected = false; Component rendered = c;
-            if (c instanceof AbstractButton button) { text = button.getText(); selected = button.isSelected(); }
+            if (c instanceof AbstractButton button) {
+                text = button.getClientProperty("cp.text") instanceof String semantic ? semantic : button.getText();
+                selected = button.isSelected();
+            }
             if (c.getClientProperty("cp.main") instanceof JButton main) { text = main.getText(); tooltip = tip(main); rendered = main; }
             if (kind.equals("FilterField")) { JTextField field = first(c, JTextField.class); text = field.getText(); prompt = string(field, "cp.prompt"); tooltip = tip(field); }
             List<UiDump.MenuItem> menus = c.getClientProperty("cp.popup") instanceof JPopupMenu popup ? menuItems(popup.getComponents()) : List.of();
@@ -153,7 +156,7 @@ public final class SwingUiDumper {
         }
         List<UiDump.ResultText> results = form.results.stream().map(label -> new UiDump.ResultText(plain(label), color(label.getForeground()))).toList();
         String ownerId = ownerId(form.dialog.getOwner());
-        return new UiDump.Window(form.session.windowId(), form.spec.windowType().name(), form.spec.purpose(), form.dialog.getTitle(), plain(form.header), form.glyph.getText(), form.dialog.getModalityType() != Dialog.ModalityType.MODELESS,
+        return new UiDump.Window(form.session.windowId(), form.spec.windowType().name(), form.spec.purpose(), form.dialog.getTitle(), plain(form.header), string(form.glyph, "cp.glyph"), form.dialog.getModalityType() != Dialog.ModalityType.MODELESS,
                 ownerId, form.page, contentBounds(form.content, port.frame.root), form.sections.stream().map(JLabel::getText).toList(), form.hints.stream().map(SwingUiDumper::plain).toList(), fields,
                 preview, selected, results, plain(form.problem), buttons(form.content, form.dialog.getRootPane()), form.details.getText(), form.detailsLink.isVisible() ? form.detailsLink.getText() : "", form.details.isShowing());
     }
@@ -256,9 +259,10 @@ public final class SwingUiDumper {
     static String color(Color color) { return color == null ? "" : ColorToken.byArgb(color.getRGB()).map(ColorToken::id).orElse(String.format("#%08X", color.getRGB())); }
     static String tip(JComponent c) { return plain(new JLabel(c.getToolTipText())); }
     static String plain(JLabel label) {
+        if (label.getClientProperty("cp.text") instanceof String logical) return logical;
         String text = label.getText(); if (text == null) return "";
         if (!text.startsWith("<html>")) return text;
-        return text.replace("<br>", "\n").replaceAll("<[^>]*>", "").replace("&lt;", "<").replace("&gt;", ">").replace("&amp;", "&");
+        return text.replaceAll("<img[^>]*alt='([^']*)'[^>]*>", "$1").replace("<br>", "\n").replaceAll("<[^>]*>", "").replace("&lt;", "<").replace("&gt;", ">").replace("&amp;", "&");
     }
     static List<String> labels(Container parent) { List<String> result = new ArrayList<>(); for (Component child : parent.getComponents()) if (child instanceof JLabel label) result.add(plain(label)); else if (child instanceof Container c) result.addAll(labels(c)); return result; }
     private static String optionText(Object option) { return option instanceof ru.cashprediction.core.ui.form.Option o ? o.text() : String.valueOf(option); }

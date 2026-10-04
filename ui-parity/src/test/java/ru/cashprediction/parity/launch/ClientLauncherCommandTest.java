@@ -47,7 +47,7 @@ class ClientLauncherCommandTest {
                         "--selftest", "s02-sample-table", "--selftest-out", home.resolve("selftest-out").toString()),
                 cmd.subList(module + 2, cmd.size()));
         assertEquals(home.getParent(), request.logDirectory());
-        // Прежний интерфейс не разбирает аргументы: изоляция доходит до него только системными свойствами (L12).
+        // Изоляция доступна до разбора аргументов через последние системные свойства JVM (L12).
         assertEquals(List.of("-Dcashprediction.home=" + home, "-Dcashprediction.registry.node=" + NODE),
                 cmd.subList(mp - 2, mp));
     }
@@ -76,30 +76,62 @@ class ClientLauncherCommandTest {
         assertEquals(List.of(), fromBoth.warnings());
     }
 
+    /** Все три клиента безопасно запускаются без выбора UI с реестром в памяти. */
     @Test
-    void legacyCapableClientWithoutRegistryNodeIsRefusedUnlessCoreUi() {
+    void allClientsUseMemoryRegistryWithoutUiSelector() {
         ReactorLayout layout = layout();
-        LaunchRequest memory = new LaunchRequest("swing", "memory", ROOT.resolve("home"), null, null, null, null, null,
-                List.of(ClientLauncher.ARG_REGISTRY, "memory"), List.of());
-
         for (ClientTarget target : List.of(ClientTarget.fx(layout), ClientTarget.swing(layout), ClientTarget.web(layout))) {
-            IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
-                    () -> ClientLauncher.command(target, memory), target.client());
-            assertTrue(e.getMessage().contains("legacy"), e.getMessage());
+            LaunchRequest memory = new LaunchRequest(target.client(), "memory", ROOT.resolve(target.client()),
+                    null, null, null, null, List.of(ClientLauncher.ARG_REGISTRY, "memory"), List.of());
+            List<String> command = ClientLauncher.command(target, memory);
+            assertTrue(command.contains("-Dcashprediction.home=" + memory.home()), target.client());
+            assertTrue(command.stream().noneMatch(option -> option.startsWith("-Dcashprediction.registry.node")), target.client());
+            List<String> arguments = command.subList(command.indexOf("--module") + 2, command.size());
+            assertTrue(arguments.stream().noneMatch(argument -> argument.equals("--" + "ui")), target.client());
+            LaunchOptions options = LaunchOptions.parse(arguments, new Properties());
+            assertEquals(List.of(), options.warnings(), target.client());
+            assertTrue(options.registryMemory(), target.client());
+            assertEquals(memory.home(), options.home(), target.client());
         }
+    }
 
-        List<String> core = ClientLauncher.command(ClientTarget.swing(layout), memory.withUi("core"));
-        assertTrue(core.contains("-Dcashprediction.home=" + memory.home()), core.toString());
-        assertTrue(core.stream().noneMatch(option -> option.startsWith("-Dcashprediction.registry.node")), core.toString());
-        List<String> dummy = ClientLauncher.command(ClientTarget.dummy(ROOT.resolve("d.jar"), ROOT.resolve("c.jar")), memory);
-        assertTrue(dummy.contains("--registry"), "the dummy client parses core LaunchOptions and is not refused");
+    /** Для каждого клиента изоляция перекрывает чужие JVM-свойства, выбор интерфейса не передаётся. */
+    @Test
+    void allDefaultClientCommandsKeepIsolationPropertiesLast() {
+        ReactorLayout layout = layout();
+        for (ClientTarget target : List.of(ClientTarget.fx(layout), ClientTarget.swing(layout), ClientTarget.web(layout))) {
+            LaunchRequest request = LaunchRequest.forScenario(layout.parityRoot(), target.client(), "s02-sample-table", NODE)
+                    .withJvmOptions(List.of("-Dcashprediction.home=foreign", "-Dcashprediction.registry.node=foreign"));
+            List<String> command = ClientLauncher.command(target, request);
+            int modulePath = command.indexOf("--module-path");
+            assertEquals(List.of("-Dcashprediction.home=" + request.home(), "-Dcashprediction.registry.node=" + NODE),
+                    command.subList(modulePath - 2, modulePath), target.client());
+            assertTrue(command.stream().noneMatch(argument -> argument.equals("--" + "ui")), target.client());
+            LaunchOptions options = LaunchOptions.parse(command.subList(command.indexOf("--module") + 2, command.size()),
+                    new Properties());
+            assertEquals(List.of(), options.warnings(), target.client());
+            assertEquals(request.home(), options.home(), target.client());
+            assertEquals(NODE, options.registryNode(), target.client());
+            assertEquals(request.selftestOut(), options.selftestOut(), target.client());
+            assertEquals(request.today(), options.today(), target.client());
+        }
+    }
+
+    /** Отсутствие выбора UI не разрешает запись в настоящий реестр без явной изоляции. */
+    @Test
+    void actualClientsWithoutRegistryIsolationAreRefused() {
+        ReactorLayout layout = layout();
+        for (ClientTarget target : List.of(ClientTarget.fx(layout), ClientTarget.swing(layout), ClientTarget.web(layout))) {
+            LaunchRequest unsafe = new LaunchRequest(target.client(), "unsafe", ROOT.resolve(target.client()),
+                    null, null, null, null, List.of(), List.of());
+            assertThrows(IllegalArgumentException.class, () -> ClientLauncher.command(target, unsafe), target.client());
+        }
     }
 
     @Test
     void everyApplicationArgumentIsKnownToCoreLaunchOptions() {
         ReactorLayout layout = layout();
         LaunchRequest request = LaunchRequest.forScenario(layout.parityRoot(), "web", "s17-recovery-dialog", NODE)
-                .withUi("core")
                 .withExtraArguments(List.of(ClientLauncher.ARG_SELFTEST_RECOVERY, "xml"));
         List<String> args = ClientLauncher.applicationArguments(ClientTarget.web(layout), request);
 
@@ -111,14 +143,13 @@ class ClientLauncherCommandTest {
         assertEquals(LocalDate.of(2026, 9, 13), options.today());
         assertEquals("s17-recovery-dialog", options.selftest());
         assertEquals(request.selftestOut(), options.selftestOut());
-        assertEquals(LaunchOptions.UiMode.CORE, options.ui());
         assertEquals(LaunchOptions.RecoveryAnswer.XML, options.selftestRecovery());
         assertTrue(options.testApi() && options.noBrowser() && options.noWindow(), "web runs headless with the test API");
     }
 
     @Test
     void registryMemoryArgumentIsKnownToCoreLaunchOptions() {
-        LaunchRequest request = new LaunchRequest("swing", "memory", ROOT.resolve("home"), null, null, null, null, null,
+        LaunchRequest request = new LaunchRequest("swing", "memory", ROOT.resolve("home"), null, null, null, null,
                 List.of(ClientLauncher.ARG_REGISTRY, "memory"), List.of());
         List<String> args = ClientLauncher.applicationArguments(ClientTarget.swing(layout()), request);
 

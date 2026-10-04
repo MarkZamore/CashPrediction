@@ -32,6 +32,8 @@
     <!-- Модуль без основного кода: пустой jar не создаётся и не устанавливается в локальный репозиторий. -->
     <maven.install.skip>true</maven.install.skip>
     <maven.deploy.skip>true</maven.deploy.skip>
+    <!-- Gates задают отдельную папку XML; обычный запуск сохраняет стандартное место. -->
+    <parity.reports.directory>${project.build.directory}/surefire-reports</parity.reports.directory>
   </properties>
 
   <dependencies>
@@ -71,6 +73,7 @@
           </includes>
           <!-- Полные стеки: падение стенда почти всегда означает внешнюю причину (браузер, реестр, процесс). -->
           <trimStackTrace>false</trimStackTrace>
+          <reportsDirectory>${parity.reports.directory}</reportsDirectory>
           <systemPropertyVariables>
             <!-- Раскладка реактора для ClientLauncher: откуда брать jar модулей и JavaFX. Корень — родитель модуля
                  (модуль лежит прямо под корнем), а не maven.multiModuleProjectDirectory: без папки .mvn тот равен папке,

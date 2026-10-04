@@ -312,7 +312,7 @@ public sealed interface SelfTestCommand {
 
     /**
      * {@code filtertype <текст>}: ввести текст в поле фильтра тулбара (s10). Драйвер ставит фокус в поле и вводит
-     * текст как клавиатура (FX {@code TextField} → Swing {@code JTextField} → Web {@code input}); задержка 300 мс
+     * текст как клавиатура (FX {@code TextField} → Swing {@code JTextField} → Web {@code input}); задержка из общего токена
      * выдерживается самим клиентом, затем {@code UiIntents.filterText}. Пустой текст — очистить поле.
      *
      * @param text текст

@@ -86,9 +86,17 @@ class DesignTokensTest {
 
     @Test
     void sizesMatchSpec() {
+        assertEquals(0, DesignTokens.FILTER_DEBOUNCE_MS);
         assertEquals(26, DesignTokens.ROW_HEIGHT);
         assertEquals(28, DesignTokens.HEADER_HEIGHT);
         assertEquals(28, DesignTokens.CONTROL_HEIGHT);
+        assertEquals(16, DesignTokens.INLINE_ICON_SIZE);
+        assertEquals(26, DesignTokens.DIALOG_ICON_SIZE);
+        assertEquals(30, DesignTokens.ALERT_ICON_SIZE);
+        assertEquals(DesignTokens.ALERT_ICON_SIZE, DesignTokens.WEB_ALERT_ICON_SIZE);
+        assertTrue(TokenCss.webCss().contains("--cp-inline-icon-size: 16px;"));
+        assertTrue(TokenCss.webCss().contains("--cp-dialog-icon-size: 26px;"));
+        assertTrue(TokenCss.webCss().contains("--cp-alert-icon-size: 30px;"));
         assertEquals(36, DesignTokens.TOOLBAR_HEIGHT);
         assertEquals(24, DesignTokens.STATUS_HEIGHT);
         assertEquals(88, DesignTokens.BUTTON_MIN_WIDTH);
@@ -98,6 +106,8 @@ class DesignTokensTest {
         assertEquals(900, DesignTokens.MAIN_MIN_WIDTH);
         assertEquals(600, DesignTokens.MAIN_MIN_HEIGHT);
         assertEquals(118, DesignTokens.CARD_MIN_WIDTH);
+        assertEquals(6, DesignTokens.CARD_GAP);
+        assertTrue(TokenCss.webCss().contains("--cp-card-gap: 6px;"));
         assertEquals(List.of(80, 24, 28, 32), List.of(DesignTokens.CHART_MARGIN_LEFT, DesignTokens.CHART_MARGIN_RIGHT,
                 DesignTokens.CHART_MARGIN_TOP, DesignTokens.CHART_MARGIN_BOTTOM));
     }
