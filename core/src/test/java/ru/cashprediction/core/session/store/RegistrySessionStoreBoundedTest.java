@@ -82,14 +82,15 @@ class RegistrySessionStoreBoundedTest {
     /** Пустые, слишком длинные и превышающие общую длину куски отвергаются до склейки. */
     @Test
     void invalidActualChunksAreCorruption() throws Exception {
-        InMemoryRegistryBackend backend = new InMemoryRegistryBackend();
-        RegistrySessionStore store = new RegistrySessionStore(backend, "fx");
         for (String chunk : List.of("", "x".repeat(4097), "xx")) {
+            // Каждый reader-case независим: сохранение поверх corruption требует отдельного quarantine scope.
+            InMemoryRegistryBackend backend = new InMemoryRegistryBackend();
+            RegistrySessionStore store = new RegistrySessionStore(backend, "fx");
             store.save(SessionFixtures.simple("fx"));
             backend.put(RegistrySessionStore.KEY_SNAPSHOT_LENGTH, "1");
             backend.put(RegistrySessionStore.KEY_SNAPSHOT_COUNT, "1");
             backend.put("snapshot.0", chunk);
-            assertThrows(SessionStoreException.class, store::load);
+            assertEquals(SessionStoreException.Code.CORRUPT,assertThrows(SessionStoreException.class, store::load).code());
         }
     }
 

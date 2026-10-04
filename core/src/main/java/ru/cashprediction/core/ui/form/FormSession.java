@@ -622,17 +622,18 @@ public final class FormSession implements StatefulWindow {
         if (spec != null) {
             return;
         }
-        spec = Objects.requireNonNull(logic.spec(context), "spec");
-        kinds = new LinkedHashMap<>();
-        innerButtons = new LinkedHashSet<>();
-        for (FormPage page : spec.pages()) {
+        FormSpec nextSpec = Objects.requireNonNull(logic.spec(context), "spec");
+        Map<String, FieldKind> nextKinds = new LinkedHashMap<>();
+        Set<String> nextInnerButtons = new LinkedHashSet<>();
+        for (FormPage page : nextSpec.pages()) {
             for (FormRow row : page.rows()) {
                 switch (row) {
-                    case FormRow.Field field -> register(field.field());
-                    case FormRow.Inline inline -> inline.fields().forEach(this::register);
+                    case FormRow.Field field -> register(field.field(), nextKinds, nextInnerButtons);
+                    case FormRow.Inline inline ->
+                            inline.fields().forEach(field -> register(field, nextKinds, nextInnerButtons));
                     case FormRow.SideColumn side -> {
-                        register(side.preview());
-                        side.buttons().forEach(button -> innerButtons.add(button.id()));
+                        register(side.preview(), nextKinds, nextInnerButtons);
+                        side.buttons().forEach(button -> nextInnerButtons.add(button.id()));
                     }
                     case FormRow.Section _, FormRow.Hint _, FormRow.Results _ -> {
                         // Разделы, подсказки и места строк результата не содержат полей.
@@ -643,14 +644,20 @@ public final class FormSession implements StatefulWindow {
         Map<String, String> defaults = new LinkedHashMap<>();
         Map<String, String> given = logic.defaults(context);
         if (given != null) {
-            given.forEach((id, value) -> defaults.put(id, FieldCodec.canonical(kinds.getOrDefault(id, FieldKind.TEXT),
+            given.forEach((id, value) -> defaults.put(id, FieldCodec.canonical(nextKinds.getOrDefault(id, FieldKind.TEXT),
                     Objects.requireNonNullElse(value, ""))));
         }
-        state = new FormState(0, defaults);
+        FormState nextState = new FormState(0, defaults);
+        // Публикуем marker старта только после успешной подготовки раскладки и defensive copy значений.
+        spec = nextSpec;
+        kinds = nextKinds;
+        innerButtons = nextInnerButtons;
+        state = nextState;
         recompute(null);
     }
 
-    private void register(FieldSpec field) {
+    /** Регистрирует поле в локальных индексах ещё не опубликованной раскладки. */
+    private static void register(FieldSpec field, Map<String, FieldKind> kinds, Set<String> innerButtons) {
         kinds.putIfAbsent(field.id(), field.kind());
         if (field.kind() == FieldKind.BUTTON) {
             innerButtons.add(field.id());

@@ -27,6 +27,8 @@ import ru.cashprediction.core.session.RestoreCoordinator;
 import ru.cashprediction.core.session.RestoreReport;
 import ru.cashprediction.core.session.RestoreTarget;
 import ru.cashprediction.core.session.SessionRecorder;
+import ru.cashprediction.core.session.RecoverySnapshots;
+import ru.cashprediction.core.session.LocalRecoverySnapshots;
 import ru.cashprediction.core.session.SessionSnapshot;
 import ru.cashprediction.core.session.SessionStore;
 import ru.cashprediction.core.session.SessionStoreException;
@@ -65,6 +67,7 @@ public final class StartupFlow {
 
     private final FlowContext context;
     private final PlanStorage storage;
+    private RecoverySnapshots recovery;
     private List<SessionStore> stores;
     private SnapshotSource source;
     private RestoreTarget target;
@@ -86,8 +89,19 @@ public final class StartupFlow {
      * @param storage общий сервис сохранённых планов
      */
     public StartupFlow(FlowContext context, PlanStorage storage) {
+        this(context, storage, null);
+    }
+
+    /**
+     * Внедряет службу чтения восстановления; адаптер может быть заменён без изменения трёх клиентов.
+     * @param context локальный контекст показа окон
+     * @param storage служба планов
+     * @param recovery служба данных снимков; null выбирает локальные подключённые хранилища
+     */
+    public StartupFlow(FlowContext context, PlanStorage storage, RecoverySnapshots recovery) {
         this.context = Objects.requireNonNull(context, "context");
         this.storage = Objects.requireNonNull(storage, "storage");
+        this.recovery = recovery;
     }
 
     /** Подменяет только внешние участники запуска для изолированных тестов, без изменения их контрактов. */
@@ -99,7 +113,13 @@ public final class StartupFlow {
     /** Подменяет хранение планов и внешние участники запуска в изолированном тесте. */
     StartupFlow(FlowContext context, PlanStorage storage, List<SessionStore> stores, SnapshotSource source, RestoreTarget target,
                 WindowFactory factory, Supplier<CrashDetector.Detection> detector) {
-        this(context, storage);
+        this(context, storage, null, stores, source, target, factory, detector);
+    }
+
+    /** Подключает заменяемую службу данных к настоящей последовательности восстановления. */
+    StartupFlow(FlowContext context, PlanStorage storage, RecoverySnapshots recovery, List<SessionStore> stores,
+                SnapshotSource source, RestoreTarget target, WindowFactory factory, Supplier<CrashDetector.Detection> detector) {
+        this(context, storage, recovery);
         this.stores = List.copyOf(stores);
         this.source = Objects.requireNonNull(source);
         this.target = Objects.requireNonNull(target);
@@ -138,6 +158,7 @@ public final class StartupFlow {
                 factory = new CoreWindowFactory(context);
                 detector = () -> CrashDetector.detect(stores, context.port().profile().snapshotClient());
             }
+            if (recovery == null) recovery = new LocalRecoverySnapshots(stores);
             CrashDetector.Detection detection = detector.get();
             switch (detection.status()) {
                 case CLEAN_START -> ordinary(true);
@@ -257,9 +278,9 @@ public final class StartupFlow {
         SessionSnapshot preview = null;
         for (SessionStore store : stores) {
             try {
-                preview = store.load().orElse(null);
+                preview = recovery.read(store.id()).snapshot().orElse(null);
                 if (preview != null) break;
-            } catch (SessionStoreException | RuntimeException ignored) {
+            } catch (RuntimeException ignored) {
                 // Ошибка предварительного просмотра не запрещает выбрать второе хранилище.
             }
         }
@@ -334,8 +355,12 @@ public final class StartupFlow {
         }
         Optional<SessionSnapshot> snapshot;
         try {
-            SessionStore selected = stores.stream().filter(store -> store.id().equals(id)).findFirst().orElse(null);
-            snapshot = selected == null ? Optional.empty() : selected.load();
+            RecoverySnapshots.Result result = recovery.read(id);
+            if (result.problem().isPresent()) {
+                RecoverySnapshots.Problem problem = result.problem().orElseThrow();
+                throw new SessionStoreException(problem.code(), problem.detail());
+            }
+            snapshot = result.snapshot();
         } catch (SessionStoreException | RuntimeException e) {
             // JavaFX: Alert → Swing: JOptionPane → Web: dialog.
             AlertSpec base = AlertCatalog.error("readSnapshot", e);

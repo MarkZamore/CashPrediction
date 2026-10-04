@@ -17,6 +17,10 @@ function layoutSummary(root) {
   const value = String(columns);
   if (root.style.getPropertyValue('--cp-summary-columns') !== value)
     root.style.setProperty('--cp-summary-columns', value);
+  // Desktop делит ширину целочисленно: остаток остаётся справа, а не накапливается между карточками.
+  const cardWidth = `${Math.max(0, Math.floor((width - (columns - 1) * gap) / columns))}px`;
+  if (root.style.getPropertyValue('--cp-summary-card-width') !== cardWidth)
+    root.style.setProperty('--cp-summary-card-width', cardWidth);
 }
 
 /** Рисует готовые значения и отправляет действия карточек в ядро. */

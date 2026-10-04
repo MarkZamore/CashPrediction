@@ -5,10 +5,12 @@
 Читает DeliveryRoot/CashPrediction и DeliveryRoot/CashPrediction-source.7z.
 Отсутствие артефактов означает FAILED. Не создаёт и не исправляет доставку.
 Политику исходников загружает через AST Pack-Source.ps1, без исполнения упаковщика.
+Требует все шесть технических docs/design/*.md из точного whitelist политики;
+рабочие docs/ai и именованный AI-контекст не допускаются, включая ресурсы.
 Listing, test и извлечение выполняются внешним 7-Zip в новой собственной папке Temp.
 Receipts и inventories сохраняются в новом EvidenceRoot без перезаписи.
 VerifyBuild дополнительно выполняет полный mvn -B install именно в свежем извлечённом дереве.
-Проверка состава не заменяет S6/S7, native smoke, parity, восстановление или release sign-off.
+Проверка состава не заменяет S5/S6, native smoke, parity, восстановление или release sign-off.
 #>
 #requires -Version 7.0
 [CmdletBinding()]
@@ -17,7 +19,9 @@ param(
     [string] $EvidenceRoot,
     [string] $SevenZipPath,
     [string] $MavenPath,
-    [switch] $VerifyBuild
+    [switch] $VerifyBuild,
+    [string] $ExpectedArchiveSha256,
+    [string] $ExpectedPortableInventorySha256
 )
 
 Set-StrictMode -Version Latest
@@ -37,6 +41,83 @@ foreach ($name in @('Test-WithinPath', 'Test-ExcludedDirectory', 'Test-IncludedF
     }, $false))
     if ($definitions.Count -ne 1) { throw "FINAL_POLICY_FUNCTION: $name" }
     . ([scriptblock]::Create($definitions[0].Extent.Text))
+}
+
+# Загружает существующий PNG guard без исполнения основного сценария или извлечённых скриптов.
+$iconPolicy = Join-Path $PSScriptRoot 'Test-IconPayloadIntegrity.ps1'
+$iconPolicySha = (Get-FileHash -LiteralPath $iconPolicy).Hash
+$iconAst = [Management.Automation.Language.Parser]::ParseFile($iconPolicy, [ref]$tokens, [ref]$parseErrors)
+if ($parseErrors.Count) { throw 'FINAL_ICON_POLICY_PARSE' }
+foreach ($name in @('Read-IconPngUInt32', 'Get-IconPngCrc', 'Assert-IconPngStructure')) {
+    $definitions = @($iconAst.FindAll({ param($node)
+        $node -is [Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -ceq $name
+    }, $false))
+    if ($definitions.Count -ne 1) { throw "FINAL_ICON_POLICY_FUNCTION: $name" }
+    . ([scriptblock]::Create($definitions[0].Extent.Text))
+}
+if ((Get-FileHash -LiteralPath $iconPolicy).Hash -cne $iconPolicySha) { throw 'FINAL_ICON_POLICY_CHANGED' }
+
+# Проверяет общие PNG и тот же canonical ICO frame, который проверяет Test-Icon-Source.
+function Assert-FinalSourceIcons([string] $Root) {
+    $directory = Join-Path $Root 'core/src/main/resources/ru/cashprediction/core/ui/icons'
+    foreach ($file in Get-ChildItem -LiteralPath $directory -File -Filter '*.png') {
+        Assert-FinalPath $file.FullName
+        if ($file.Length -gt 4194304) { throw 'FINAL_SOURCE_ICON_SIZE' }
+        Assert-IconPngStructure ([IO.File]::ReadAllBytes($file.FullName))
+    }
+    $png = [IO.File]::ReadAllBytes((Join-Path $directory 'application.png'))
+    if ((Read-IconPngUInt32 $png 16) -ne 256 -or (Read-IconPngUInt32 $png 20) -ne 256) { throw 'FINAL_SOURCE_ICON_DIMENSIONS' }
+    $path = Join-Path $directory 'application.ico'; Assert-FinalPath $path
+    if ((Get-Item -LiteralPath $path).Length -gt 4194304) { throw 'FINAL_SOURCE_ICON_SIZE' }
+    $ico = [IO.File]::ReadAllBytes($path)
+    if ($ico.Length -lt 6 -or [BitConverter]::ToUInt16($ico,0) -ne 0 -or
+        [BitConverter]::ToUInt16($ico,2) -ne 1) { throw 'FINAL_SOURCE_ICON_ICO' }
+    $count = [BitConverter]::ToUInt16($ico,4); $end = 6 + 16 * $count; $canonical = 0
+    if ($count -eq 0 -or $end -gt $ico.Length) { throw 'FINAL_SOURCE_ICON_ICO' }
+    for ($i = 0; $i -lt $count; $i++) {
+        $entry = 6 + 16 * $i
+        $length = [BitConverter]::ToUInt32($ico,$entry+8); $offset = [BitConverter]::ToUInt32($ico,$entry+12)
+        if ($length -eq 0 -or $offset -lt $end -or [long]$offset+$length -gt $ico.Length) { throw 'FINAL_SOURCE_ICON_BOUNDS' }
+        if ($ico[$entry] -eq 0 -and $ico[$entry+1] -eq 0) {
+            $canonical++
+            if ($length -ne $png.Length -or [Convert]::ToBase64String($ico,[int]$offset,[int]$length) -cne
+                [Convert]::ToBase64String($png)) { throw 'FINAL_SOURCE_ICON_FRAME' }
+        }
+    }
+    if ($canonical -ne 1) { throw 'FINAL_SOURCE_ICON_FRAME' }
+}
+
+# Проверяет наличие Java launcher и bounded JImage index; не утверждает загрузку JVM или полноту модулей.
+function Assert-FinalRuntime([string] $Portable) {
+    $java = Join-Path $Portable 'runtime/bin/java.exe'
+    $modules = Join-Path $Portable 'runtime/lib/modules'
+    foreach ($path in @($java,$modules)) {
+        Assert-FinalPath $path
+        if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { throw 'FINAL_RUNTIME_MISSING' }
+    }
+    Assert-FinalLauncher $java
+    $stream = [IO.File]::OpenRead($modules)
+    try {
+        $header = [byte[]]::new(28)
+        if ($stream.Read($header,0,28) -ne 28 -or [BitConverter]::ToUInt32($header,0) -ne 3405699802L -or
+            [BitConverter]::ToUInt32($header,4) -ne 65536) { throw 'FINAL_RUNTIME_JIMAGE_HEADER' }
+        $resources = [BitConverter]::ToUInt32($header,12); $table = [BitConverter]::ToUInt32($header,16)
+        $locations = [BitConverter]::ToUInt32($header,20); $strings = [BitConverter]::ToUInt32($header,24)
+        $index = 28L + 8L * $table + [long]$locations + [long]$strings
+        if ($resources -eq 0 -or $table -lt $resources -or $locations -eq 0 -or $strings -eq 0 -or
+            $index -ge $stream.Length) { throw 'FINAL_RUNTIME_JIMAGE_INDEX' }
+    } finally { $stream.Dispose() }
+}
+
+# Связывает доставку с независимо закреплёнными входами acceptance, не выдаёт composition за signoff.
+function Assert-FinalCandidatePins([string] $ArchiveSha, [string] $PortableSha,
+        [string] $ExpectedArchive, [string] $ExpectedPortable) {
+    if (-not $ExpectedArchive -and -not $ExpectedPortable) { return $false }
+    if ($ExpectedArchive -notmatch '\A[0-9a-fA-F]{64}\z' -or
+        $ExpectedPortable -notmatch '\A[0-9a-fA-F]{64}\z') { throw 'FINAL_CANDIDATE_PIN_PAIR' }
+    if ($ArchiveSha -ine $ExpectedArchive) { throw 'FINAL_CANDIDATE_ARCHIVE_MISMATCH' }
+    if ($PortableSha -ine $ExpectedPortable) { throw 'FINAL_CANDIDATE_PORTABLE_MISMATCH' }
+    return $true
 }
 
 # Проверяет буквальный абсолютный путь и всю существующую цепочку родителей.
@@ -219,6 +300,7 @@ $receipt = [ordered]@{schema = 1; status = 'FAILED'; fullAcceptance = $false; st
     deliveryRoot = $delivery; evidenceRoot = $evidence; scriptSha256 = (Get-FileHash -LiteralPath $PSCommandPath).Hash;
     policyPath = $policy; policySha256 = $loadedPolicySha; archive = $null; portable = $null;
     source = $null; commands = @(); verifyBuild = [bool]$VerifyBuild; buildStatus = 'NOT_RUN'; cleanup = 'NOT_CREATED'; error = $null}
+$receipt.iconPolicy = @{path=$iconPolicy; sha256=$iconPolicySha}
 $archiveStream = $null; $created = $false; $failure = $null
 try {
     $portable = Join-Path $delivery 'CashPrediction'; $archive = Join-Path $delivery 'CashPrediction-source.7z'
@@ -242,9 +324,12 @@ try {
             throw "FINAL_PORTABLE_TREE: $tree"
         }
     }
+    Assert-FinalRuntime $portable
     $archiveStream = [IO.File]::Open($archive, [IO.FileMode]::Open, [IO.FileAccess]::Read, [IO.FileShare]::Read)
     $archiveSha = (Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash
     $receipt.archive = @{path = $archive; size = $archiveStream.Length; sha256 = $archiveSha; listing = 'archive-listing.log'; tested = $false}
+    $receipt.candidateBinding = Assert-FinalCandidatePins $archiveSha $receipt.portable.inventorySha256 `
+        $ExpectedArchiveSha256 $ExpectedPortableInventorySha256
     if ($archiveStream.Length -gt 536870912) { throw 'FINAL_ARCHIVE_CONTAINER_SIZE' }
     $signature = [byte[]]::new(6)
     if ($archiveStream.Read($signature, 0, 6) -ne 6 -or [Convert]::ToHexString($signature) -cne '377ABCAF271C') { throw 'FINAL_ARCHIVE_SIGNATURE' }
@@ -286,6 +371,7 @@ try {
     # Общая политика требует и транзитивный PNG-validator, и скрипт размещения модулей;
     # agent metadata отсекается той же политикой сначала в listing, затем в извлечённом дереве.
     Assert-DeliveredSource $extracted
+    Assert-FinalSourceIcons $extracted
     $receipt.source.composition = 'VERIFIED'
     if ($VerifyBuild) {
         $maven = if ($MavenPath) { (Get-Item -LiteralPath $MavenPath).FullName } else { (Get-Command mvn -ErrorAction Stop).Source }
@@ -307,6 +393,7 @@ try {
     if ((Get-FileHash -LiteralPath $archive).Hash -cne $archiveSha -or
         (ConvertTo-Json -InputObject @(Get-FinalInventory $portable) -Depth 8) -cne $portableJson) { throw 'FINAL_ARTIFACTS_CHANGED' }
     if ((Get-FileHash -LiteralPath $policy).Hash -cne $receipt.policySha256) { throw 'FINAL_POLICY_CHANGED' }
+    if ((Get-FileHash -LiteralPath $iconPolicy).Hash -cne $iconPolicySha) { throw 'FINAL_ICON_POLICY_CHANGED' }
     $receipt.status = if ($VerifyBuild) { 'VERIFIED_COMPOSITION_AND_BUILD' } else { 'VERIFIED_COMPOSITION' }
 } catch { $failure = $_; $receipt.status = 'FAILED'; $receipt.error = $_.Exception.Message }
 finally {

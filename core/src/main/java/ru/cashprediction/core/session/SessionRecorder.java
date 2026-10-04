@@ -212,11 +212,12 @@ public final class SessionRecorder {
 
     /**
      * Снимает окно с регистрации (окно закрыто). Вызывает {@link #touch()}.
+     * Сравнивает экземпляры: закрытие прежнего равного окна не снимает заменившую его регистрацию.
      *
      * @param window окно
      */
     public void unregister(StatefulWindow window) {
-        if (window != null && windows.remove(window)) {
+        if (window != null && windows.removeIf(registered -> registered == window)) {
             touch();
         }
     }
@@ -603,7 +604,7 @@ public final class SessionRecorder {
                     store.save(snapshot);
                     lastWrittenByStore.put(store.id(), snapshot);
                     lastSuccessByStore.put(store.id(), snapshot.savedAt());
-                    statuses.add(new StoreStatus(store.id(), true, snapshot.savedAt(), ""));
+                    statuses.add(new StoreStatus(store.id(), true, snapshot.savedAt(), store.recoveryNotice().orElse("")));
                 } catch (SessionStoreException | RuntimeException e) {
                     // Ошибка одного хранилища не мешает записи в остальные.
                     statuses.add(new StoreStatus(store.id(), false, lastSuccessByStore.get(store.id()),
@@ -660,7 +661,7 @@ public final class SessionRecorder {
                 } else if (error.isPresent()) {
                     statuses.add(new StoreStatus(store.id(), false, savedAt, error.get()));
                 } else {
-                    statuses.add(new StoreStatus(store.id(), true, savedAt, ""));
+                    statuses.add(new StoreStatus(store.id(), true, savedAt, store.recoveryNotice().orElse("")));
                 }
             } catch (RuntimeException e) {
                 statuses.add(new StoreStatus(store.id(), false, savedAt,

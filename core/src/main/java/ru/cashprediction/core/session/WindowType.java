@@ -26,7 +26,7 @@ public enum WindowType {
     NEW_PLAN_WIZARD(true,
             List.of(WindowType.CONTEXT_PAGE),
             List.of("name", "currency", "startDate", "startBalance", "horizonKind", "horizonValue", "horizonUntil",
-                    "cushion", "quickIncomeTitle", "quickIncomeAmount", "quickIncomeDay",
+                    "displayPeriod", "cushion", "quickIncomeTitle", "quickIncomeAmount", "quickIncomeDay",
                     "quickExpenseTitle", "quickExpenseAmount", "quickExpenseDay")),
 
     /** Параметры плана: те же поля, что у мастера, без быстрых операций, плюс заметка и цель. */

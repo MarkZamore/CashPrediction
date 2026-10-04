@@ -134,11 +134,14 @@ public final class FileFlow {
     public void save(Runnable onSaved) { save(false, onSaved); }
 
     /** Выбирает новое имя файла и при допустимом имени меняет имя плана одним шагом отмены. */
-    public void saveAs() {
+    public void saveAs() { saveAs(null); }
+
+    /** Сохранение импортированной копии продолжает исходное действие только после успешной записи. */
+    private void saveAs(Runnable onSaved) {
         if (saving) return;
         Plan expected = context.document().plan();
         Path oldFile = context.document().file().orElse(null);
-        Path folder = oldFile == null ? context.environment().cashMemory() : oldFile.toAbsolutePath().getParent();
+        Path folder = context.environment().cashMemory();
         saving = true;
         context.choosers().chooseFile(chooser(FileChooserSpec.Purpose.SAVE_PLAN_AS, "md", folder,
                 baseName() + ".md"), result -> {
@@ -158,7 +161,7 @@ public final class FileFlow {
                     if (rename) context.edits().edit(UiText.get("undo.saveAsName", name), "",
                             new ru.cashprediction.core.service.plan.PlanCommand.RenamePlan(name));
                 };
-                write(target, expected, oldFile, written, version, false, afterWrite, null);
+                write(target, expected, oldFile, written, version, false, afterWrite, onSaved);
             } catch (RuntimeException failure) {
                 error("save", failure, target);
             }
@@ -192,6 +195,10 @@ public final class FileFlow {
                 context.status(StatusLevel.INFO, "status.msg.renamed", name);
             }
             return;
+        }
+        if (!context.externalChanges().canWrite(oldFile)) {
+            throw new IllegalArgumentException(UiText.get("s2.file.importedReadOnly", oldFile,
+                    context.environment().cashMemory()));
         }
         try {
             var reference = FilePlanStorage.reference(oldFile);
@@ -251,7 +258,8 @@ public final class FileFlow {
                     CsvOptions options = new CsvOptions(separator, choice.bom(),
                             period ? state.document().forecast().anchor() : null,
                             period ? state.view().periodEnd(state.document().plan(), state.document().forecast().anchor()) : null);
-                    AtomicFiles.writeString(file.get(), CsvExporter.toCsv(state.document().forecast(), options));
+                    AtomicFiles.writeStringScoped(context.environment().cashMemory(), file.get(),
+                            CsvExporter.toCsv(state.document().forecast(), options), true, () -> { });
                     context.status(StatusLevel.SUCCESS, "status.msg.csv", file.get());
                 } catch (IOException | RuntimeException failure) {
                     error("csv", failure);
@@ -275,7 +283,7 @@ public final class FileFlow {
                 context.environment().cashMemory(), UiText.get("s2.file.pngName", baseName())), file -> {
             if (file.isEmpty()) return;
             try {
-                AtomicFiles.write(file.get(), bytes);
+                AtomicFiles.writeScoped(context.environment().cashMemory(), file.get(), bytes);
                 context.status(StatusLevel.SUCCESS, "status.msg.png", file.get());
             } catch (IOException | RuntimeException failure) {
                 error("png", failure, file.get());
@@ -319,6 +327,13 @@ public final class FileFlow {
         if (automatic && !context.document().isDirty()) return;
         Plan expected = context.document().plan();
         Path current = context.document().file().orElse(null);
+        // Внешний Markdown доступен для чтения/правок в памяти, но не для application-managed записи.
+        if (current != null && !context.externalChanges().canWrite(current)) {
+            if (automatic) context.setAutosaveProblem(UiText.get("s2.file.importedReadOnly", current,
+                    context.environment().cashMemory()));
+            else saveAs(onSaved);
+            return;
+        }
         Path target = current == null ? FilePlanStorage.pathFor(context.environment().cashMemory(), expected.name()) : current;
         var reference = FilePlanStorage.reference(target);
         PlanStorage.Version observed;
@@ -428,6 +443,8 @@ public final class FileFlow {
                         if (observed.succeeded() && !PlanStorage.Version.ABSENT.equals(observed.value())) {
                             throw new IllegalArgumentException(UiText.get("val.plan.exists", plan.name()));
                         }
+                        // Первый render/reveal нового плана уже использует выбранный период, даже при ошибке записи.
+                        context.updateView(view -> view.withPeriod(created.displayPeriod()));
                         replace(plan, null, true, List.of());
                         try {
                             observed.requireValue();
@@ -491,7 +508,9 @@ public final class FileFlow {
             context.externalChanges().remember(read.reference(), read.version());
             replace(read.plan(), file, false, read.diagnostics());
             context.updateSettings(settings -> settings.withPlanOpened(file.toString()));
-            if (reloaded) context.status(StatusLevel.INFO, "status.msg.reloaded");
+            if (!context.externalChanges().canWrite(file)) context.status(StatusLevel.INFO, "s2.file.importedReadOnly",
+                    file, context.environment().cashMemory());
+            else if (reloaded) context.status(StatusLevel.INFO, "status.msg.reloaded");
             else context.status(StatusLevel.INFO, "status.msg.opened", read.plan().name());
             if (read.diagnostics().stream().anyMatch(value -> value.severity() != Severity.INFO)) {
                 ask(AlertCatalog.loadDiagnostics(PlanMarkdownReader.nameWithoutExtension(file), read.diagnostics()), ignored -> { });

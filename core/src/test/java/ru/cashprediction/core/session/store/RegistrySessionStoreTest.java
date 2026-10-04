@@ -184,8 +184,24 @@ class RegistrySessionStoreTest {
         };
         new RegistrySessionStore(recording, "fx").save(SessionFixtures.simple("fx"));
         assertEquals("remove snapshot.time", log.get(0));
-        assertEquals("put snapshot.time", log.get(log.size() - 2));
-        assertEquals("flush", log.get(log.size() - 1));
+        // Commit последним среди primary writes; durable flush и journal cleanup идут после него.
+        List<String> primaryWrites=log.stream().filter(s->s.startsWith("put snapshot.")).toList();
+        assertEquals("put snapshot.time", primaryWrites.getLast());
+        int commit=log.indexOf("put snapshot.time");
+        assertEquals("flush",log.get(commit+1));
+        assertTrue(log.indexOf("remove transaction.pending")>commit);
+        assertEquals("flush",log.getLast());
+        log.clear();
+        new RegistrySessionStore(recording,"fx").save(SessionFixtures.tricky("fx"));
+        int pending=log.indexOf("put transaction.pending");
+        assertTrue(pending>log.indexOf("put backup.snapshot.time"));
+        assertEquals("flush",log.get(pending+1));
+        assertTrue(log.indexOf("remove snapshot.time")>pending+1);
+        primaryWrites=log.stream().filter(s->s.startsWith("put snapshot.")).toList();
+        assertEquals("put snapshot.time",primaryWrites.getLast());
+        commit=log.indexOf("put snapshot.time");
+        assertEquals("flush",log.get(commit+1));
+        assertTrue(log.indexOf("remove transaction.pending")>commit);
     }
 
     @Test

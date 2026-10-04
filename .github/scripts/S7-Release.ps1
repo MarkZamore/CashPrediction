@@ -50,8 +50,84 @@ function Invoke-S7Tool {
     # ASCII Base64 сохраняет Unicode аргументов до декодирования JSON внутри CLI.
     $json = ConvertTo-Json -Compress -InputObject $CommandArguments
     $payload = [Convert]::ToBase64String([Text.UTF8Encoding]::new($false, $true).GetBytes($json))
-    & $Java @ToolArguments '--arguments-base64' $payload
-    if ($LASTEXITCODE -ne 0) { throw "S7_TOOL_FAILED: $($CommandArguments[0])" }
+    $diagnosticFile = [IO.Path]::GetTempFileName()
+    $savedNativePreference = $PSNativeCommandUseErrorActionPreference
+    $PSNativeCommandUseErrorActionPreference = $false
+    try {
+        & $Java @ToolArguments '--arguments-base64' $payload 2> $diagnosticFile
+        $exit = $LASTEXITCODE
+        if ($exit -ne 0) {
+            $diagnostic = [IO.File]::ReadAllText($diagnosticFile)
+            $failure = [IO.IOException]::new("S7_TOOL_FAILED: $($CommandArguments[0])")
+            $failure.Data['S7Command'] = $CommandArguments[0]
+            $failure.Data['S7Exit'] = $exit
+            # Только одна точная строка протокола, без поиска подстроки в stack trace или warning.
+            if ($diagnostic -cmatch '\AUPDATE_TOOL_FAILED ([A-Z][A-Z0-9_]{0,79})\r?\n?\z') {
+                $failure.Data['S7Code'] = $Matches[1]
+            }
+            throw $failure
+        }
+    } finally {
+        $PSNativeCommandUseErrorActionPreference = $savedNativePreference
+        Remove-Item -LiteralPath $diagnosticFile -Force
+    }
+}
+
+<# .SYNOPSIS Создаёт дельту; только точный отказ размера допускает пропуск этой базы после повторной проверки. #>
+function New-S7VerifiedDelta {
+    param([string]$Java, [string[]]$ToolArguments, $Base, [string]$TargetRoot,
+        [string]$SeedManifest, [string]$SeedSha256, [string]$Patch, [string]$Work,
+        [string[]]$ManifestArguments)
+    if ((Get-FileHash -LiteralPath $SeedManifest).Hash -cne $SeedSha256) { throw 'S7_TARGET_MANIFEST_CHANGED' }
+    $expected = Read-S7Json $SeedManifest
+    $baseInventory = Join-Path $Work 'base-inventory.json'
+    Invoke-S7Tool $Java $ToolArguments @('inventory', '--root', $Base.root, '--out', $baseInventory) | Out-Null
+    if ((Read-S7Json $baseInventory).treeSha256 -cne $Base.treeSha256) { throw 'S7_BASE_CHANGED' }
+    try {
+        Invoke-S7Tool $Java $ToolArguments @('create', '--base', $Base.root,
+            '--base-release', [string]$Base.releaseNumber, '--base-commit', $Base.commitSha,
+            '--target', $TargetRoot, '--manifest', $SeedManifest, '--out', $Patch) | Out-Null
+        return $true
+    } catch {
+        $data = $_.Exception.Data
+        if ($data['S7Command'] -cne 'create' -or $data['S7Exit'] -ne 1 -or
+            $data['S7Code'] -cne 'CONTAINER_SIZE') { throw }
+    }
+    # CONTAINER_SIZE используется и в metadata validation: код сам по себе не доказывает целый target.
+    if (Test-Path -LiteralPath $Patch) { throw 'S7_LIMIT_UNEXPECTED_OUTPUT' }
+    if ((Get-FileHash -LiteralPath $SeedManifest).Hash -cne $SeedSha256) { throw 'S7_TARGET_MANIFEST_CHANGED' }
+    $baseCheck = Join-Path $Work 'limit-base-inventory.json'
+    Invoke-S7Tool $Java $ToolArguments @('inventory', '--root', $Base.root, '--out', $baseCheck) | Out-Null
+    if ((Read-S7Json $baseCheck).treeSha256 -cne $Base.treeSha256) { throw 'S7_BASE_CHANGED' }
+    $fullCheck = Join-Path $Work 'limit-full-manifest.json'
+    # Тот же manifest route проверяет full ZIP, все files/tree и соответствие настоящему target root.
+    Invoke-S7Tool $Java $ToolArguments ($ManifestArguments + @('--out', $fullCheck)) | Out-Null
+    $actual = Read-S7Json $fullCheck
+    foreach ($field in 'releaseNumber', 'commitSha', 'treeSha256', 'assetName', 'sizeBytes', 'sha256') {
+        if ($actual.$field -cne $expected.$field) { throw 'S7_LIMIT_FULL_IDENTITY_CHANGED' }
+    }
+    Invoke-S7Tool $Java $ToolArguments @('verify', '--root', $TargetRoot, '--manifest', $SeedManifest) | Out-Null
+    return $false
+}
+
+<# .SYNOPSIS Присваивает canonical имя проверенной дельте без изменения bytes и их size/SHA. #>
+function Set-S7DeltaAssetName {
+    param([string]$Directory, [string]$Descriptor, [string]$Name)
+    $entry = Read-S7Json $Descriptor
+    $secondary = "CashPrediction.from-$($entry.baseReleaseNumber).cpdelta"
+    if ([string]$entry.baseReleaseNumber -cnotmatch '^[1-9][0-9]*$' -or
+        $entry.assetName -cnotin @('CashPrediction.cpdelta', $secondary) -or
+        $Name -cnotin @('CashPrediction.cpdelta', $secondary)) { throw 'S7_PATCH_NAME' }
+    $source = Join-Path $Directory $entry.assetName
+    Assert-S7Container $source $entry
+    $destination = Join-Path $Directory $Name
+    if ($entry.assetName -cne $Name) {
+        if (Test-Path -LiteralPath $destination) { throw 'S7_PATCH_RENAME_COLLISION' }
+        Move-Item -LiteralPath $source -Destination $destination
+        $entry.assetName = $Name
+        Write-S7Json $Descriptor $entry
+    }
+    Assert-S7Container $destination $entry
 }
 
 <# .SYNOPSIS Проверяет безопасное имя управляемого файла архива. #>
@@ -312,13 +388,16 @@ function Assert-S7Artifacts {
     if ($patches.Count -gt 2) { throw 'S7_PATCH_COUNT' }
     $expected = @('CashPrediction-portable.zip', 'release.json', 'update.json')
     $seen = [Collections.Generic.HashSet[int]]::new()
+    $commits = [Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
     for ($i = 0; $i -lt $patches.Count; $i++) {
         $patch = $patches[$i]
         $name = if ($i -eq 0) { 'CashPrediction.cpdelta' } else { "CashPrediction.from-$($patch.baseReleaseNumber).cpdelta" }
         if ($patch.assetName -cne $name -or $patch.algorithm -cne 'cashprediction-tree-delta' -or
             $patch.algorithmVersion -ne 1 -or $patch.baseReleaseNumber -lt 1 -or
             $patch.baseReleaseNumber -ge $update.releaseNumber -or -not $seen.Add([int]$patch.baseReleaseNumber) -or
-            $patch.baseCommitSha -cnotmatch '^[0-9a-f]{40}$' -or $patch.baseTreeSha256 -cnotmatch '^[0-9a-f]{64}$') { throw 'S7_PATCH_IDENTITY' }
+            $patch.baseCommitSha -cnotmatch '^[0-9a-f]{40}$' -or
+            $patch.baseCommitSha -ceq $update.commitSha -or -not $commits.Add($patch.baseCommitSha) -or
+            $patch.baseTreeSha256 -cnotmatch '^[0-9a-f]{64}$') { throw 'S7_PATCH_IDENTITY' }
         Assert-S7Container (Join-Path $Directory $name) $patch
         $expected += $name
     }
@@ -342,6 +421,9 @@ function Publish-S7Latest {
     if ($CommitSha -cne $update.commitSha) { throw 'S7_PUBLISH_COMMIT' }
     if (@($KeepBases).Count -gt 2 -or @($KeepBases | Select-Object -Unique).Count -ne @($KeepBases).Count -or
         @($KeepBases | Where-Object { $_ -notmatch '^update-base-[1-9][0-9]*$' }).Count) { throw 'S7_RETENTION_SET' }
+    # Проверенные successful базы сохраняются и тогда, когда для них нет дельты.
+    $requiredBases = @($update.deltaPatches | ForEach-Object { "update-base-$($_.baseReleaseNumber)" })
+    if (@($requiredBases | Where-Object { $_ -cnotin $KeepBases }).Count) { throw 'S7_RETENTION_POINTER_MISMATCH' }
     $payload = @((Join-Path $Directory 'CashPrediction-portable.zip'))
     foreach ($patch in $update.deltaPatches) { $payload += Join-Path $Directory $patch.assetName }
     $payload += Join-Path $Directory 'release.json'
@@ -374,4 +456,15 @@ function Publish-S7Latest {
     }
     Invoke-S7Gh api "repos/$Repository/git/refs/tags/latest" --method PATCH --raw-field "sha=$CommitSha" --field force=true | Out-Null
     Invoke-S7Gh release edit latest --title $Title --notes $Notes --latest | Out-Null
+}
+
+<# .SYNOPSIS Сверяет полную identity каждой дельты с проверенными сохраняемыми базами, допускает базы без дельты. #>
+function Assert-S7DeltaBases {
+    param($Update, [object[]]$Bases)
+    foreach ($patch in $Update.deltaPatches) {
+        $matches = @($Bases | Where-Object { $_.releaseNumber -eq $patch.baseReleaseNumber })
+        if ($matches.Count -ne 1) { throw 'S7_DELTA_RETAINED_BASE_MISSING' }
+        if ($matches[0].commitSha -cne $patch.baseCommitSha -or
+            $matches[0].treeSha256 -cne $patch.baseTreeSha256) { throw 'S7_DELTA_RETAINED_BASE_IDENTITY' }
+    }
 }

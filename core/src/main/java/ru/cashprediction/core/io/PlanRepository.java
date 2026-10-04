@@ -141,8 +141,17 @@ public final class PlanRepository {
      * @throws IOException если запись не удалась (прежнее содержимое файла в этом случае не изменено)
      */
     public void save(Plan plan, Path file) throws IOException {
-        requireUserPath(file);
-        AtomicFiles.writeString(file, PlanMarkdownWriter.write(plan));
+        save(plan, file, true, () -> { });
+    }
+
+    /**
+     * Сохраняет план только в настроенной CashMemory с повторным guard перед atomic replace.
+     * @param plan план @param file цель @param replaceExisting разрешена ли замена @param guard проверка версии
+     * @throws IOException при выходе за scope, конфликте или отказе; это не межпроцессный CAS
+     */
+    public void save(Plan plan, Path file, boolean replaceExisting, AtomicFiles.WriteGuard guard) throws IOException {
+        requireManagedWrite(file);
+        AtomicFiles.writeStringScoped(dir, file, PlanMarkdownWriter.write(plan), replaceExisting, guard);
     }
 
     /**
@@ -231,13 +240,29 @@ public final class PlanRepository {
      * @throws IOException                если чтение или запись не удались
      */
     public Path rename(Path from, String newName) throws IOException {
-        requireUserPath(from);
+        return rename(from, newName, () -> { });
+    }
+
+    /**
+     * Переименовывает план с guard source и no-overwrite публикацией новой цели внутри CashMemory.
+     * @param from источник @param newName имя @param guard проверка ожидаемой версии источника
+     * @return итоговый путь @throws IOException при конфликте или отказе без замены чужой новой цели
+     */
+    public Path rename(Path from, String newName, AtomicFiles.WriteGuard guard) throws IOException {
+        requireManagedWrite(from);
+        guard.check();
         String title = newName == null || newName.isBlank() ? DEFAULT_FILE_NAME
                 : newName.replace("\r\n", " ").replace('\r', ' ').replace('\n', ' ').strip();
         Path target = from.toAbsolutePath().normalize().resolveSibling(fileBaseName(title) + EXTENSION);
-        requireUserPath(target);
+        requireManagedWrite(target);
         String text = AtomicFiles.readString(from);
         String updated = replaceTitle(text, title);
+        AtomicFiles.WriteGuard unchanged = () -> {
+            requireManagedWrite(from);
+            requireManagedWrite(target);
+            guard.check();
+            requireUnchanged(from, text);
+        };
 
         boolean targetExists = Files.exists(target);
         boolean sameFile = targetExists && Files.isSameFile(from, target);
@@ -245,13 +270,16 @@ public final class PlanRepository {
             throw new FileAlreadyExistsException(target.toString(), null, Texts.get("io.error.planExists"));
         }
         if (sameFile) {
-            AtomicFiles.writeString(from, updated);
+            AtomicFiles.writeStringScoped(dir, from, updated, true, unchanged);
             String currentName = from.toAbsolutePath().normalize().getFileName().toString();
             if (!currentName.equals(target.getFileName().toString())) {
                 // Меняется только регистр букв: Windows считает это тем же файлом, поэтому переименовываем
                 // через промежуточное имя.
                 // Отдельный суффикс исключает очистку: после сбоя здесь может быть единственная копия плана.
                 Path intermediate = AtomicFiles.temporaryPath(target, "rename.md");
+                // Служебный staging не является пользовательским именем, но обязан оставаться в scope.
+                AtomicFiles.requireWriteScope(dir, intermediate);
+                requireUnchanged(from, updated);
                 Files.move(from, intermediate);
                 try {
                     Files.move(intermediate, target);
@@ -266,9 +294,29 @@ public final class PlanRepository {
             }
             return target;
         }
-        AtomicFiles.writeString(target, updated);
+        AtomicFiles.writeStringScoped(dir, target, updated, false, unchanged);
+        // После публикации guard защищает от удаления уже изменённого source. При конфликте обе копии остаются.
+        unchanged.check();
         Files.delete(from);
         return target;
+    }
+
+    /** Конфликт source, обнаруженный после подготовки или публикации rename. */
+    public static final class VersionConflict extends IOException {
+        private static final long serialVersionUID = 1L;
+        /** Создаёт технический конфликт; пользовательский текст задаётся общим UI. */
+        public VersionConflict() { super("PLAN_VERSION_CHANGED"); }
+    }
+
+    /** Не удаляет и не заменяет source, если редактор изменил его после чтения. */
+    private static void requireUnchanged(Path file, String expected) throws IOException {
+        if (!AtomicFiles.readString(file).equals(expected)) throw new VersionConflict();
+    }
+
+    /** Запись и её staging разрешены только внутри корня; чтение внешнего MD остаётся доступным. */
+    private void requireManagedWrite(Path file) throws IOException {
+        AtomicFiles.requireWriteScope(dir, file);
+        requireUserPath(file);
     }
 
     /** Не допускает служебный файл или его реальный алиас; сообщение не читает и не раскрывает содержимое. */

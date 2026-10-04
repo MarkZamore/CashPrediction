@@ -242,6 +242,7 @@ public final class StatusBuilder {
         List<String> parts = new ArrayList<>();
         List<String> tips = new ArrayList<>();
         boolean failed = false;
+        boolean recovered = false;
         for (StoreStatus store : state.stores()) {
             if (!store.ok()) {
                 failed = true;
@@ -251,13 +252,14 @@ public final class StatusBuilder {
                 String time = UiFormats.time(LocalTime.ofInstant(store.savedAt(), zone));
                 parts.add(UiText.get("status.session.store.ok", storeName(store.storeId()), time));
                 tips.add(UiText.get("status.session.tip.ok", storeTitle(store.storeId()), time));
+                if (!store.message().isBlank()) { tips.add(store.message()); recovered = true; }
             }
         }
         if (parts.isEmpty()) {
             return segment(StatusModel.SESSION, UiText.get("status.session.none"), "", ColorToken.TEXT_PRIMARY);
         }
         return segment(StatusModel.SESSION, UiText.get("status.session", String.join(STORE_SEPARATOR, parts)),
-                String.join("\n", tips), failed ? ColorToken.EXPENSE : ColorToken.TEXT_PRIMARY);
+                String.join("\n", tips), failed ? ColorToken.EXPENSE : recovered ? ColorToken.WARN : ColorToken.TEXT_PRIMARY);
     }
 
     private static String storeName(String storeId) {

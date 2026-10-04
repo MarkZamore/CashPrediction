@@ -71,6 +71,62 @@ public final class AtomicFiles {
         write(target, content.getBytes(StandardCharsets.UTF_8), textSuffix(content));
     }
 
+    /** Проверка версии и области записи после staging и перед каждой попыткой публикации. */
+    @FunctionalInterface
+    public interface WriteGuard {
+        /** @throws IOException если публикацию следует отменить, сохранив цель */
+        void check() throws IOException;
+    }
+
+    /**
+     * Записывает текст с guard, не меняя протокол атомарной замены существующей цели.
+     * @param target цель @param content UTF-8 текст @param replaceExisting разрешена ли замена
+     * @param guard проверка после force и перед каждой попыткой move
+     * @throws IOException при конфликте или отказе; проверка и move не являются межпроцессным CAS
+     */
+    public static void writeString(Path target, String content, boolean replaceExisting, WriteGuard guard) throws IOException {
+        write(target, content.getBytes(StandardCharsets.UTF_8), textSuffix(content), replaceExisting,
+                java.util.Objects.requireNonNull(guard, "guard"));
+    }
+
+    /**
+     * Проверяет application-managed цель до создания любых папок или staging.
+     * @param cashMemory разрешённый корень @param target цель @return проверенный абсолютный путь
+     * @throws IOException если путь вне корня или содержит небезопасного предка
+     */
+    public static Path requireWriteScope(Path cashMemory, Path target) throws IOException {
+        Path root = CanonicalPaths.requireNoLinks(cashMemory);
+        Path file = CanonicalPaths.requireNoLinks(target);
+        if (file.equals(root) || !file.startsWith(root)) throw new IOException("WRITE_OUTSIDE_CASHMEMORY");
+        return file;
+    }
+
+    /**
+     * Записывает application-managed текст только в CashMemory, повторяя scope перед публикацией.
+     * @param cashMemory разрешённый корень @param target цель @param content UTF-8 текст
+     * @param replaceExisting разрешена ли замена @param guard проверка версии
+     * @throws IOException при выходе за scope, конфликте или отказе файловой системы
+     */
+    public static void writeStringScoped(Path cashMemory, Path target, String content,
+            boolean replaceExisting, WriteGuard guard) throws IOException {
+        Path file = requireWriteScope(cashMemory, target);
+        java.util.Objects.requireNonNull(guard, "guard");
+        writeString(file, content, replaceExisting, () -> {
+            requireWriteScope(cashMemory, file);
+            guard.check();
+        });
+    }
+
+    /**
+     * Записывает экспортные байты и их staging только в CashMemory.
+     * @param cashMemory разрешённый корень @param target цель @param bytes данные экспорта
+     * @throws IOException при выходе за scope или отказе записи
+     */
+    public static void writeScoped(Path cashMemory, Path target, byte[] bytes) throws IOException {
+        Path file = requireWriteScope(cashMemory, target);
+        write(file, bytes, "tmp", true, () -> requireWriteScope(cashMemory, file));
+    }
+
     /** Выбирает расширение по содержимому, а не по имени конечного файла. */
     static String textSuffix(String content) {
         // XML-снимок имеет декларацию; остальной текст остаётся читаемым Markdown независимо от имени цели.
@@ -104,6 +160,11 @@ public final class AtomicFiles {
 
     /** Записывает копию с нужным расширением, сохраняя сброс на диск и атомарную замену. */
     private static void write(Path target, byte[] bytes, String suffix) throws IOException {
+        write(target, bytes, suffix, true, () -> { });
+    }
+
+    /** Подготавливает полную расходную копию, затем проверяет право публикации. */
+    private static void write(Path target, byte[] bytes, String suffix, boolean replaceExisting, WriteGuard guard) throws IOException {
         target = CanonicalPaths.requireNoLinks(target);
         Path dir = target.toAbsolutePath().getParent();
         if (dir == null) {
@@ -128,7 +189,7 @@ public final class AtomicFiles {
                 // можно получить «успешно переименованный», но пустой файл.
                 channel.force(true);
             }
-            moveWithRetries(tmp, target);
+            moveWithRetries(tmp, target, replaceExisting, guard);
         } catch (IOException | RuntimeException | Error failure) {
             primary = failure;
             throw failure;
@@ -146,11 +207,17 @@ public final class AtomicFiles {
         }
     }
 
-    private static void moveWithRetries(Path tmp, Path target) throws IOException {
+    private static void moveWithRetries(Path tmp, Path target, boolean replaceExisting, WriteGuard guard) throws IOException {
         IOException last = null;
         for (int attempt = 1; attempt <= MOVE_ATTEMPTS; attempt++) {
             CanonicalPaths.requireNoLinks(tmp);
             CanonicalPaths.requireNoLinks(target);
+            guard.check();
+            // ATOMIC_MOVE допускает замену занятой цели: создание без overwrite использует отдельный move.
+            if (!replaceExisting) {
+                Files.move(tmp, target);
+                return;
+            }
             try {
                 Files.move(tmp, target, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
                 return;
@@ -158,6 +225,7 @@ public final class AtomicFiles {
                 // Файловая система не умеет атомарно: заменяем обычным способом.
                 CanonicalPaths.requireNoLinks(tmp);
                 CanonicalPaths.requireNoLinks(target);
+                guard.check();
                 Files.move(tmp, target, StandardCopyOption.REPLACE_EXISTING);
                 return;
             } catch (AccessDeniedException e) {

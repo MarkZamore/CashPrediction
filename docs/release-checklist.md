@@ -1,7 +1,7 @@
-# Будущая проверка S6, переход S7 и доставка
+# Приёмка S5, независимая проверка S6 и доставка
 
 Статус всех действий: NOT RUN / PENDING. Подготовка 03.10.2026 не подтверждает готовность релиза.
-Правила: AGENTS.md; docs/design/stages.md S6/S7; docs/design/update-protocol.md.
+Правила: AGENTS.md; docs/design/stages.md S5/S6; docs/design/update-protocol.md. После зелёного CI S4 остаются только S5 и S6. Соответствие требованиям и тихое обновление входят в S5; исторические S7 имена файлов и gate ID не обозначают отдельный этап.
 Матрица приёмки: docs/parity-signoff.md. Исторический .claude/workflows/unified-ui-s6.js сохранён;
 его agent()/phase()/parallel()/log(), args и top-level return не доступны текущему локальному runner.
 Не запускать этот файл через Node и не выполнять его force-cleanup/overlay команды.
@@ -18,6 +18,8 @@
 Недоступность UI оставляет строки PENDING. Новые chats/subagents не создавать без отдельного запроса.
 
 ## Чистый кандидат и сохранность
+
+Быстрый GitHub CI/CD входит в S4: impact planner и выбор подтверждённой успешной базы, negative fixtures и реальный зелёный GitHub-прогон коммита S4. Неопределённая база означает полный прогон; обязательные parity/recovery/portable и release integrity gates не отключаются ради скорости. Это не отложенная задача S5.
 
 Текущий checkout содержит много чужих незакоммиченных изменений. HEAD не представляет эти изменения.
 Сначала владелец интеграции завершает S5 и фиксирует кандидат. Здесь этого не делать.
@@ -82,8 +84,8 @@ strictE2E, ui-tests/e2e lifecycle profiles, dist, portableParity и sourceVerify
 Квитанция: $clean/target/s6/<UUID>/automatic-results.json, status AUTOMATED_ONLY,
 independentSignoff=false; на ошибке FAILED. StartedAt/finishedAt каждого шага дают длительность.
 AUTOMATED_ONLY не является GREEN S6, независимой подписью или разрешением публикации и доставки.
-Начало реализации S7 параллельно с S4-S6 разрешено пользователем 03.10.2026;
-контракт: docs/design/s7-contract-freeze.md. Финальная приёмка S6/S7 остаётся обязательной.
+Начало реализации тихого обновления параллельно с S4 разрешено пользователем;
+контракт: docs/design/s7-contract-freeze.md. Работа входит в S5; независимая финальная приёмка S6 остаётся обязательной.
 Strict gates: Invoke-UiGates.ps1 -Mode UI/E2E; свежие XML с точными counts и zero skipped.
 Пути runner: target/s6/<UUID>/ui-gates/<UUID>/reports-*, actual/parity, upload;
 аналогично e2e-gates; portable evidence в target/s6/<UUID>/portable; журналы шагов рядом с receipt.
@@ -183,17 +185,29 @@ AutoCloseable BrowserSession/LaunchedClient/RegistryNodeCleaner - основно
 и закрытия процессов; если есть изменения/locks, оставить worktree для разбора. Не делать recursive delete checkout.
 Сравнить исходный status/stash с before, чужие изменения не откатывать.
 
-## S7: параллельная реализация и обязательная финальная приёмка
+## S5: тихое обновление и обязательная приёмка
 
-Реализация S7 разрешена до GREEN S6 и его коммита согласно docs/design/s7-contract-freeze.md
-и docs/design/update-protocol.md §8. Публикация и доставка требуют завершённой общей приёмки S6/S7.
+Независимые задачи S5 разрешены параллельно с достижением GREEN S4, без изменения проверяемой сборки.
+Тихое обновление реализуется и принимается в S5 согласно сохранённому контракту docs/design/s7-contract-freeze.md
+и docs/design/update-protocol.md §8. После S5 выполняется независимая приёмка S6; только затем публикация и доставка.
 
-Все строки PENDING. Это backlog приёмки протокола; команды нового update-tool/Test-Update пока не утверждать
-как существующие. После реализации владельцами сверить CLI и paths с кодом, добавить реальные команды в sign-off.
+Все строки таблицы ниже остаются PENDING: это статус обязательной приёмки протокола, а не утверждение
+об отсутствии реализации. В source уже существует [UpdateTool](../update-tool/src/main/java/ru/cashprediction/updatetool/UpdateTool.java)
+с CLI inventory/create/apply/verify/manifest; актуальные builders, параметры и границы проверок описаны
+в [techstack.md](design/techstack.md). Наличие исходников или команд не подтверждает их исполнение,
+совместимость конкретного candidate и прохождение native gates.
+
+[Test-Update.ps1](../.github/scripts/Test-Update.ps1) также существует, но его Rehearsal проверяет только
+CLI/HTTP, а Signoff явно отклоняет PENDING: этот runner не реализует заявленную portable UI/phase приёмку.
+Для каждой строки нужны соответствующие реальные проверки и receipts согласованного candidate;
+перед запуском сверить CLI, paths, inputs и source/artifact pins с текущим кодом и записать фактически
+выполненные команды в sign-off. Implementation, компиляция, focused tests и окончательная приёмка
+учитываются отдельно; ни одно из них само по себе не повышает PENDING до PASS. Исторические имена
+S7 у scripts/receipts не выделяют тихое обновление в отдельный этап: оно остаётся частью S5.
 
 | Владелец / этап | Что требуется и будущее доказательство | Статус |
 |---|---|---|
-| Gate публикации и доставки | S6 все строки OK, нет открытых дефектов, source freeze и committed sign-off SHA; завершённая приёмка S7 | PENDING |
+| Gate публикации и доставки | S5 требования/UX/обновления приняты; затем S6 все строки OK, нет открытых дефектов, source freeze и committed sign-off SHA | PENDING |
 | update-core | Schema2 strict manifest; managed exe/app/runtime tree, deterministic digest; ZIP unsafe/duplicate rejection; delta add/change/delete/empty/readonly/Unicode | PENDING |
 | update-core | Downgrade/same-release rejection, hash/size checks, fixed URLs, dev no-op, one checker pass, 3 attempts 20s + pauses 1/2s | PENDING |
 | update-core | Delta from either base; full fallback; cancellation .download cleanup; lock, stale staging, atomic Ready | PENDING |
@@ -215,7 +229,7 @@ AutoCloseable BrowserSession/LaunchedClient/RegistryNodeCleaner - основно
 Номера 1001..1003 и dummy release/commit metadata не являются Git-релизами (git release),
 проверенными опубликованными update-base или финальной доставкой (delivery). Они не заменяют
 номер релиза по истории main, настоящий SHA кандидата, CI, sign-off или проверку конечных артефактов.
-Для native-матрицы сверять требования к идентичности баз и цели с docs/design/architecture.md;
+Для native-матрицы сверять требования к идентичности баз и цели с docs/design/techstack.md;
 подготовка образов сама по себе не закрывает PENDING.
 Протокол управляет только exe/app/runtime; при CashMemory/Updates изменениях отдельно сравнивать пользовательские
 планы/снимки, не требовать неизменности всего служебного Updates.
@@ -224,11 +238,11 @@ AutoCloseable BrowserSession/LaunchedClient/RegistryNodeCleaner - основно
 
 | Действие | Статус |
 |---|---|
-| S6 signed+committed; затем S7 signed+committed и новая финальная полная матрица | PENDING |
+| S5 signed+committed, включая требования и обновления; затем S6 signed+committed и финальная полная матрица | PENDING |
 | CHANGELOG номер по итоговой истории main; одна пользовательская строка сверху | PENDING |
-| Согласованные merge/push; release.yml success, ZIP/release.json (S7 также update assets) | PENDING |
+| Согласованные merge/push; release.yml success, ZIP/release.json и update assets из S5 | PENDING |
 | Скачанный release ZIP: SHA/структура, 3 exe smoke + parity/restore | PENDING |
-| В корне проекта: CashPrediction-source.7z из frozen source после S6/S7 | PENDING |
+| В корне проекта: CashPrediction-source.7z из frozen source после S5 и S6 | PENDING |
 | В корне проекта: папка CashPrediction с тремя exe и их общими app/runtime, без CashMemory | PENDING |
 | Проверка именно корневой portable-папки: Test-Portable -Parity, версии/хеши всех трёх exe | PENDING |
 | Pack-Source фильтры и VerifyBuild; 7z listing/extract/install именно финального архива | PENDING |
@@ -238,15 +252,19 @@ AutoCloseable BrowserSession/LaunchedClient/RegistryNodeCleaner - основно
 Для merge N = число коммитов итоговой main, включая коммиты ветки и merge-коммит;
 расчёт «main count + 1» до слияния неверен. Пересчитать при изменении истории.
 Предложение строки (не готовая запись): «Единый интерфейс JavaFX, Swing и Web с восстановлением сеанса».
-После S7 добавить фактически проверенное тихое обновление. Ни push, ни выпуск не делать в рамках подготовки.
+После приёмки обновления в S5 добавить фактически проверенное тихое обновление. Ни push, ни выпуск не делать в рамках подготовки.
 
 Доставка исходников - отдельный артефакт от portable ZIP. Реальный Pack-Source.ps1 требует PowerShell7 + 7-Zip,
 принимает SourceRoot/StageDirectory/OutputPath/SevenZipPath/StageOnly; OutputPath только .7z, существующие цели
 не перезаписывает. Исключает .git/.claude/targets/CashMemory, developer docs/workflows, repository-doc-audits,
-сохраняет docs/design/architecture.md, тесты/ресурсы/лицензии; staged POM убирает только audit module.
-Его -VerifyBuild проверяет временную упаковку, не подтверждает произвольный финальный архив автоматически.
+сохраняет ровно шесть документов разработчика в docs/design: architecture.md, techstack.md, edge-cases.md,
+db-schema.md, linx.md, ui-kit.md, а также тесты/ресурсы/лицензии; staged POM убирает только audit module.
+Документы AI docs/ai/CurrentSprint.md, ContextDump.md, ChangeRequest.md и LegacyWarning.md не поставляются.
+Проверить отсутствие каждого из шести обязательных документов и вложенные имитации AI-файлов отрицательными
+фикстурами. Ссылки между документами поставки должны разрешаться в самом извлечённом дереве, без .git/.claude.
+Test-Pack-Source.ps1 -VerifyBuild проверяет временную упаковку, не подтверждает произвольный финальный архив автоматически; у Pack-Source.ps1 параметра -VerifyBuild нет.
 
-Будущие команды из $clean, под lock после S6/S7:
+Будущие команды из $clean, под lock после S5 и S6:
 ```powershell
 pwsh -NoProfile -File ./dist/scripts/Test-Pack-Source.ps1 -VerifyBuild -SourceRoot $clean
 $deliveryRoot = Join-Path $runRoot 'delivery'
@@ -266,7 +284,7 @@ app/runtime они не являются портативным продукто
 проверенные артефакты в owned delivery staging и запросить решение о размещении.
 Сверить хеши staging и конечной папки, затем выполнить Test-Portable.ps1 -Parity именно для конечной папки:
 проверка должна использовать изолированные копии, не создавать пользовательский CashMemory в доставке.
-Сохранить inventory трёх exe и общего runtime, номер релиза и SHA исходников. До S7 это только будущие шаги.
+Сохранить inventory трёх exe и общего runtime, номер релиза и SHA исходников. До приёмки S5 и S6 это только будущие шаги.
 Для именно этого .7z сохранить 7z list/test, извлечь в новую owned папку, проверить исключения и выполнить
 mvn -B install в извлечённом дереве (тот же lock), сохранить log/duration/exit.
 Не публиковать/передавать артефакт до выполнения этих строк.

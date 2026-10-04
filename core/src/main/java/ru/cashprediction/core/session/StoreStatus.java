@@ -12,7 +12,8 @@ import java.util.Objects;
  * @param storeId идентификатор хранилища ({@link SessionStore#id()})
  * @param ok      успешна ли операция
  * @param savedAt момент последнего успешно сохранённого в это хранилище снимка; {@code null}, если ещё не было
- * @param message пояснение на русском: пусто при успехе, причина при ошибке
+ * @param message пояснение на русском: причина ошибки либо предупреждение об успешном карантине;
+ *                пусто при обычном успехе
  */
 public record StoreStatus(String storeId, boolean ok, Instant savedAt, String message) {
 

@@ -32,7 +32,7 @@ input[type=radio], input[type=checkbox] { min-height: 0; width: var(--cp-inline-
 .ACCENT { color: var(--cp-accent); font-weight: 700; }
 .DANGER { color: var(--cp-expense); }
 /* Число колонок рассчитывается по ширине панели; неполный ряд сохраняет ту же сетку. */
-#summary { display: grid; grid-template-columns: repeat(var(--cp-summary-columns, 1), minmax(0, 1fr)); gap: var(--cp-card-gap); padding: 6px 8px; flex-shrink: 0; }
+#summary { display: grid; grid-template-columns: repeat(var(--cp-summary-columns, 1), var(--cp-summary-card-width, minmax(0, 1fr))); gap: var(--cp-card-gap); padding: 6px 8px; flex-shrink: 0; }
 .summary-unavailable { grid-column: 1 / -1; min-width: 0; overflow-wrap: anywhere; color: var(--cp-expense); }
 .card { display: flex; flex-direction: column; gap: var(--cp-card-content-gap); min-width: 0; border: 1px solid var(--cp-border); background: var(--cp-bg-card); border-radius: var(--cp-radius); padding: 6px 10px; }
 .card:hover, .card:focus-visible { border-color: var(--cp-accent); }

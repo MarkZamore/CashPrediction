@@ -90,7 +90,7 @@ public final class InMemoryRegistryBackend implements RegistryBackend {
     public synchronized void flush() throws SessionStoreException {
         flushCount++;
         if (failure != null) {
-            throw new SessionStoreException(Texts.get("session.registry.unavailable", failure));
+            throw new SessionStoreException(SessionStoreException.Code.UNAVAILABLE, Texts.get("session.registry.unavailable", failure));
         }
     }
 

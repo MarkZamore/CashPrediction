@@ -163,12 +163,13 @@ class FileServicesTest {
     @Test
     void autosaveWriteErrorUsesStatusInsteadOfRepeatedAlerts() throws Exception {
         FakeFileFlowContext f = fake();
-        Path blocker = f.environment.cashMemory().resolve("blocked");
-        Files.writeString(blocker, "block");
-        f.document.replace(f.document.plan(), blocker.resolve("Current.md"), true, List.of());
+        // Каталог вместо внутреннего файла проверяет IO_ERROR, а не readonly-политику импорта.
+        Files.createDirectory(f.environment.cashMemory().resolve("Current.md"));
+        f.dirty();
         f.autosave.setEnabled(true);
         f.scheduler.advance(1000);
         assertFalse(f.autosaveProblem.isBlank());
+        assertFalse(f.autosaveProblem.contains("Сохранить как"));
         assertTrue(f.alerts.isEmpty());
         assertTrue(f.document.isDirty());
         String problem = f.autosaveProblem;

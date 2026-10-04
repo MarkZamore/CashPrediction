@@ -6,6 +6,7 @@ import java.util.Optional;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.nio.file.Files;
+import ru.cashprediction.core.document.PeriodChoice;
 import ru.cashprediction.core.model.Plan;
 import ru.cashprediction.core.model.Kind;
 import ru.cashprediction.core.model.Money;
@@ -39,7 +40,8 @@ import ru.cashprediction.core.session.WindowType;
  *
  * <p>Страница 1: {@code name} (первое свободное «Мой план», «Мой план 2», …; checkPlanName, {@code val.plan.exists}),
  * {@code currency} (editableChoice ₽ $ € ₸ BYN), широкая подсказка. Страница 2: {@code startDate} (сегодня),
- * {@code startBalance} (0,00), горизонт ({@link HorizonFields}), {@code cushion} (0,00, неотрицательная), подсказка.
+ * {@code startBalance} (0,00), горизонт ({@link HorizonFields}), начальный {@code displayPeriod} (M12),
+ * {@code cushion} (0,00, неотрицательная), подсказка.
  * Страница 3: разделы «Ежемесячный доход» ({@code quickIncomeTitle} «Зарплата», {@code quickIncomeAmount},
  * {@code quickIncomeDay} 5) и «Ежемесячный расход» ({@code quickExpenseTitle} «Аренда», {@code quickExpenseAmount},
  * {@code quickExpenseDay} 1); проверки только при заполненной сумме.</p>
@@ -57,12 +59,17 @@ public final class NewPlanWizardForm implements FormLogic {
      * Мастер создал план.
      *
      * @param plan новый план (контроллер сохраняет его в CashMemory и открывает)
+     * @param displayPeriod начальный период показа, независимый от горизонта прогноза
      */
-    public record Created(Plan plan) {
+    public record Created(Plan plan, PeriodChoice displayPeriod) {
         /** Проверяет план. */
         public Created {
             Objects.requireNonNull(plan, "plan");
+            Objects.requireNonNull(displayPeriod, "displayPeriod");
         }
+
+        /** Сохраняет прежний контракт вызывающих сторон с периодом показа M12. */
+        public Created(Plan plan) { this(plan, PeriodChoice.M12); }
     }
 
     /** Нажата «Открыть пример»: мастер закрывается и открывается {@code SamplePlan}. */
@@ -92,6 +99,7 @@ public final class NewPlanWizardForm implements FormLogic {
                                 new FormRow.Field(FieldSpecs.date("startDate", UiText.get("form.newPlan.startDate"))),
                                 new FormRow.Field(FieldSpecs.money("startBalance", UiText.get("form.newPlan.startBalance"))),
                                 HorizonFields.rows().get(0), HorizonFields.rows().get(1),
+                                new FormRow.Field(FieldSpecs.choice("displayPeriod", UiText.get("form.newPlan.displayPeriod"), displayPeriods())),
                                 new FormRow.Field(FieldSpecs.money("cushion", UiText.get("form.newPlan.cushion"))),
                                 new FormRow.Hint("cushionHint", UiText.get("form.newPlan.hint.cushion")))),
                         new FormPage("page3", List.of(
@@ -123,6 +131,7 @@ public final class NewPlanWizardForm implements FormLogic {
         values.put("name", freeName(context)); values.put("currency", Plan.DEFAULT_CURRENCY);
         values.put("startDate", FieldCodec.date(context.app().today())); values.put("startBalance", Money.ZERO.formatPlain());
         values.putAll(HorizonFields.values(new ru.cashprediction.core.model.Horizon.Months(12)));
+        values.put("displayPeriod", PeriodChoice.M12.name());
         values.put("cushion", Money.ZERO.formatPlain());
         values.put("quickIncomeTitle", UiText.get("form.newPlan.quickIncome.default")); values.put("quickIncomeAmount", ""); values.put("quickIncomeDay", "5");
         values.put("quickExpenseTitle", UiText.get("form.newPlan.quickExpense.default")); values.put("quickExpenseAmount", ""); values.put("quickExpenseDay", "1");
@@ -150,6 +159,7 @@ public final class NewPlanWizardForm implements FormLogic {
         }
         boolean allValid = checkPage(0, state, context).isEmpty() && checkPage(1, state, context).isEmpty() && checkPage(2, state, context).isEmpty();
         Map<String, ru.cashprediction.core.ui.form.FieldView> fields = new LinkedHashMap<>(HorizonFields.views(state));
+        fields.put("displayPeriod", new ru.cashprediction.core.ui.form.FieldView(displayPeriodValue(state), true, true, false, null, null, null));
         return new FormView(0, page, pageTitle(page), fields, current,
                 Map.of("sample", page == 0 ? ButtonView.ENABLED : ButtonView.HIDDEN,
                         "back", page == 0 ? ButtonView.DISABLED : ButtonView.ENABLED,
@@ -177,7 +187,7 @@ public final class NewPlanWizardForm implements FormLogic {
             case "back" -> new FormOutcome.Page(Math.max(0, state.page() - 1));
             case "next" -> checkPage(state.page(), state, context).isEmpty() ? new FormOutcome.Page(Math.min(2, state.page() + 1)) : FormOutcome.stay();
             case "finish" -> checkPage(0, state, context).isEmpty() && checkPage(1, state, context).isEmpty() && checkPage(2, state, context).isEmpty()
-                    ? new FormOutcome.Close(new Created(buildPlan(state))) : FormOutcome.stay();
+                    ? new FormOutcome.Close(new Created(buildPlan(state), PeriodChoice.valueOf(displayPeriodValue(state)))) : FormOutcome.stay();
             default -> FormOutcome.stay();
         };
     }
@@ -199,11 +209,46 @@ public final class NewPlanWizardForm implements FormLogic {
     /** Возвращает первую проблему конкретной страницы. */
     private static java.util.Optional<String> checkPage(int page, FormState s, FormContext c) {
         if (page == 0) { var name=PlanValidator.checkPlanName(s.value("name")); if(name.isPresent())return name; if(Files.exists(c.app().cashMemory().resolve(s.value("name").strip()+".md"))) return java.util.Optional.of(UiText.get("val.plan.exists", s.value("name").strip())); if(s.value("currency").isBlank())return java.util.Optional.of(UiText.get("val.currency.required")); if(s.value("currency").codePointCount(0,s.value("currency").length())>10)return java.util.Optional.of(UiText.get("val.currency.long")); return java.util.Optional.empty(); }
-        if (page == 1) return FieldChecks.first(FieldChecks.date(UiText.get("form.newPlan.startDate"), s.value("startDate"), true), FieldChecks.money(UiText.get("form.newPlan.startBalance"),s.value("startBalance"),FieldChecks.MoneyRule.ANY), HorizonFields.error(s,start(s)), FieldChecks.money(UiText.get("form.newPlan.cushion"),s.value("cushion"),FieldChecks.MoneyRule.NON_NEGATIVE));
+        if (page == 1) return FieldChecks.first(FieldChecks.date(UiText.get("form.newPlan.startDate"), s.value("startDate"), true), FieldChecks.money(UiText.get("form.newPlan.startBalance"),s.value("startBalance"),FieldChecks.MoneyRule.ANY), HorizonFields.error(s,start(s)), displayPeriodError(s), FieldChecks.money(UiText.get("form.newPlan.cushion"),s.value("cushion"),FieldChecks.MoneyRule.NON_NEGATIVE));
         return quickError(s,"quickIncome",UiText.get("form.newPlan.income")).or(() -> quickError(s,"quickExpense",UiText.get("form.newPlan.expense")));
     }
+    /** Использует M12 для старого снимка без нового поля; явно ошибочное значение не скрывает. */
+    private static String displayPeriodValue(FormState state) {
+        return state.values().getOrDefault("displayPeriod", PeriodChoice.M12.name());
+    }
+
+    /** Возвращает общий закрытый список периодов, не меняющий финансовый горизонт. */
+    private static List<Option> displayPeriods() {
+        return java.util.Arrays.stream(PeriodChoice.values()).map(period -> Option.of(period.name(), switch (period) {
+            case M3 -> UiText.get("form.newPlan.displayPeriod.M3");
+            case M6 -> UiText.get("form.newPlan.displayPeriod.M6");
+            case M12 -> UiText.get("form.newPlan.displayPeriod.M12");
+            case M24 -> UiText.get("form.newPlan.displayPeriod.M24");
+            case ALL -> UiText.get("form.newPlan.displayPeriod.ALL");
+        })).toList();
+    }
+
+    /** Проверяет код выбора периода до разрешения завершения мастера. */
+    private static Optional<String> displayPeriodError(FormState state) {
+        String value = displayPeriodValue(state);
+        return java.util.Arrays.stream(PeriodChoice.values()).anyMatch(period -> period.name().equals(value))
+                ? Optional.empty() : Optional.of(UiText.get("form.newPlan.displayPeriod.invalid"));
+    }
+
     /** Проверяет быструю регулярную операцию только при указанной сумме. */
-    private static java.util.Optional<String> quickError(FormState s,String prefix,String kind) { String raw=s.value(prefix+"Amount"); if(raw.isBlank())return java.util.Optional.empty(); var amount=FieldCodec.parseMoney(raw); if(amount.isEmpty() || !amount.get().isPositive())return java.util.Optional.of(UiText.get("form.newPlan.quick.amount",kind)); if(amount.get().abs().compareTo(PlanValidator.MAX_AMOUNT)>0)return java.util.Optional.of(UiText.get("form.newPlan.quick.tooBig",kind)); if(s.value(prefix+"Title").isBlank())return java.util.Optional.of(UiText.get("form.newPlan.quick.title",kind)); return java.util.Optional.empty(); }
+    private static java.util.Optional<String> quickError(FormState s, String prefix, String kind) {
+        String raw = s.value(prefix + "Amount");
+        if (raw.isBlank()) return java.util.Optional.empty();
+        var amount = FieldCodec.parseMoney(raw);
+        if (amount.isEmpty() || !amount.get().isPositive()) return java.util.Optional.of(UiText.get("form.newPlan.quick.amount", kind));
+        if (amount.get().abs().compareTo(PlanValidator.MAX_AMOUNT) > 0) return java.util.Optional.of(UiText.get("form.newPlan.quick.tooBig", kind));
+        if (s.value(prefix + "Title").isBlank()) return java.util.Optional.of(UiText.get("form.newPlan.quick.title", kind));
+        var day = FieldCodec.parseLong(s.value(prefix + "Day"));
+        if (day.isEmpty() || day.getAsLong() < 1 || day.getAsLong() > Recurrence.MAX_DAY_OF_MONTH) {
+            return java.util.Optional.of(UiText.get("recurrence.error.dayOfMonth", Recurrence.MAX_DAY_OF_MONTH));
+        }
+        return java.util.Optional.empty();
+    }
     /** Собирает итоговый план из проверенных значений мастера. */
     private static Plan buildPlan(FormState s) { var rules=new java.util.ArrayList<RecurringRule>(); addQuick(rules,s,"quickIncome",Kind.INCOME,"r1"); addQuick(rules,s,"quickExpense",Kind.EXPENSE,rules.isEmpty()?"r1":"r2"); return new Plan(s.value("name"),"",s.value("currency"),FieldCodec.parseDate(s.value("startDate")).orElseThrow(),FieldCodec.parseMoney(s.value("startBalance")).orElseThrow(),HorizonFields.toHorizon(s),FieldCodec.parseMoney(s.value("cushion")).orElseThrow(),null,rules,List.of(),List.of(),List.of()); }
     /** Добавляет заполненную быструю операцию. */

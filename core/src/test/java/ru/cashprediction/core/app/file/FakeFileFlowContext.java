@@ -56,7 +56,7 @@ final class FakeFileFlowContext implements InvocationHandler {
     final SettingsKeeper settings;
     final ExitFlow exit;
     final FileChooserService choosers;
-    final ExternalChangeGuard guard = new ExternalChangeGuard();
+    final ExternalChangeGuard guard;
     AppSettings appSettings = AppSettings.defaults();
     OpenWindows windows = OpenWindows.NONE;
     Path plansFolder;
@@ -82,6 +82,7 @@ final class FakeFileFlowContext implements InvocationHandler {
                 "--home", home.toString(), "--registry", "memory", "--today", TODAY.toString() });
         environment = AppEnvironment.from(options);
         Files.createDirectories(environment.cashMemory());
+        guard = new ExternalChangeGuard(new ru.cashprediction.core.service.storage.FilePlanStorage(environment.cashMemory()));
         plansFolder = environment.cashMemory();
         document = new PlanDocument(Plan.empty("Current", TODAY), null, () -> TODAY);
         planCommands = new LocalPlanCommands(document);
@@ -168,7 +169,7 @@ final class FakeFileFlowContext implements InvocationHandler {
                         events.add("markClean");
                         yield null;
                     }
-                    case "readMarker", "load", "lastSavedAt", "lastError" -> Optional.empty();
+                    case "readMarker", "load", "lastSavedAt", "lastError", "recoveryNotice" -> Optional.empty();
                     case "clear" -> null;
                     default -> throw new AssertionError(method.getName());
                 });

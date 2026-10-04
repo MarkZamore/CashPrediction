@@ -12,6 +12,7 @@ import java.nio.file.Path;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Stream;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import ru.cashprediction.core.session.SessionFixtures;
@@ -28,14 +29,17 @@ class XmlSessionStoreTest {
     @TempDir
     Path dir;
 
+    /** Реальный scope карантина совпадает с production CashMemory, а не произвольным Temp корнем. */
+    @BeforeEach void createCashMemory() throws IOException { Files.createDirectory(dir.resolve("CashMemory")); }
+
     private XmlSessionStore store() {
-        return XmlSessionStore.inCashMemory(dir, "fx");
+        return XmlSessionStore.inCashMemory(dir.resolve("CashMemory"), "fx");
     }
 
     @Test
     void savesAtomicallyAndLoads() throws SessionStoreException, IOException {
         XmlSessionStore store = store();
-        assertEquals(dir.resolve("session-fx.xml"), store.file());
+        assertEquals(dir.resolve("CashMemory/session-fx.xml"), store.file());
         assertEquals(Optional.empty(), store.load());
         SessionSnapshot first = SessionFixtures.simple("fx");
         store.save(first);
@@ -45,7 +49,7 @@ class XmlSessionStoreTest {
         assertEquals(Optional.of(SessionFixtures.SAVED), store.lastSavedAt());
         String text = Files.readString(store.file(), StandardCharsets.UTF_8);
         assertTrue(text.startsWith("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<session schema=\"1\" client=\"fx\""), text);
-        try (Stream<Path> files = Files.list(dir)) {
+        try (Stream<Path> files = Files.list(dir.resolve("CashMemory"))) {
             assertEquals(List.of("session-fx.xml"), files.map(p -> p.getFileName().toString()).toList(),
                     "после атомарной записи временных файлов не остаётся");
         }
@@ -58,6 +62,7 @@ class XmlSessionStoreTest {
     void corruptFileThrowsAndNextSaveRecovers() throws IOException, SessionStoreException {
         XmlSessionStore store = store();
         Files.writeString(store.file(), "<session schema=\"1\" client=\"fx\"><main", StandardCharsets.UTF_8);
+        byte[] original=Files.readAllBytes(store.file());
         SessionStoreException e = assertThrows(SessionStoreException.class, store::load);
         assertTrue(e.getMessage().startsWith("XML-файл сессии повреждён"), e.getMessage());
         assertEquals(Optional.empty(), store.readMarker());
@@ -66,6 +71,10 @@ class XmlSessionStoreTest {
         SessionSnapshot snapshot = SessionFixtures.tricky("fx");
         store.save(snapshot);
         assertEquals(Optional.of(snapshot), store.load());
+        try(var archives=Files.list(dir.resolve("CashMemory/Recovery"))) {
+            var retained=archives.toList(); assertEquals(1,retained.size());
+            assertTrue(Files.readString(retained.getFirst()).contains(java.util.Base64.getEncoder().encodeToString(original)));
+        }
     }
 
     @Test
@@ -105,13 +114,16 @@ class XmlSessionStoreTest {
     }
 
     @Test
-    void markDirtyOverCorruptFileWritesFreshMarker() throws IOException, SessionStoreException {
+    void markDirtyOverCorruptFilePreservesEvidenceUntilQuarantine() throws IOException, SessionStoreException {
         XmlSessionStore store = store();
         Files.writeString(store.file(), "мусор", StandardCharsets.UTF_8);
         SessionMarker marker = SessionFixtures.running("fx");
         store.markDirty(marker);
-        assertEquals(Optional.of(marker), store.readMarker());
-        assertEquals(Optional.empty(), store.load());
+        assertEquals("мусор",Files.readString(store.file()));
+        assertEquals(Optional.empty(), store.readMarker());
+        assertEquals(SessionStoreException.Code.CORRUPT,assertThrows(SessionStoreException.class,store::load).code());
+        assertTrue(store.lastError().isPresent());
+        assertFalse(Files.exists(dir.resolve("CashMemory/Recovery")));
     }
 
     @Test

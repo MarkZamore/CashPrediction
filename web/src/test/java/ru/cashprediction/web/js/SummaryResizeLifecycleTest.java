@@ -19,6 +19,8 @@ class SummaryResizeLifecycleTest {
                 "root.style.getPropertyValue('--cp-summary-columns') !== value", "true")));
         assertThrows(AssertionError.class, () -> verifySummary(source.replace(
                 "requestAnimationFrame(() => { pending = false; layoutSummary(root); });", "layoutSummary(root);")));
+        assertThrows(AssertionError.class, () -> verifySummary(source.replace(
+                "Math.floor((width - (columns - 1) * gap) / columns)", "(width - (columns - 1) * gap) / columns")));
     }
 
     /** Resize таблицы только планирует общий кадр; явное обновление отменяет отложенный дубль. */
@@ -87,6 +89,9 @@ class SummaryResizeLifecycleTest {
         String layout = between(source, "function layoutSummary(root)", "export function renderSummary");
         assertTrue(layout.contains("if (root.style.getPropertyValue('--cp-summary-columns') !== value)"));
         assertTrue(layout.contains("root.style.setProperty('--cp-summary-columns', value);"));
+        assertTrue(layout.contains("Math.floor((width - (columns - 1) * gap) / columns)"));
+        assertTrue(layout.contains("if (root.style.getPropertyValue('--cp-summary-card-width') !== cardWidth)"));
+        assertTrue(layout.contains("root.style.setProperty('--cp-summary-card-width', cardWidth);"));
     }
 
     /** Фиксирует единственную отложенную перерисовку для серии resize и scroll. */

@@ -65,21 +65,35 @@ class FreshRestoredEquivalenceTest {
     @Test void renameExternalConflictKeepsFreshAndRestoredFormsAndDraft() throws java.io.IOException {
         for (boolean restore : List.of(false, true)) {
             CaptureContext fake = new CaptureContext(home.resolve(restore ? "restored" : "fresh"), ClientProfile.swing());
+            // Этот сценарий реально пишет managed-файл; общий CaptureContext по умолчанию readonly.
+            var managedGuard = new ru.cashprediction.core.app.flow.ExternalChangeGuard(
+                    new ru.cashprediction.core.service.storage.FilePlanStorage(fake.environment.cashMemory()));
+            ru.cashprediction.core.app.flow.FileFlow[] managedFiles = new ru.cashprediction.core.app.flow.FileFlow[1];
+            var managedContext = (ru.cashprediction.core.app.flow.FlowContext) java.lang.reflect.Proxy.newProxyInstance(
+                    ru.cashprediction.core.app.flow.FlowContext.class.getClassLoader(),
+                    new Class<?>[] { ru.cashprediction.core.app.flow.FlowContext.class },
+                    (proxy, method, args) -> switch (method.getName()) {
+                        case "externalChanges" -> managedGuard;
+                        case "planStorage" -> managedGuard.storage();
+                        case "files" -> managedFiles[0];
+                        default -> fake.invoke(proxy, method, args);
+                    });
+            managedFiles[0] = new ru.cashprediction.core.app.flow.FileFlow(managedContext);
             var repository = new ru.cashprediction.core.io.PlanRepository(fake.environment.cashMemory());
             Path original = repository.pathFor("original");
             Path target = repository.pathFor("renamed");
             Plan saved = fake.document.plan().withName("original");
             repository.save(saved, original);
-            fake.external.remember(original);
+            managedGuard.remember(original);
             var rememberedTime = java.nio.file.Files.getLastModifiedTime(original);
             Plan draft = saved.withNote("local draft");
             fake.document.replace(draft, original, true, List.of());
             if (restore) {
-                new CoreWindowFactory(fake.flow).open(new WindowState("rename1", WindowType.TEXT_INPUT, true,
+                new CoreWindowFactory(managedContext).open(new WindowState("rename1", WindowType.TEXT_INPUT, true,
                         "main", null, Map.of("purpose", "rename"), Map.of("value", "renamed")),
                         "main", window -> { }, reason -> fail(reason));
             } else {
-                fake.files.rename();
+                managedFiles[0].rename();
                 fake.sessions.getFirst().fieldChanged("value", "renamed", true, 1);
             }
             var session = fake.sessions.getFirst();
@@ -89,7 +103,7 @@ class FreshRestoredEquivalenceTest {
             java.nio.file.Files.setLastModifiedTime(original,
                     java.nio.file.attribute.FileTime.fromMillis(rememberedTime.toMillis() + 60_000));
             String externalContent = java.nio.file.Files.readString(original);
-            assertTrue(fake.external.changedExternally(original));
+            assertTrue(managedGuard.changedExternally(original));
             session.buttonPressed("rename");
             assertFalse(session.isClosed());
             assertEquals(ru.cashprediction.core.ui.form.Problem.Severity.ERROR, session.view().problem().severity());
@@ -102,7 +116,7 @@ class FreshRestoredEquivalenceTest {
             assertFalse(fake.document.canUndo());
             assertEquals(externalContent, java.nio.file.Files.readString(original));
             assertFalse(java.nio.file.Files.exists(target));
-            assertTrue(fake.external.changedExternally(original));
+            assertTrue(managedGuard.changedExternally(original));
             assertTrue(fake.statusKeys.isEmpty());
             assertTrue(fake.port.calls("showAlert").isEmpty());
         }

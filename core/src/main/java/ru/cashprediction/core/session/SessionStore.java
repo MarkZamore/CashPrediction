@@ -97,12 +97,12 @@ public interface SessionStore {
      */
     void clear();
 
-    /**
-     * Последняя ошибка операции, которая не бросает исключений ({@link #markDirty}, {@link #markClean},
-     * {@link #clear}); сбрасывается следующей успешной операцией.
-     *
-     * @return сообщение на русском или пусто
-     */
+    /** Успешное восстановление после карантина: предупреждение отдельно от ошибки записи. @return сообщение или пусто */
+    default Optional<String> recoveryNotice() {
+        return Optional.empty();
+    }
+
+    /** Последняя ошибка операции; успешная запись сбрасывает ошибку. @return сообщение или пусто */
     default Optional<String> lastError() {
         return Optional.empty();
     }

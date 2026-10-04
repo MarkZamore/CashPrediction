@@ -3,9 +3,10 @@
 Собирает исходники CashPrediction в отдельной папке и, по запросу, в архиве .7z.
 .DESCRIPTION
 Нужны PowerShell 7 и установленный 7-Zip (только инструмент разработчика).
-Скрипт не подтверждает прохождение S6/S7. Финальную доставку запускают после этих этапов.
+Скрипт не подтверждает прохождение S5/S6. Финальную доставку запускают после этих этапов.
 Сохраняются исходники, конфигурация, лицензии, ресурсы приложения и тестов.
-Документация разработчика исключается, кроме docs/design/architecture.md.
+Включаются только шесть технических документов docs/design: architecture, techstack,
+edge-cases, db-schema, linx, ui-kit (.md); рабочие docs/ai и прочие документы исключаются.
 Markdown справки и настоящих ресурсов тестов сохраняется, лицензии сохраняются отдельно.
 Модуль repository-doc-audits исключается только из доставки; его единственная запись
 удаляется из staged pom.xml. Все модули приложения и профили тестов сохраняются.
@@ -45,6 +46,7 @@ function Test-ExcludedDirectory([string] $Name, [string] $Relative = $Name) {
     if ($Relative -eq '.github/workflows') { return $true }
     if ($Relative -eq 'ui-parity/docs') { return $true }
     if ($Relative -eq 'repository-doc-audits') { return $true }
+    if ($Relative -match '^docs/ai(/|$)') { return $true }
     if ($Relative -match '^\.github/(agents|instructions|prompts|skills)(/|$)') { return $true }
     if ($Relative -notmatch '^[^/]+/src/(main|test)/' -and
         $Name -match '^(reports?|artifacts?|evidence|history|sessions|transcripts|scratch|coverage|test-results)$') { return $true }
@@ -126,12 +128,15 @@ function Test-IncludedFile([string] $Relative) {
     if ($name -match '^(\.env(\..*)?|\.(netrc|npmrc|pypirc)|settings-security\.xml|settings\.xml|id_(rsa|dsa|ecdsa|ed25519)(\..*)?|\.?credentials(\..*)?|\.?secrets?(\..*)?)$' -or
         $name -match '\.(pem|key|p12|pfx|jks|keystore)$') { return $false }
     if ($Relative -match '^ui-parity/docs/') { return $false }
-    if ($name -match '^(AGENTS|CLAUDE|GEMINI|COPILOT|INSTRUCTIONS)(\..*)?$' -or
+    if ($name -match '^SKILL\.(md|markdown)$' -or
+        $name -match '^(AGENTS|CLAUDE|GEMINI|COPILOT|INSTRUCTIONS|CurrentSprint|ContextDump|ChangeRequest|LegacyWarning)(\..*)?$' -or
         $name -match '^(\.aider.*|\.cursorrules|\.cursorignore|\.claudeignore|\.codexignore|\.mcp\.json|copilot-instructions\..*|.*\.iml)$') { return $false }
     if ($Relative -match '^\.github/(agents|instructions|prompts|skills|workflows)/') { return $false }
     if ($name -match '(\.(7z|zip|rar|tar|tgz|gz|bz2|xz|exe|dll|class|jmod|war|ear|msi|pdb|obj|pyc|log|tmp|temp|bak|swp|swo|orig)|~)$') { return $false }
     if ($name -match '\.jar$' -and $Relative -ne '.mvn/wrapper/maven-wrapper.jar') { return $false }
-    if ($Relative -eq 'docs/design/architecture.md') { return $true }
+    if ($Relative -in @('docs/design/architecture.md', 'docs/design/techstack.md',
+            'docs/design/edge-cases.md', 'docs/design/db-schema.md',
+            'docs/design/linx.md', 'docs/design/ui-kit.md')) { return $true }
     if ($Relative -match '^docs/') { return $false }
     # Разрешены только исходники и поддерживаемые входы сборки, а не произвольные файлы репозитория.
     if ($name -match '\.(md|markdown|rst|adoc|txt|html|pdf|docx?)$' -and -not $resource -and
@@ -157,7 +162,9 @@ function Assert-NoSourceSecret([string] $Path, [string] $Relative) {
 
 # Проверяет полноту staged reactor, включая модули неактивных профилей, без запуска Maven.
 function Assert-DeliveredSource([string] $Root) {
-    $required = @('pom.xml', 'docs/design/architecture.md', 'dist/pom.xml', 'ui-parity/pom.xml',
+    $required = @('pom.xml', 'docs/design/architecture.md', 'docs/design/techstack.md',
+        'docs/design/edge-cases.md', 'docs/design/db-schema.md', 'docs/design/linx.md',
+        'docs/design/ui-kit.md', 'dist/pom.xml', 'ui-parity/pom.xml',
         'dist/scripts/Set-LauncherUtf8.ps1', 'dist/scripts/Test-Icon-Source.ps1', 'dist/icons/make-icon.ps1',
         'dist/scripts/Test-IconPayloadIntegrity.ps1', 'dist/scripts/Normalize-AppModules.ps1',
         'dist/launchers/swing.properties', 'dist/launchers/web.properties',

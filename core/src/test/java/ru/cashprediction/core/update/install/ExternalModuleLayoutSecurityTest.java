@@ -142,8 +142,7 @@ class ExternalModuleLayoutSecurityTest {
         for (boolean targetSide : List.of(false, true)) {
             for (String cfg : PortableBootstrap.CONFIGS) {
                 for (String replacement : replacements) {
-                    BootstrapFixture f = new BootstrapFixture(temporary.resolve(family + "-" + index++), true);
-                    Files.delete(f.updates.resolve("install-journal.json"));
+                    BootstrapFixture f = BootstrapFixture.unpreparedLayout(temporary.resolve(family + "-" + index++), true);
                     Path path = (targetSide ? f.ready : f.root).resolve(cfg);
                     String original = Files.readString(path);
                     assertTrue(original.contains(MODULE_PATH));
@@ -159,8 +158,7 @@ class ExternalModuleLayoutSecurityTest {
         int index = 0;
         for (boolean targetSide : List.of(false, true)) {
             for (String role : ROLES) {
-                BootstrapFixture f = new BootstrapFixture(temporary.resolve(fault + "-role-" + index++), true);
-                Files.delete(f.updates.resolve("install-journal.json"));
+                BootstrapFixture f = BootstrapFixture.unpreparedLayout(temporary.resolve(fault + "-role-" + index++), true);
                 Path side = targetSide ? f.ready : f.root;
                 Path jar = side.resolve(rolePath(role));
                 switch (fault) {

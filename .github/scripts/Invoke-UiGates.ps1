@@ -78,6 +78,9 @@ try {
     Invoke-ActualTest 'GateCoverageDesktopTest' 1 'actualDesktopFocusRoundTrip' @('-Dparity.desktopPreflight=true')
     # Негативные тесты проверяют строгость сбора свидетельств до дорогой GUI-матрицы.
     Invoke-ActualTest 'GateCoverageValidationTest' 8 ''
+    # Синтетические негативные guards не подменяют отдельный реальный census выбора папки.
+    Invoke-ActualTest 'DirectoryChooserSpecificationTest' 4 ''
+    Invoke-ActualTest 'DirectoryChooserProbeTest' 4 '' @() 'ui-parity' 'DirectoryChooserProbeTest#scriptUsesActualFolderCommandAndCancellation+doneCannotHideFailedOrMissingSteps+directoryEvidenceRejectsMissingZeroNegativeAndInjectedMetadata+directoryIdentityCannotBeRelabelled'
     Invoke-ActualTest 'FxInputFocusTest' 1 'completedFillProducesRealBlurBeforeReturning' @('-Dfx.focusProof=true') 'ui-fx'
     # Реальное наведение не должно смешиваться с искусственным событием над другой строкой меню.
     Invoke-ActualTest 'FxMenuHoverTest' 1 'movingFromPngToSaveShowsOnlySaveTooltip' @('-Dfx.menuHoverProof=true') 'ui-fx'

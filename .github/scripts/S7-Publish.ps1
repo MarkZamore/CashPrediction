@@ -16,6 +16,7 @@ if ($ApprovedCommitSha -cne $state.commitSha -or $ApprovedCommitSha -cnotmatch '
 $env:GH_REPO = $state.repository
 $update = Assert-S7Artifacts $ArtifactDirectory
 if ($update.commitSha -cne $state.commitSha -or $update.releaseNumber -ne $state.releaseNumber) { throw 'S7_STATE_TARGET_MISMATCH' }
+Assert-S7DeltaBases $update @($state.bases)
 if (Test-Path -LiteralPath $WorkDirectory) { throw 'S7_PUBLISH_WORK_EXISTS' }
 $null = New-Item -ItemType Directory -Path $WorkDirectory
 $keep = @()

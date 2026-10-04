@@ -1,14 +1,14 @@
-# S7 update signoff template
+# S5 silent-update signoff template
 
-Overall: PENDING. Prepared 2026-10-03; scoped evidence reviewed 2026-10-04. Отдельные S7 проверки реально выполнены; их ограниченный scope приведён ниже. Полный S7 signoff не получен, этот документ не является approval. Commands and evidence definitions: `.claude/scratch/s7-execution-preparation.md`. Fill only from actual receipts, never from template existence or missing reports.
+Overall: PENDING. Prepared 2026-10-03; scoped evidence reviewed 2026-10-04. Тихое обновление входит в S5 вместе с соответствием требованиям и UX; отдельного этапа S7 больше нет. Исторические имена S7 scripts/receipts сохраняются как технические идентификаторы. Отдельные проверки реально выполнены; их ограниченный scope приведён ниже. Полная приёмка обновления в S5 не получена, этот документ не является approval. Итоговая независимая проверка интегрированного продукта выполняется в S6 после S5. Commands and evidence definitions: `.claude/scratch/s7-execution-preparation.md`. Fill only from actual receipts, never from template existence or missing reports.
 
 | Prerequisite / context | Status | Evidence |
 | --- | --- | --- |
-| Clean tested committed S6 SHA and empty status | PENDING | PENDING |
-| Invoke-S6Verification serial receipt bound to expected SHA | PENDING | PENDING |
-| Independent S6 review: 18 scenarios and spec sections 1-10 | PENDING | PENDING |
-| Independent S6 review: 23 classes and mapping comments | PENDING | PENDING |
-| Independent S6 review: complete seven manual recovery receipts | PENDING | PENDING |
+| Clean tested S5 candidate SHA and empty status for update acceptance | PENDING | PENDING |
+| Final S6 publication gate after S5: Invoke-S6Verification serial receipt bound to expected SHA | PENDING | PENDING |
+| Final S6 publication gate after S5: 18 scenarios and spec sections 1-10 | PENDING | PENDING |
+| Final S6 publication gate after S5: 23 classes and mapping comments | PENDING | PENDING |
+| Final S6 publication gate after S5: complete seven manual recovery receipts | PENDING | PENDING |
 | Seven cases: FX registry/XML, Swing registry/XML, Web, decline/clear, corrupt-registry/XML | PENDING | PENDING |
 | G1 main decisions P01-P12 | PENDING | PENDING |
 | G2 engine / G3 lifecycle tested APIs | PENDING | PENDING |
@@ -117,4 +117,4 @@ Frozen fixture SHA256 для MAIN scoped regression результатов, не
 
 - **Текущий UI ParityTest, отдельный scoped PASS.** MAIN сообщил фактический `ParityTest PASS`, `1 test / 0 skipped`, `683.193 s` и `18` scenario directories для каждого `fx/swing/web`. Прочитан сохранённый [gate XML](/C:/Users/Oscar/Documents/CashPrediction/ui-parity/target/gates/00892b4c-8be5-4273-afa2-d4d14203ced0/reports-22-ParityTest/TEST-ru.cashprediction.parity.pipeline.ParityTest.xml): `tests=1`, `failures=0`, `errors=0`, `skipped=0`, `time=683.193`. Общий `ui-parity/target/surefire-reports` при этом содержит другой skipped `ParityTest` (`1/0/0/1`, `0.001 s`); он не подменяет сохранённый gate receipt. Это текущий UI parity scope, не native update matrix или полный S7 signoff. Hotkeys на момент сообщения MAIN ещё ongoing: успешный terminal hotkey run здесь не заявляется, остальные требуемые parity/profile receipts и полный T16P остаются PENDING.
 
-Остаются PENDING все полные gates таблиц выше: полный T17 с terminal и всеми обязательными клетками/отказами/клиентами, повтор на изолированной копии, общий cleanup всей native очереди, независимый S6/S7 review, real main ancestry/count/AppInfo и CI evidence, финальные source archive/portable delivery и release approval. Мocks/static fixtures не являются native PASS; partial/выбранные PASS-строки, UI ParityTest и свежий default install не закрывают эти gates. Overall: PENDING.
+Остаются PENDING все полные gates таблиц выше: полный T17 с terminal и всеми обязательными клетками/отказами/клиентами, повтор на изолированной копии, общий cleanup всей native очереди, независимый review требований и обновления в S5, затем финальная проверка S6, real main ancestry/count/AppInfo и CI evidence, финальные source archive/portable delivery и release approval. Мocks/static fixtures не являются native PASS; partial/выбранные PASS-строки, UI ParityTest и свежий default install не закрывают эти gates. Overall: PENDING.

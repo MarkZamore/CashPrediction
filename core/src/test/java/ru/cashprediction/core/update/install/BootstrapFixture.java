@@ -32,6 +32,16 @@ final class BootstrapFixture {
 
     /** Внешние модульные JAR моделируются отдельными управляемыми файлами, не нативным кодом. */
     BootstrapFixture(Path path, boolean externalModules) throws IOException {
+        this(path, externalModules, true);
+    }
+
+    /** Создаёт только независимое физическое дерево для проверки отказа повторной подготовки. */
+    static BootstrapFixture unpreparedLayout(Path path, boolean externalModules) throws IOException {
+        return new BootstrapFixture(path, externalModules, false);
+    }
+
+    /** Старые конструкторы сохраняют полный setup; облегчённый режим не создаёт journal/helper. */
+    private BootstrapFixture(Path path, boolean externalModules, boolean prepared) throws IOException {
         root = Files.createDirectories(path).toRealPath();
         updates = Files.createDirectories(root.resolve("CashMemory/Updates"));
         ready = Files.createDirectories(updates.resolve("Ready/tree"));
@@ -70,9 +80,13 @@ final class BootstrapFixture {
         target = new UpdateManifest(2, "b".repeat(40), "2", Instant.parse("2026-10-03T00:00:00Z"),
                 "CashPrediction-portable.zip", 1, "c".repeat(64), TreeDeltaEngine.treeHash(files), files, List.of());
         InstallFiles.write(updates.resolve("Ready/update.json"), UpdateCodec.write(target));
-        journal = InstallJournal.preparePortable(root, target);
-        InstallJournal.write(updates, journal);
-        PowerShellHelper.publish(updates);
+        if (prepared) {
+            journal = InstallJournal.preparePortable(root, target);
+            InstallJournal.write(updates, journal);
+            PowerShellHelper.publish(updates);
+        } else {
+            journal = Map.of();
+        }
     }
 
     private static String cfg(String module, int release) {
@@ -87,6 +101,7 @@ final class BootstrapFixture {
     }
 
     Result run(int boundary, boolean crash, String phase, int journalFailure) throws Exception {
+        if (journal.isEmpty()) throw new IllegalStateException("UNPREPARED_LAYOUT_CANNOT_RUN_HELPER");
         var command = new java.util.ArrayList<>(List.of(Path.of(System.getenv("SystemRoot"),
                 "System32/WindowsPowerShell/v1.0/powershell.exe").toString(), "-NoProfile", "-NonInteractive",
                 "-WindowStyle", "Hidden", "-ExecutionPolicy", "Bypass", "-File", updates.resolve("apply-update.ps1").toString(),

@@ -4,6 +4,9 @@ import java.io.IOException;
 import java.net.URI;
 import java.nio.file.Path;
 import java.util.Properties;
+import java.util.Optional;
+import ru.cashprediction.core.update.model.UpdateProblem;
+import ru.cashprediction.core.update.model.UpdateProblem.Code;
 import ru.cashprediction.core.app.LaunchOptions;
 import ru.cashprediction.core.io.AppInfo;
 import ru.cashprediction.core.update.install.InstallCoordinator;
@@ -23,6 +26,9 @@ public final class UpdateLifecycle implements UpdateSessionLifecycle {
     private boolean entered;
     private boolean ready;
     private boolean closed;
+    private StartupResult startupResult;
+    private Stage stage = Stage.NEW;
+    private UpdateProblem problem;
 
     private UpdateLifecycle(Path root, InstallCoordinator coordinator, URI selftestManifest) {
         this.root = root;
@@ -33,16 +39,20 @@ public final class UpdateLifecycle implements UpdateSessionLifecycle {
     /** Создаёт lifecycle; сборка разработчика полностью инертна и не пишет файлов. */
     public static UpdateLifecycle create(Path installationRoot, Path cashMemory, String client, String[] args) {
         InstallCoordinator coordinator = null;
+        UpdateProblem initializationFailure = null;
         if (System.getProperty("os.name", "").startsWith("Windows") && AppInfo.release() > 0
                 && AppInfo.commit().matches("[0-9a-f]{40}")) {
             try {
                 coordinator = new InstallCoordinator(installationRoot, cashMemory, client, args, AppInfo.release());
-            } catch (IOException | RuntimeException ignored) {
+            } catch (IOException | RuntimeException failure) {
+                initializationFailure = problem(Code.INITIALIZATION_FAILED, failure);
                 // Обновления не препятствуют запуску исправной установленной версии.
             }
         }
-        return new UpdateLifecycle(installationRoot, coordinator,
+        UpdateLifecycle lifecycle = new UpdateLifecycle(installationRoot, coordinator,
                 selftestManifest(installationRoot, args, System.getProperties()));
+        lifecycle.problem = initializationFailure;
+        return lifecycle;
     }
 
     /**
@@ -74,20 +84,37 @@ public final class UpdateLifecycle implements UpdateSessionLifecycle {
 
     /** Проверяет локальное восстановление до UI; false означает переданный запрос перезапуска. */
     @Override public synchronized boolean beforeUi() {
-        if (closed) return false;
-        if (entered) return ready;
+        return beforeUiResult().allowed();
+    }
+
+    /** Возвращает то же решение на повторе, сохраняя точку и диагностику ожидаемого отказа. */
+    @Override public synchronized StartupResult beforeUiResult() {
+        if (closed) return new StartupResult(Decision.CLOSED, Optional.ofNullable(problem));
+        if (entered) return startupResult;
         entered = true;
-        if (coordinator == null) return ready = true;
-        try { return ready = coordinator.beforeUi(); }
-        catch (IOException | RuntimeException ignored) {
-            // Отказ регистрации или установщика не блокирует приложение; census помощника страхует lease.
-            return ready = true;
+        stage = coordinator == null ? Stage.INACTIVE : Stage.ENTERED;
+        if (coordinator == null) ready = true;
+        else {
+            try { ready = coordinator.beforeUi(); }
+            catch (IOException | RuntimeException failure) {
+                // Существующая политика fail-open относится к исправной текущей версии; native барьер не ослабляется.
+                problem = problem(Code.BARRIER_FAILED, failure);
+                ready = true;
+            }
         }
+        startupResult = new StartupResult(ready ? Decision.ALLOWED : Decision.BLOCKED, Optional.ofNullable(problem));
+        return startupResult;
+    }
+
+    /** Возвращает неизменяемый снимок без выдачи worker/preparer/coordinator или исходного исключения. */
+    @Override public synchronized Status status() {
+        return new Status(stage, Optional.ofNullable(problem));
     }
 
     /** Запускает ровно один фоновый проход после готовности основного интерфейса. */
     @Override public synchronized void afterUiReady() {
         if (closed || !entered || !ready || coordinator == null || worker != null) return;
+        stage = Stage.PREPARING;
         worker = new Thread(this::prepare, "cashprediction-update");
         worker.setDaemon(true);
         worker.start();
@@ -102,9 +129,21 @@ public final class UpdateLifecycle implements UpdateSessionLifecycle {
                 preparer = selftestManifest == null ? new UpdatePreparer(root, installed, MANIFEST)
                         : UpdatePreparer.forSelftest(root, installed, selftestManifest);
             }
-            preparer.prepare();
-        } catch (IOException | RuntimeException ignored) {
-            // Ошибка сети и подготовки не имеет видимого пользователю уведомления.
+            boolean prepared = preparer.prepare();
+            synchronized (this) {
+                if (!closed) {
+                    stage = prepared ? Stage.PREPARED : Stage.NOT_PREPARED;
+                    preparer.lastProblem().ifPresent(value -> problem = value);
+                }
+            }
+        } catch (IOException | RuntimeException failure) {
+            synchronized (this) {
+                if (!closed) {
+                    stage = Stage.NOT_PREPARED;
+                    problem = problem(Code.PREPARATION_FAILED, failure);
+                }
+            }
+            // Диагностика доступна службе, но пользовательское уведомление не появляется.
         }
     }
 
@@ -114,13 +153,24 @@ public final class UpdateLifecycle implements UpdateSessionLifecycle {
         synchronized (this) {
             if (closed) return;
             closed = true;
+            stage = Stage.CLOSED;
             download = preparer;
         }
         if (download != null) {
-            try { download.close(); } catch (Exception ignored) { }
+            try { download.close(); }
+            catch (Exception failure) { recordProblem(Code.CANCELLATION_FAILED, failure); }
         }
         if (coordinator != null && entered && ready) {
-            try { coordinator.normalExit(); } catch (IOException | RuntimeException ignored) { }
+            try { coordinator.normalExit(); }
+            catch (IOException | RuntimeException failure) { recordProblem(Code.EXIT_FAILED, failure); }
         }
+    }
+    /** Запоминает технический отказ, не меняя уже закрытое состояние. */
+    private synchronized void recordProblem(Code code, Exception failure) { problem = problem(code, failure); }
+
+    /** Переводит локальное исключение в данные без потери исходной диагностики. */
+    private static UpdateProblem problem(Code code, Exception failure) {
+        String message = failure.getMessage();
+        return new UpdateProblem(code, message == null || message.isBlank() ? failure.getClass().getSimpleName() : message);
     }
 }

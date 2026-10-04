@@ -24,7 +24,7 @@ class SessionModelTest {
                 "GOAL_CALCULATOR", "TEXT_INPUT", "CHOICE", "ALERT", "CSV_EXPORT", "QUICK_EDIT_POPUP"),
                 java.util.Arrays.stream(WindowType.values()).map(Enum::name).toList());
         assertEquals(List.of("name", "currency", "startDate", "startBalance", "horizonKind", "horizonValue", "horizonUntil",
-                "cushion", "quickIncomeTitle", "quickIncomeAmount", "quickIncomeDay", "quickExpenseTitle",
+                "displayPeriod", "cushion", "quickIncomeTitle", "quickIncomeAmount", "quickIncomeDay", "quickExpenseTitle",
                 "quickExpenseAmount", "quickExpenseDay"), WindowType.NEW_PLAN_WIZARD.fieldIds());
         assertEquals(List.of("page"), WindowType.NEW_PLAN_WIZARD.contextKeys());
         assertEquals(List.of("name", "currency", "startDate", "startBalance", "horizonKind", "horizonValue", "horizonUntil",

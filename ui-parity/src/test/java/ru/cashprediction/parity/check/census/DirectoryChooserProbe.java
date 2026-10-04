@@ -105,9 +105,18 @@ public final class DirectoryChooserProbe {
                     + SCENARIO + "/" + step);
             if (dump.chooserRequests().size() != 1 || !dump.chooserRequests().getFirst().kind().equals("directory"))
                 throw new AssertionError("Missing directory request: " + SCENARIO + "/" + step);
+            // Одного имени класса недостаточно: запрос должен происходить из FileFlow с полной спецификацией.
+            UiDump.ChooserRequest request = dump.chooserRequests().getFirst();
+            if (request.folder() == null || request.folder().isBlank()
+                    || !UiText.get("s2.file.folderTitle", request.folder()).equals(request.title())
+                    || !"".equals(request.mode()) || !"".equals(request.filter()) || !"".equals(request.name()))
+                throw new AssertionError("Invalid directory specification: " + SCENARIO + "/" + step);
             if (dump.counters().getOrDefault(CommandId.FILE_CASH_MEMORY.id(), 0) != 1)
                 throw new AssertionError("Folder command did not fire exactly once: " + SCENARIO + "/" + step);
         }
+        // Отмена завершает тот же запрос, а не позволяет подменить начальную папку или заголовок.
+        if (!dumps.get(PENDING).chooserRequests().equals(dumps.get(CANCELLED).chooserRequests()))
+            throw new AssertionError("Directory request changed after cancellation: " + SCENARIO);
     }
 
     /** Проверяет окончание журнала, пока процесс жив и не истёк срок ожидания. */

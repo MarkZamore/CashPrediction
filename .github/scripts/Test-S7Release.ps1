@@ -71,7 +71,7 @@ function New-S7Fixture {
         [IO.File]::WriteAllText($path, "patch-$number")
         $patches += [ordered]@{
             algorithm = 'cashprediction-tree-delta'; algorithmVersion = 1
-            baseReleaseNumber = $number; baseCommitSha = ('a' * 40); baseTreeSha256 = ('b' * 64)
+            baseReleaseNumber = $number; baseCommitSha = $(if ($i -eq 0) { 'a' * 40 } else { 'e' * 40 }); baseTreeSha256 = ('b' * 64)
             assetName = $asset; sizeBytes = (Get-Item -LiteralPath $path).Length
             sha256 = (Get-FileHash -LiteralPath $path).Hash.ToLowerInvariant()
         }
@@ -161,6 +161,9 @@ try {
         if ($script:BadReadback -eq 'identity') {
             return [pscustomobject]@{ releaseNumber = 200; commitSha = ('e' * 40); treeSha256 = ('d' * 64) }
         }
+        if ($script:BadReadback -eq 'tree') {
+            return [pscustomobject]@{ releaseNumber = 200; commitSha = ('c' * 40); treeSha256 = ('e' * 64) }
+        }
         if ($script:BadReadback -in 'assets', 'bytes', 'incomplete') {
             if ($script:BadReadback -eq 'incomplete') { throw 'S7_BASE_INCOMPLETE' }
             $copy = $base.PSObject.Copy()
@@ -182,7 +185,7 @@ try {
         else {
             Assert-S7Test ($writes.Count -eq 1 -and $writes[0] -contains ('c' * 40) -and $writes[0][2] -ceq 'update-base-200') 'archive target not from published identity'
         }
-        foreach ($mode in 'identity', 'assets', 'bytes', 'incomplete') {
+        foreach ($mode in 'identity', 'tree', 'assets', 'bytes', 'incomplete') {
             $script:Calls.Clear(); $script:BadReadback = $mode
             $problem = $null
             try { Save-S7Base $base 'fixture-owner/fixture-repo' $fixtureRoot 'mock-java' @('mock-tool') | Out-Null } catch { $problem = $_ }

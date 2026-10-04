@@ -1,6 +1,7 @@
 package ru.cashprediction.swing.ui;
 
 import java.awt.*;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
 import javax.swing.*;
@@ -51,7 +52,11 @@ public final class SwingToolbar extends JPanel {
         int caret = filter == null ? 0 : filter.getCaretPosition();
         if (filterDelay != null) filterDelay.stop();
         applying = true;
-        removeAll(); widgets.clear();
+        // Живое поле нельзя удалять при debounce-render: AWT теряет его focus owner до следующей клавиши.
+        Component retainedFilter = filter == null ? null : filter.getParent();
+        for (Component child : getComponents()) if (child != retainedFilter) remove(child);
+        widgets.clear();
+        var order = new ArrayList<Component>();
         Map<String, ButtonGroup> groups = new HashMap<>();
         for (ToolbarNode node : model.items()) {
             JComponent widget = switch (node) {
@@ -103,7 +108,14 @@ public final class SwingToolbar extends JPanel {
                 Dimension preferred = new Dimension(widget.getPreferredSize().width, DesignTokens.CONTROL_HEIGHT);
                 widget.setPreferredSize(preferred); widget.setMinimumSize(preferred); widget.setMaximumSize(preferred);
             }
-            if (getComponentCount() > 0) add(Box.createHorizontalStrut(DesignTokens.SPACING)); add(widget);
+            if (!order.isEmpty()) order.add(Box.createHorizontalStrut(DesignTokens.SPACING));
+            order.add(widget);
+        }
+        if (retainedFilter != null && !order.contains(retainedFilter)) remove(retainedFilter);
+        for (int index = 0; index < order.size(); index++) {
+            Component child = order.get(index);
+            if (child.getParent() != this) add(child);
+            setComponentZOrder(child, index);
         }
         setPreferredSize(new Dimension(super.getPreferredSize().width, DesignTokens.TOOLBAR_HEIGHT));
         setMaximumSize(new Dimension(Integer.MAX_VALUE, DesignTokens.TOOLBAR_HEIGHT));
@@ -132,6 +144,22 @@ public final class SwingToolbar extends JPanel {
     public JComponent widget(String id) { return widgets.get(id); }
 
     private JPanel filter(ToolbarNode.FilterField n) {
+        if (filter != null && (n.id() + ".input").equals(filter.getClientProperty("cp.id"))
+                && filter.getParent() instanceof JPanel retained && retained.getParent() == this) {
+            // Обновляем модель без нового document, listeners или detach; каретка остаётся при неизменном тексте.
+            if (!filter.getText().equals(n.text())) filter.setText(n.text());
+            filter.putClientProperty("cp.prompt", n.prompt());
+            filter.getAccessibleContext().setAccessibleName(n.prompt());
+            filter.getAccessibleContext().setAccessibleDescription(n.tooltip());
+            SwingLook.tooltip(filter, n.tooltip());
+            filterDelay.setDelay(n.debounceMs()); filterDelay.setInitialDelay(n.debounceMs());
+            for (Component child : retained.getComponents()) if (child instanceof JButton clear) {
+                clear.setVisible(n.clearVisible()); SwingLook.tooltip(clear, n.clearTooltip());
+            }
+            filter.setMargin(new Insets(0, 0, 0, n.clearVisible() ? DesignTokens.CONTROL_HEIGHT + DesignTokens.SPACING : 0));
+            retained.setPreferredSize(new Dimension(n.widthPx(), DesignTokens.CONTROL_HEIGHT));
+            return retained;
+        }
         JPanel panel = ownerPanel(new BorderLayout(4, 0)); panel.setOpaque(false);
         filter = SwingLook.id(new FilterInput(n.text(), paintContext), n.id() + ".input");
         filter.putClientProperty("cp.prompt", n.prompt());

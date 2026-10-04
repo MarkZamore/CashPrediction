@@ -5,7 +5,7 @@ import java.util.Optional;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import ru.cashprediction.core.format.FormatWords;
-import ru.cashprediction.core.markdown.RuFormats;
+import ru.cashprediction.core.format.FormatNormalization;
 
 /**
  * Период отображения: какая часть горизонта прогноза видна в таблице и на графике.
@@ -62,16 +62,16 @@ public enum PeriodChoice {
      * @return период или пустое значение, если текст не распознан
      */
     public static Optional<PeriodChoice> parse(String text) {
-        String t = RuFormats.normalize(text);
+        String t = FormatNormalization.normalize(text);
         for (PeriodChoice choice : values()) {
-            if (t.equals(RuFormats.normalize(choice.label())) || t.equals(choice.name().toLowerCase(Locale.ROOT))) {
+            if (t.equals(FormatNormalization.normalize(choice.label())) || t.equals(choice.name().toLowerCase(Locale.ROOT))) {
                 return Optional.of(choice);
             }
         }
         // Короткие синонимы «весь»/«все» из ручной правки файла настроек; «all» — имя константы по-английски.
         // Слова ресурса нормализуются так же, как текст файла: регистр и «ё» в ресурсе не ломают чтение.
-        if (t.equals(RuFormats.normalize(FormatWords.get("settings.period.all.alias1")))
-                || t.equals(RuFormats.normalize(FormatWords.get("settings.period.all.alias2"))) || t.equals("all")) {
+        if (t.equals(FormatNormalization.normalize(FormatWords.get("settings.period.all.alias1")))
+                || t.equals(FormatNormalization.normalize(FormatWords.get("settings.period.all.alias2"))) || t.equals("all")) {
             return Optional.of(ALL);
         }
         Matcher m = LEADING_NUMBER.matcher(t);

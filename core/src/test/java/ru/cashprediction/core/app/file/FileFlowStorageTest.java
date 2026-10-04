@@ -243,7 +243,7 @@ class FileFlowStorageTest {
         FakeFileFlowContext ui = new FakeFileFlowContext(home);
         ui.forecastAvailable = false;
         FakePlanStorage storage = new FakePlanStorage();
-        ExternalChangeGuard guard = new ExternalChangeGuard(storage);
+        ExternalChangeGuard guard = new ExternalChangeGuard(storage, ui.environment.cashMemory());
         FileFlow[] files = new FileFlow[1];
         AutosaveService[] autosave = new AutosaveService[1];
         FlowContext context = (FlowContext) Proxy.newProxyInstance(FlowContext.class.getClassLoader(),
@@ -256,6 +256,72 @@ class FileFlowStorageTest {
         files[0] = new FileFlow(context, storage);
         autosave[0] = new AutosaveService(context);
         return new Fixture(ui, storage, guard, files[0], autosave[0]);
+    }
+
+    @Test void explicitManagedPolicyKeepsAlternateServiceAndOpaqueExpectedVersion() throws Exception {
+        Fixture fixture = fixture();
+        Path memory = fixture.ui.environment.cashMemory();
+        Path file = memory.resolve("nested/Stored.md");
+        var reference = FilePlanStorage.reference(file);
+        var opaque = new PlanStorage.Version("opaque backend token: !/not-a-file-hash");
+        assertSame(fixture.storage, fixture.guard.storage());
+        assertTrue(fixture.guard.canWrite(file));
+        fixture.guard.remember(reference, opaque);
+        assertEquals(opaque, fixture.guard.expectedVersion(reference, new PlanStorage.Version("later token")));
+        assertFalse(new ExternalChangeGuard(fixture.storage).canWrite(file));
+        assertFalse(fixture.guard.canWrite(memory));
+        assertFalse(fixture.guard.canWrite(memory.resolve("nested/../Stored.md")));
+    }
+
+    @Test void externalInjectedPlanRemainsReadableButNeverAutosavedOrRenamed() throws Exception {
+        Fixture fixture = fixture();
+        Path outside = home.resolve("External.md");
+        Files.writeString(outside, "external owner bytes");
+        var reference = FilePlanStorage.reference(outside);
+        Plan original = Plan.empty("External", FakeFileFlowContext.TODAY);
+        var version = fixture.storage.put(reference, original);
+        fixture.files.openFile();
+        fixture.ui.fileAnswer.accept(Optional.of(outside));
+        assertEquals(original, fixture.ui.document.plan());
+        assertEquals(outside, fixture.ui.document.file().orElseThrow());
+        fixture.ui.document.edit("change", plan -> plan.withStart(FakeFileFlowContext.TODAY.minusDays(1), plan.startBalance()));
+        int chooserCount = fixture.ui.chooserRequests.size();
+        fixture.autosave.setEnabled(true);
+        fixture.ui.scheduler.advance(DesignTokens.AUTOSAVE_DELAY_MS);
+        assertEquals(chooserCount, fixture.ui.chooserRequests.size());
+        assertTrue(fixture.ui.alerts.isEmpty());
+        assertFalse(fixture.storage.calls().contains("write"));
+        assertThrows(IllegalArgumentException.class, () -> fixture.files.renameTo("Renamed"));
+        assertFalse(fixture.storage.calls().contains("rename"));
+        assertEquals(version, fixture.storage.snapshot(reference).version());
+        assertFalse(fixture.guard.canWrite(outside));
+        assertFalse(fixture.guard.canWrite(home.resolve("CashMemoryOther/Plan.md")));
+        assertTrue(fixture.ui.document.isDirty());
+        assertEquals("external owner bytes", Files.readString(outside));
+    }
+
+    @Test void managedPolicyRefusesRealLinkAncestorWithoutChangingExternalBytes() throws Exception {
+        Fixture fixture = fixture();
+        Path outside = Files.createDirectory(home.resolve("Outside"));
+        Path victim = outside.resolve("Victim.md");
+        Files.writeString(victim, "keep");
+        Path link = fixture.ui.environment.cashMemory().resolve("redirect");
+        if (System.getProperty("os.name").startsWith("Windows")) {
+            Process command = new ProcessBuilder("cmd.exe", "/d", "/c", "mklink", "/J",
+                    link.toString(), outside.toString()).redirectErrorStream(true).start();
+            String output = new String(command.getInputStream().readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
+            assertEquals(0, command.waitFor(), output);
+        } else {
+            Files.createSymbolicLink(link, outside);
+        }
+        try {
+            assertFalse(fixture.guard.canWrite(link.resolve("Victim.md")));
+            assertEquals("keep", Files.readString(victim));
+            assertFalse(fixture.storage.calls().contains("write"));
+        } finally {
+            Files.deleteIfExists(link);
+        }
+        assertEquals("keep", Files.readString(victim));
     }
 
     /** Участники одного изолированного сценария. */

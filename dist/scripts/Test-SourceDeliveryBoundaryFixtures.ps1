@@ -79,7 +79,9 @@ foreach ($module in @('core', 'update-tool', 'ui-fx', 'ui-swing', 'web', 'dist',
         Add-Owned (Join-Path $fixture "$module/src/main/java/Example.java") 'class Example {}'
     }
 }
-foreach ($relative in @('docs/design/architecture.md', 'dist/scripts/Set-LauncherUtf8.ps1',
+foreach ($relative in @('docs/design/architecture.md', 'docs/design/techstack.md',
+        'docs/design/edge-cases.md', 'docs/design/db-schema.md', 'docs/design/linx.md', 'docs/design/ui-kit.md',
+        'dist/scripts/Set-LauncherUtf8.ps1',
         'dist/scripts/Test-Icon-Source.ps1', 'dist/scripts/Test-IconPayloadIntegrity.ps1',
         'dist/scripts/Normalize-AppModules.ps1', 'dist/icons/make-icon.ps1',
         'dist/launchers/swing.properties', 'dist/launchers/web.properties',
@@ -96,7 +98,9 @@ foreach ($relative in @('docs/design/architecture.md', 'dist/scripts/Set-Launche
 $baseline = Join-Path $owned 'baseline-stage'
 $null = & $pack -SourceRoot $fixture -StageDirectory $baseline -StageOnly
 Record-Boundary 'baseline-stage' $true 'Actual StageOnly accepted complete synthetic source; no build.'
-foreach ($relative in @('docs/design/architecture.md', 'LICENSE.md', 'LICENSE.txt', 'LICENCE',
+foreach ($relative in @('docs/design/architecture.md', 'docs/design/techstack.md',
+        'docs/design/edge-cases.md', 'docs/design/db-schema.md', 'docs/design/linx.md', 'docs/design/ui-kit.md',
+        'LICENSE.md', 'LICENSE.txt', 'LICENCE',
         'COPYING.md', 'NOTICE', 'core/src/main/resources/LICENSE.md',
         'core/src/test/resources/NOTICE.txt', 'core/src/test/resources/session.plan.md',
         'core/src/test/resources/agent-response.json', 'dist/scripts/Test-IconPayloadIntegrity.ps1',
@@ -105,7 +109,9 @@ foreach ($relative in @('docs/design/architecture.md', 'LICENSE.md', 'LICENSE.tx
         (Get-FileHash -LiteralPath (Join-Path $baseline $relative)).Hash) 'Actual staged SHA equals source SHA.'
 }
 Record-Boundary 'source-pom-unchanged' ([IO.File]::ReadAllText((Join-Path $fixture 'pom.xml')) -ceq $rootPom) 'Root fixture POM unchanged.'
-foreach ($relative in @('dist/scripts/Set-LauncherUtf8.ps1',
+foreach ($relative in @('docs/design/architecture.md', 'docs/design/techstack.md',
+        'docs/design/edge-cases.md', 'docs/design/db-schema.md', 'docs/design/linx.md', 'docs/design/ui-kit.md',
+        'dist/scripts/Set-LauncherUtf8.ps1',
         'dist/scripts/Test-IconPayloadIntegrity.ps1', 'dist/scripts/Normalize-AppModules.ps1')) {
     $path = Join-Path $fixture $relative; $saved = Join-Path $owned ([guid]::NewGuid().ToString('N'))
     Assert-Owned $path; Assert-Owned $saved

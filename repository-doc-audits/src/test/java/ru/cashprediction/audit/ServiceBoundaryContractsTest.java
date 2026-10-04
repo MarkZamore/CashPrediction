@@ -255,7 +255,7 @@ final class ServiceBoundaryContractsTest {
         assertFalse(Pattern.compile("\\bEngineForecastService\\b").matcher(goal).find(), "GoalCalculatorForm");
     }
 
-    /** Сборка приложения публикует стабильные интерфейсы и передаёт guard тот же экземпляр хранения. */
+    /** Сборка приложения передаёт guard тот же интерфейс хранения и явную разрешённую область записи. */
     @Test
     void flowContextAndControllerExposeOwnedServicePorts() {
         String context = code(source("app/flow/FlowContext.java"));
@@ -272,10 +272,36 @@ final class ServiceBoundaryContractsTest {
         assertFalse(NON_VALUE.matcher(context).results().anyMatch(match -> Set.of(
                 "LocalPlanCommands", "FilePlanStorage", "EngineForecastService").contains(match.group())), "FlowContext adapters");
         String storage = serviceField(controller, "PlanStorage", "AppController");
-        require(controller, "\\bnew\\s+ExternalChangeGuard\\s*\\(\\s*(?:(?:this\\s*\\.\\s*)?"
-                + Pattern.quote(storage) + "|planStorage\\s*\\(\\s*\\))\\s*\\)", "AppController shared storage");
+        String environment = serviceField(controller, "AppEnvironment", "AppController");
+        require(controller, sharedScopedGuard(storage, environment), "AppController shared storage and write scope");
         assertFalse(Pattern.compile("\\bnew\\s+ExternalChangeGuard\\s*\\(\\s*\\)").matcher(controller).find(),
                 "AppController must not select the compatibility storage default");
+    }
+
+    /** Изоляция storage и авторизация пути не заменяются compatibility-конструктором или чужим окружением. */
+    @Test
+    void controllerGuardMutationCannotDropOrReplaceItsOwnedWriteScope() {
+        Pattern construction = Pattern.compile(sharedScopedGuard("ownedStorage", "ownedEnvironment"));
+        for (String valid : List.of(
+                "new ExternalChangeGuard(ownedStorage, ownedEnvironment.cashMemory())",
+                "new ExternalChangeGuard(this.ownedStorage, this.ownedEnvironment.cashMemory())",
+                "new ExternalChangeGuard(planStorage(), ownedEnvironment.cashMemory())")) {
+            assertTrue(construction.matcher(valid).find(), valid);
+        }
+        for (String invalid : List.of("new ExternalChangeGuard()", "new ExternalChangeGuard(ownedStorage)",
+                "new ExternalChangeGuard(new FilePlanStorage(path), ownedEnvironment.cashMemory())",
+                "new ExternalChangeGuard(ownedStorage, otherEnvironment.cashMemory())",
+                "new ExternalChangeGuard(ownedStorage, null)",
+                "new ExternalChangeGuard(ownedStorage, ownedEnvironment.home())")) {
+            assertFalse(construction.matcher(invalid).find(), invalid);
+        }
+    }
+
+    /** Требует явную CashMemory того же окружения, сохраняя проверку общего экземпляра storage. */
+    private static String sharedScopedGuard(String storage, String environment) {
+        return "\\bnew\\s+ExternalChangeGuard\\s*\\(\\s*(?:(?:this\\s*\\.\\s*)?"
+                + Pattern.quote(storage) + "|planStorage\\s*\\(\\s*\\))\\s*,\\s*(?:this\\s*\\.\\s*)?"
+                + Pattern.quote(environment) + "\\s*\\.\\s*cashMemory\\s*\\(\\s*\\)\\s*\\)";
     }
 
     /** Отрицательные примеры проверяют охрану границы, включая полные имена, static-import и Unicode-escape. */

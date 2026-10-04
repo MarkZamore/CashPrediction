@@ -397,7 +397,8 @@ public final class BrowserFixtureProbe {
                   const css=getComputedStyle(panel); const box=panel.getBoundingClientRect();
                   const cards=[...panel.querySelectorAll(':scope > .card')];
                   const available=outerWidth-16-2*border;
-                  const width=(available-6*(expectedColumns-1))/expectedColumns;
+                  // Независимое целочисленное ожидание совпадает с контрактом desktop-layout.
+                  const width=Math.max(0,Math.floor((available-6*(expectedColumns-1))/expectedColumns));
                   const rows=Math.ceil(cardCount/expectedColumns); const height=12+2*border+rows*72+(rows-1)*6;
                   return cards.length===cardCount && parseFloat(css.getPropertyValue('--cp-card-min-width'))===140
                     && parseFloat(css.columnGap)===6 && parseFloat(css.rowGap)===6 && css.display==='grid'

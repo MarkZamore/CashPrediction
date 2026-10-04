@@ -150,13 +150,13 @@ public final class PreferencesRegistryBackend implements RegistryBackend {
     @Override
     public void flush() throws SessionStoreException {
         if (!isAvailable()) {
-            throw new SessionStoreException(Texts.get("session.registry.unavailable", failure));
+            throw new SessionStoreException(SessionStoreException.Code.UNAVAILABLE, Texts.get("session.registry.unavailable", failure));
         }
         try {
             node.flush();
         } catch (BackingStoreException | IllegalStateException | SecurityException e) {
             markUnavailable(e);
-            throw new SessionStoreException(Texts.get("session.registry.unavailable", failure), e);
+            throw new SessionStoreException(SessionStoreException.Code.UNAVAILABLE, Texts.get("session.registry.unavailable", failure), e);
         }
     }
 
@@ -187,7 +187,7 @@ public final class PreferencesRegistryBackend implements RegistryBackend {
      */
     public void removeNode() throws SessionStoreException {
         if (!isAvailable()) {
-            throw new SessionStoreException(Texts.get("session.registry.unavailable", failure));
+            throw new SessionStoreException(SessionStoreException.Code.UNAVAILABLE, Texts.get("session.registry.unavailable", failure));
         }
         try {
             Preferences parent = node.parent();
@@ -197,7 +197,7 @@ public final class PreferencesRegistryBackend implements RegistryBackend {
             }
         } catch (BackingStoreException | IllegalStateException | SecurityException e) {
             markUnavailable(e);
-            throw new SessionStoreException(Texts.get("session.registry.unavailable", failure), e);
+            throw new SessionStoreException(SessionStoreException.Code.UNAVAILABLE, Texts.get("session.registry.unavailable", failure), e);
         }
     }
 

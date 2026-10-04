@@ -30,8 +30,9 @@ import ru.cashprediction.core.text.Texts;
  * {@code markDirty}/{@code markClean}, а до этого читается из файла.</p>
  *
  * <p><b>Повреждённый файл</b> (ручная правка в Блокноте): {@link #load} бросает
- * {@link SessionStoreException} с причиной, диалог восстановления отключает кнопку, а следующий
- * {@link #save} просто перезаписывает файл целиком.</p>
+ * {@link SessionStoreException} с причиной. Запись маркера не заменяет повреждение;
+ * {@link #save} допускает новый снимок только после подтверждённого карантина в CashMemory.
+ * Неудача карантина оставляет исходные байты; ошибки I/O не считаются повреждением.</p>
  *
  * <p>Класс потокобезопасен: все операции синхронизированы на экземпляре.</p>
  */
@@ -47,6 +48,13 @@ public final class XmlSessionStore implements SessionStore {
     private boolean markerKnown;
     /** Ошибка последней «тихой» операции. */
     private String lastError;
+    private Path quarantine;
+    private boolean recoveryCommitted;
+
+    /** Путь подтверждённого карантина, отдельно от ошибки последней записи. */
+    public synchronized Optional<String> recoveryNotice() {
+        return quarantine == null || !recoveryCommitted ? Optional.empty() : Optional.of(Texts.get("session.quarantine.recovered", quarantine));
+    }
 
     /**
      * Создаёт хранилище.
@@ -119,7 +127,7 @@ public final class XmlSessionStore implements SessionStore {
 
     /**
      * Запоминает маркер и заменяет XML-документ, сохраняя снимок, если старый документ читается.
-     * При отсутствии или ошибке чтения старого документа записывает только маркер.
+     * При отсутствии старого документа записывает только маркер; при ошибке чтения не заменяет файл.
      * Ошибка записи сохраняется в {@link #lastError()}, новый маркер остаётся в памяти.
      * @param newMarker маркер начавшегося сеанса, не {@code null}
      */
@@ -165,17 +173,19 @@ public final class XmlSessionStore implements SessionStore {
      * гарантия целого старого или нового файла при сбое отсутствует.
      * Успех сбрасывает {@link #lastError()}, ошибка ввода-вывода передаётся исключением.
      * @param snapshot снимок, не {@code null}
-     * @throws SessionStoreException если запись XML-файла не удалась
+     * @throws SessionStoreException если существующий XML-документ не читается или запись не удалась
      */
     @Override
     public synchronized void save(SessionSnapshot snapshot) throws SessionStoreException {
         Objects.requireNonNull(snapshot, "snapshot");
         try {
+            recoverBeforeSave();
             AtomicFiles.writeString(file, codec.encodeDocument(new SessionDocument(client, currentMarker(), snapshot)));
             lastError = null;
+            recoveryCommitted = quarantine != null;
         } catch (IOException e) {
-            throw new SessionStoreException(Texts.get("session.store.xml.writeFailed", file.getFileName(),
-                    e.getMessage()), e);
+            lastError = Texts.get("session.store.xml.writeFailed", file.getFileName(), e.getMessage());
+            throw new SessionStoreException(SessionStoreException.Code.IO_ERROR, lastError, e);
         }
     }
 
@@ -234,13 +244,13 @@ public final class XmlSessionStore implements SessionStore {
         try {
             text = AtomicFiles.readString(file);
         } catch (IOException e) {
-            throw new SessionStoreException(Texts.get("session.store.xml.readFailed", file.getFileName(),
+            throw new SessionStoreException(SessionStoreException.Code.IO_ERROR, Texts.get("session.store.xml.readFailed", file.getFileName(),
                     e.getMessage()), e);
         }
         try {
             return codec.decodeDocument(text);
         } catch (SnapshotFormatException e) {
-            throw new SessionStoreException(e.getMessage(), e);
+            throw new SessionStoreException(SessionStoreException.Code.CORRUPT, e.getMessage(), e);
         }
     }
 
@@ -248,7 +258,7 @@ public final class XmlSessionStore implements SessionStore {
         try {
             return Optional.ofNullable(readDocument());
         } catch (SessionStoreException e) {
-            // Повреждённый файл: сохранить из него нечего, следующая запись его заменит.
+            // Тихое чтение не превращает повреждение в разрешение заменить исходный файл.
             return Optional.empty();
         }
     }
@@ -261,10 +271,41 @@ public final class XmlSessionStore implements SessionStore {
         return marker;
     }
 
+    /** Нечитаемый существующий снимок заменяется только после явной очистки или исправления. */
+    private void requireReadableBeforeReplacement() throws SessionStoreException {
+        try {
+            readDocument();
+        } catch (SessionStoreException failure) {
+            lastError = failure.getMessage();
+            throw failure;
+        }
+    }
+
+    /** Только typed CORRUPT позволяет замену после verified archive; I/O не считается порчей. */
+    private void recoverBeforeSave() throws SessionStoreException {
+        try { requireReadableBeforeReplacement(); }
+        catch (SessionStoreException failure) {
+            if (failure.code() != SessionStoreException.Code.CORRUPT) throw failure;
+            try {
+                Path memory = file.toAbsolutePath().normalize().getParent();
+                var evidence = CorruptStoreQuarantine.files(memory, file);
+                Path archived = CorruptStoreQuarantine.preserve(memory, id(), file.toString(), failure.getMessage(), evidence);
+                CorruptStoreQuarantine.unchanged(evidence, CorruptStoreQuarantine.files(memory, file));
+                quarantine = archived; recoveryCommitted = false;
+            } catch (IOException error) {
+                lastError = Texts.get("session.quarantine.failed", error.getMessage());
+                throw new SessionStoreException(SessionStoreException.Code.IO_ERROR, lastError, error);
+            }
+        }
+    }
+
     private void writeQuietly(SessionDocument document) {
         try {
+            requireReadableBeforeReplacement();
             AtomicFiles.writeString(file, codec.encodeDocument(document));
             lastError = null;
+        } catch (SessionStoreException e) {
+            lastError = e.getMessage();
         } catch (IOException e) {
             lastError = Texts.get("session.store.xml.writeFailed", file.getFileName(), e.getMessage());
         }

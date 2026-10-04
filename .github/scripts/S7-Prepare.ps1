@@ -15,7 +15,7 @@ $state = Read-S7Json $StateFile
 $command = $state.toolCommand
 $java = [string]$command.java
 $toolArguments = [string[]]$command.arguments
-$bases = @($state.bases)
+$bases = @($state.bases | Sort-Object releaseNumber -Descending)
 if ($bases.Count -gt 2) { throw 'S7_BASE_COUNT' }
 if (Test-Path -LiteralPath $ArtifactDirectory) { throw 'S7_ARTIFACT_DIRECTORY_EXISTS' }
 if (Test-Path -LiteralPath $WorkDirectory) { throw 'S7_PREPARE_WORK_EXISTS' }
@@ -51,6 +51,7 @@ $manifestArguments = @('manifest', '--root', $ImageRoot, '--archive', $zip,
     '--version', [string]$state.releaseNumber, '--published-at', $published)
 Invoke-S7Tool $java $toolArguments ($manifestArguments + @('--out', $seedManifest)) | Out-Null
 $target = Read-S7Json $seedManifest
+$seedSha256 = (Get-FileHash -LiteralPath $seedManifest).Hash
 # Проверка full ZIP отдельно от обоих delta apply: восстановленные bytes и атрибуты.
 $fullRoot = Join-Path $WorkDirectory 'full-roundtrip'
 Expand-S7Full $zip $fullRoot $target
@@ -63,16 +64,13 @@ try {
         $base = $bases[$index]
         $assetName = if ($index -eq 0) { 'CashPrediction.cpdelta' } else { "CashPrediction.from-$($base.releaseNumber).cpdelta" }
         $jobs += Start-Job -Name "S7-delta-$($base.releaseNumber)" -ScriptBlock {
-            param($library, $java, $toolArguments, $base, $targetRoot, $seed, $zip, $patch, $work, $manifestArguments)
+            param($library, $java, $toolArguments, $base, $targetRoot, $seed, $zip, $patch, $work, $manifestArguments, $seedSha256)
             $ErrorActionPreference = 'Stop'
             . $library
             $null = New-Item -ItemType Directory -Path $work
-            $baseInventoryPath = Join-Path $work 'base-inventory.json'
-            Invoke-S7Tool $java $toolArguments @('inventory', '--root', $base.root, '--out', $baseInventoryPath) | Out-Null
-            if ((Read-S7Json $baseInventoryPath).treeSha256 -cne $base.treeSha256) { throw 'S7_BASE_CHANGED' }
-            Invoke-S7Tool $java $toolArguments @('create', '--base', $base.root,
-                '--base-release', [string]$base.releaseNumber, '--base-commit', $base.commitSha,
-                '--target', $targetRoot, '--manifest', $seed, '--out', $patch) | Out-Null
+            if (-not (New-S7VerifiedDelta $java $toolArguments $base $targetRoot $seed $seedSha256 $patch $work $manifestArguments)) {
+                return 'S7_DELTA_LIMIT_SKIPPED'
+            }
             $descriptorPath = Join-Path $work 'descriptor.json'
             Write-S7Json $descriptorPath ([ordered]@{
                 algorithm = 'cashprediction-tree-delta'; algorithmVersion = 1
@@ -99,16 +97,28 @@ try {
             return $descriptorPath
         } -ArgumentList (Join-Path $PSScriptRoot 'S7-Release.ps1'), $java, $toolArguments, $base,
             $ImageRoot, $seedManifest, $zip, (Join-Path $ArtifactDirectory $assetName),
-            (Join-Path $WorkDirectory "delta-$index"), $manifestArguments
+            (Join-Path $WorkDirectory "delta-$index"), $manifestArguments, $seedSha256
     }
     $descriptors = @()
     if ($jobs.Count) { Wait-Job -Job $jobs | Out-Null }
     foreach ($job in $jobs) {
         $result = @(Receive-Job -Job $job -ErrorAction Stop)
+        if ($job.State -eq 'Completed' -and $result.Count -eq 1 -and $result[0] -ceq 'S7_DELTA_LIMIT_SKIPPED') {
+            continue
+        }
         if ($job.State -ne 'Completed' -or $result.Count -ne 1 -or -not (Test-Path -LiteralPath $result[0] -PathType Leaf)) {
             throw "S7_DELTA_JOB_FAILED: $($job.Name)"
         }
         $descriptors += [string]$result[0]
+    }
+    # Сохраняем все пригодные direct дельты, даже если другая база превысила лимит.
+    # Первое canonical имя получает ближайшая пригодная база; bytes/size/SHA не меняются.
+    # Обе verified базы остаются в state для retention, независимо от deltaPatches.
+    $descriptors = @($descriptors | Sort-Object { (Read-S7Json $_).baseReleaseNumber } -Descending)
+    for ($index = 0; $index -lt $descriptors.Count; $index++) {
+        $entry = Read-S7Json $descriptors[$index]
+        $name = if ($index -eq 0) { 'CashPrediction.cpdelta' } else { "CashPrediction.from-$($entry.baseReleaseNumber).cpdelta" }
+        Set-S7DeltaAssetName $ArtifactDirectory $descriptors[$index] $name
     }
     $finalArguments = $manifestArguments + @('--out', (Join-Path $ArtifactDirectory 'update.json'))
     foreach ($descriptor in $descriptors) { $finalArguments += @('--delta', $descriptor) }

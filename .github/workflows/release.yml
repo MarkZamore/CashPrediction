@@ -1,7 +1,7 @@
 name: Сборка и публикация CashPrediction
 
-# Каждый push в main: тесты, портативная сборка с тремя exe, проверка готовой папки
-# и публикация zip в релиз latest. Пользователь всегда скачивает по одной и той же ссылке.
+# Изменения продукта в main: полная приёмка и публикация свежей сборки latest.
+# Docs/test-only изменения выполняют затронутые проверки, не перепубликуя старый executable.
 on:
   push:
     branches:
@@ -29,7 +29,26 @@ jobs:
           # неглубокий клон насчитал бы один.
           fetch-depth: 0
 
+      - name: Resolve published baseline
+        id: baseline
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $full = '${{ github.event_name }}' -eq 'workflow_dispatch'
+          & .github/scripts/Resolve-CiBaseline.ps1 -Mode Release -ForceFull:$full -GithubOutput $env:GITHUB_OUTPUT
+
+      - name: Plan affected checks
+        id: impact
+        shell: pwsh
+        run: |
+          & .github/scripts/Test-CiImpact.ps1
+          & .github/scripts/Test-CiWorkflowImpact.ps1
+          $full = '${{ steps.baseline.outputs.force_full }}' -ne 'false'
+          & .github/scripts/Get-CiImpact.ps1 -BaseSha '${{ steps.baseline.outputs.base_sha }}' -ForceFull:$full -GithubOutput $env:GITHUB_OUTPUT
+
       - name: Setup Java
+        if: steps.impact.outputs.release == 'true' || steps.impact.outputs.unitModules != '' || steps.impact.outputs.ui == 'true' || steps.impact.outputs.e2e == 'true' || steps.impact.outputs.portable == 'true'
         uses: actions/setup-java@v5
         with:
           # Сборка Microsoft содержит jmods, из которых jlink собирает встроенную Java.
@@ -38,6 +57,7 @@ jobs:
           cache: maven
 
       - name: Prepare
+        if: steps.impact.outputs.release == 'true'
         shell: pwsh
         run: |
           if ($env:GITHUB_REF -cne 'refs/heads/main') { throw 'RELEASE_MAIN_ONLY' }
@@ -63,6 +83,7 @@ jobs:
           Write-Host "Версия ${releaseNumber}: $($match.Groups['line'].Value.Trim())"
 
       - name: Build and test
+        if: steps.impact.outputs.release == 'true'
         shell: pwsh
         run: |
           # Аудит документов обязателен перед сборкой и публикацией портативной папки.
@@ -76,11 +97,16 @@ jobs:
           & .github/scripts/Test-GateReportExport.ps1
           & .github/scripts/Test-ReleaseSafety.ps1
           & .github/scripts/Test-ReleaseMockScopeFixtures.ps1 -ReceiptPath (Join-Path $env:RUNNER_TEMP ('release-mock-scope-' + [guid]::NewGuid() + '.json'))
+          $expectedErrorReceipt = Join-Path $env:RUNNER_TEMP ('release-expected-errors-' + [guid]::NewGuid() + '.json')
+          & pwsh -NoProfile -File .github/scripts/Test-ReleaseExpectedErrorFixtures.ps1 -ReceiptPath $expectedErrorReceipt
+          if ($LASTEXITCODE -ne 0) { throw 'Expected-error fixtures failed.' }
           & .github/scripts/Test-ReleaseIdentityGuard.ps1
           & .github/scripts/Test-S7Release.ps1
           # Общий каталог иконок проверяется до GUI: ошибки источников не маскируются дампами.
           & dist/scripts/Test-Icon-Source.ps1
           & dist/scripts/Test-Icon-SourceFixtures.ps1
+          & pwsh -NoProfile -File dist/scripts/Test-FinalDeliveryFixtures.ps1
+          if ($LASTEXITCODE -ne 0) { throw 'Final delivery guard fixtures failed.' }
           # Модули и все тесты, затем портативная папка: jlink + jpackage + zip.
           # Номер релиза и коммит попадают в окно «О программе» и в свойства exe.
           $common = @('-B', '-ntp', "-Dapp.release=$env:RELEASE_NUMBER", "-Dapp.commit=${{ github.sha }}")
@@ -89,7 +115,31 @@ jobs:
           & mvn @common -Pdist -pl dist package
           if ($LASTEXITCODE -ne 0) { throw "Портативная сборка не собралась." }
 
+      - name: Non-release affected tests
+        if: steps.impact.outputs.release != 'true' && (steps.impact.outputs.unitModules != '' || steps.impact.outputs.ui == 'true' || steps.impact.outputs.e2e == 'true' || steps.impact.outputs.portable == 'true')
+        shell: pwsh
+        run: |
+          $modules = '${{ steps.impact.outputs.unitModules }}'
+          if ($modules -ne 'repository-doc-audits' -or '${{ steps.impact.outputs.ui }}' -eq 'true' -or
+              '${{ steps.impact.outputs.e2e }}' -eq 'true' -or '${{ steps.impact.outputs.portable }}' -eq 'true') {
+            & mvn -B -ntp -DskipTests install
+            if ($LASTEXITCODE -ne 0) { throw 'Compilation failed.' }
+          }
+          if ($modules -ne '') {
+            & mvn -B -ntp -pl $modules test
+            if ($LASTEXITCODE -ne 0) { throw 'Affected tests failed.' }
+          }
+
+      - name: Non-release portable test image
+        if: steps.impact.outputs.release != 'true' && steps.impact.outputs.portable == 'true'
+        shell: pwsh
+        run: |
+          # Test-only изменения не публикуют релиз, но проверяют свежий portable image.
+          & mvn -B -ntp -Pdist -pl dist package
+          if ($LASTEXITCODE -ne 0) { throw 'Portable test build failed.' }
+
       - name: Actual UI gates (S4, blocking)
+        if: steps.impact.outputs.release == 'true' || steps.impact.outputs.ui == 'true'
         id: ui_gates
         timeout-minutes: 90
         shell: pwsh
@@ -97,6 +147,7 @@ jobs:
           & .github/scripts/Invoke-UiGates.ps1 -Mode UI
 
       - name: Actual recovery gates (S4, blocking)
+        if: steps.impact.outputs.release == 'true' || steps.impact.outputs.e2e == 'true'
         id: recovery_gates
         timeout-minutes: 60
         shell: pwsh
@@ -104,14 +155,20 @@ jobs:
           & .github/scripts/Invoke-UiGates.ps1 -Mode E2E
 
       - name: Complete UI and E2E profile lifecycles
+        if: steps.impact.outputs.release == 'true' || steps.impact.outputs.ui == 'true' || steps.impact.outputs.e2e == 'true'
         timeout-minutes: 30
         shell: pwsh
         run: |
           # Полный lifecycle не подменяет реальные UI/E2E-доказательства предыдущих шагов.
           # Каждый step запускается в новом процессе: параметры версии задаются здесь заново.
-          $common = @('-B', '-ntp', "-Dapp.release=$env:RELEASE_NUMBER", "-Dapp.commit=${{ github.sha }}")
+          $version = if ($env:RELEASE_NUMBER) { $env:RELEASE_NUMBER } else { '0' }
+          $common = @('-B', '-ntp', "-Dapp.release=$version", "-Dapp.commit=${{ github.sha }}")
           foreach ($profile in 'ui-tests', 'e2e') {
-            & mvn @common "-P$profile" verify
+            if ('${{ steps.impact.outputs.release }}' -ne 'true') {
+              $enabled = if ($profile -eq 'ui-tests') { '${{ steps.impact.outputs.ui }}' } else { '${{ steps.impact.outputs.e2e }}' }
+              if ($enabled -ne 'true') { continue }
+            }
+            & mvn @common "-P$profile" -pl ui-parity verify
             if ($LASTEXITCODE -ne 0) { throw "Lifecycle $profile не прошёл." }
           }
 
@@ -125,6 +182,7 @@ jobs:
           if-no-files-found: error
 
       - name: Verify portable build
+        if: steps.impact.outputs.release == 'true' || steps.impact.outputs.portable == 'true'
         timeout-minutes: 30
         shell: pwsh
         run: |
@@ -148,6 +206,7 @@ jobs:
 
 
       - name: Prepare S7 update payloads
+        if: steps.impact.outputs.release == 'true'
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
@@ -174,6 +233,7 @@ jobs:
             -WorkDirectory (Join-Path $env:RUNNER_TEMP 's7-prepare') -Note $env:RELEASE_NOTE
 
       - name: S7 release acceptance gate
+        if: steps.impact.outputs.release == 'true'
         shell: pwsh
         env:
           S7_APPROVED_SHA: ${{ vars.S7_APPROVED_SHA }}
@@ -182,6 +242,7 @@ jobs:
           if ($env:S7_APPROVED_SHA -cne '${{ github.sha }}') { throw 'S7_RELEASE_MATRIX_NOT_APPROVED' }
 
       - name: Verify release Git and embedded AppInfo
+        if: steps.impact.outputs.release == 'true'
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
@@ -286,6 +347,7 @@ jobs:
           } finally { $zip.Dispose() }
 
       - name: Publish latest release
+        if: steps.impact.outputs.release == 'true'
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}

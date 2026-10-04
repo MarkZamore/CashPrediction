@@ -21,6 +21,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import ru.cashprediction.core.io.PlanRepository;
+import ru.cashprediction.core.io.AtomicFiles;
 import ru.cashprediction.core.markdown.MarkdownParseException;
 import ru.cashprediction.core.markdown.PlanMarkdownWriter;
 import ru.cashprediction.core.model.Plan;
@@ -34,12 +35,29 @@ import ru.cashprediction.core.text.Texts;
  */
 public final class FilePlanStorage implements PlanStorage {
     private final PlanRepository repository;
+    private final Runnable beforeMutation;
 
-    /** Совместимый адаптер для старых изолированных контекстов; политика путей определяется папкой файла. */
-    public FilePlanStorage() { repository = null; }
+    /** Адаптер только для чтения; запись требует явно настроенного корня CashMemory. */
+    public FilePlanStorage() { this(null); }
 
     /** @param cashMemory корневая CashMemory для прежней политики защищённых файлов */
-    public FilePlanStorage(Path cashMemory) { repository = new PlanRepository(cashMemory); }
+    public FilePlanStorage(Path cashMemory) { this(cashMemory, () -> { }); }
+
+    /** Синхронный барьер теста после observe, без подмены настоящих файловых операций. */
+    FilePlanStorage(Path cashMemory, Runnable beforeMutation) {
+        repository = cashMemory == null ? null : new PlanRepository(cashMemory);
+        this.beforeMutation = Objects.requireNonNull(beforeMutation, "beforeMutation");
+    }
+
+    /**
+     * Проверяет scope записи, не запрещая version/read внешнего Markdown.
+     * @param file предполагаемая цель @return разрешена ли application-managed запись
+     */
+    public boolean canWrite(Path file) {
+        if (repository == null) return false;
+        try { AtomicFiles.requireWriteScope(repository.dir(), file); return true; }
+        catch (IOException | RuntimeException denied) { return false; }
+    }
 
     /** @param file выбранный интерфейсом путь @return непрозрачная ссылка для операций хранения */
     public static Reference reference(Path file) { return new Reference(encode(file)); }
@@ -103,11 +121,18 @@ public final class FilePlanStorage implements PlanStorage {
         Objects.requireNonNull(expectedVersion, "expectedVersion");
         try {
             Path file = path(reference);
+            PlanRepository destination = writableRepository(file);
             // Считаем версию именно записываемого текста; последующая внешняя правка не станет нашей меткой.
             byte[] contents = PlanMarkdownWriter.write(plan).getBytes(StandardCharsets.UTF_8);
             if (!expectedVersion.equals(observe(file))) return changed();
             requireWritableTarget(file);
-            repository(file).save(plan, file);
+            beforeMutation.run();
+            try {
+                destination.save(plan, file, !Version.ABSENT.equals(expectedVersion), () -> checkVersion(file, expectedVersion));
+            } catch (FileAlreadyExistsException occupied) {
+                if (file.toAbsolutePath().toString().equals(occupied.getFile())) return changed();
+                throw occupied;
+            }
             return Result.success(new Stored(reference, versionOf(Files.readAttributes(file, BasicFileAttributes.class), digest(contents))));
         } catch (IOException | RuntimeException failure) { return failed(failure); }
     }
@@ -119,11 +144,13 @@ public final class FilePlanStorage implements PlanStorage {
         Path target = null;
         try {
             Path file = path(reference);
+            PlanRepository destination = writableRepository(file);
             Version before = observe(file);
             if (Version.ABSENT.equals(before)) return failure(Code.MISSING, Conflict.NONE, "");
             if (!expectedVersion.equals(before)) return changed();
             target = renameTarget(file, name);
-            Path renamed = repository(file).rename(file, name);
+            beforeMutation.run();
+            Path renamed = destination.rename(file, name, () -> checkVersion(file, expectedVersion));
             return Result.success(new Stored(reference(renamed), observe(renamed)));
         } catch (IOException | RuntimeException failure) {
             // Только занятое итоговое имя является бизнес-конфликтом, не родитель или временный файл.
@@ -138,6 +165,20 @@ public final class FilePlanStorage implements PlanStorage {
     /** Возвращает прежний репозиторий с политикой защищённых файлов приложения. */
     private PlanRepository repository(Path file) {
         return repository == null ? new PlanRepository(file.toAbsolutePath().getParent()) : repository;
+    }
+
+    /** Отказывает до создания staging, если экземпляр не связан с CashMemory либо цель вне неё. */
+    private PlanRepository writableRepository(Path file) throws IOException {
+        if (repository == null) throw new IOException("WRITE_SCOPE_REQUIRED");
+        AtomicFiles.requireWriteScope(repository.dir(), file);
+        return repository;
+    }
+
+    /** Повторяет hash/stamp guard после staging и перед каждым publish/retry. */
+    private static void checkVersion(Path file, Version expectedVersion) throws IOException {
+        if (!expectedVersion.equals(observe(file))) throw new PlanStorageException(
+                new Problem(Code.CONFLICT, Conflict.VERSION_CHANGED, ""));
+        requireWritableTarget(file);
     }
 
     /** Наблюдает и метку, и содержимое: сохранение старой метки редактором не скрывает изменение. */
@@ -226,6 +267,7 @@ public final class FilePlanStorage implements PlanStorage {
 
     /** Создаёт структурированный отказ из существующего исключения адаптера. */
     private static <T> Result<T> failed(Exception failure) {
+        if (failure instanceof PlanRepository.VersionConflict) return changed();
         if (failure instanceof PlanStorageException storage) return Result.failure(storage.problem());
         if (failure instanceof UncheckedIOException unchecked) return failed(unchecked.getCause());
         Code code = failure instanceof NoSuchFileException ? Code.MISSING

@@ -110,11 +110,23 @@ public final class RegistrySessionStore implements SessionStore {
     private final String client;
     private final JsonSnapshotCodec codec = new JsonSnapshotCodec();
 
+    /** Durable журнал прежнего снимка до первой мутации основных кусков. */
+    private static final String PENDING = "transaction.pending";
+    private static final String BACKUP = "backup.";
+
     /** Путь CashMemory для читаемого значения {@link #KEY_CASHMEMORY_PATH}; {@code null} — не писать. */
     private final String cashMemoryPath;
 
     /** Ошибка последней «тихой» операции; {@code null} — ошибок нет. */
     private volatile String lastError;
+    private Path quarantine;
+    private boolean recoveryCommitted;
+    private SessionMarker deferredMarker;
+
+    /** Сообщение о verified карантине; успех save остаётся успехом. */
+    public synchronized Optional<String> recoveryNotice() {
+        return quarantine == null || !recoveryCommitted ? Optional.empty() : Optional.of(Texts.get("session.quarantine.recovered", quarantine));
+    }
 
     /**
      * Создаёт хранилище поверх бэкенда.
@@ -393,6 +405,10 @@ public final class RegistrySessionStore implements SessionStore {
         }
         try {
             // Только ключи маркера: куски снимка не трогаем, пользователь ещё может восстановиться из них.
+            try { requireReadableSnapshot(); }
+            catch (SessionStoreException failure) {
+                deferredMarker = marker; lastError = failure.getMessage(); return;
+            }
             backend.put(KEY_SCHEMA, String.valueOf(SnapshotSchema.CURRENT));
             backend.put(KEY_STATE, marker.state());
             backend.put(KEY_PID, String.valueOf(marker.pid()));
@@ -421,6 +437,7 @@ public final class RegistrySessionStore implements SessionStore {
         }
         try {
             // Без маркера (сеанс не начинался) закрывать нечего: одиночный state=closed был бы неполным маркером.
+            requireReadableSnapshot();
             if (backend.get(KEY_STATE) == null) {
                 return;
             }
@@ -460,10 +477,13 @@ public final class RegistrySessionStore implements SessionStore {
      * по байтам UTF-8 полного JSON. Удаляет устаревшие куски и дубли окон, после чего
      * записывает {@code snapshot.time} последним как маркер фиксации и сбрасывает изменения.
      * После сброса проверяет доступность и обратным чтением только маркер фиксации.
-     * Это протокол обнаружения неполной записи, а не транзакция: старый снимок не сохраняется
-     * для отката; без маркера загрузка вернёт пусто, с маркером проверит куски, длину и CRC.
-     * Отказ после записи маркера может оставить новый снимок даже при исключении.
+     * До первой мутации flushed backup сохраняет прежний полный снимок; pending разрешает
+     * читать его после прерванной записи. После commit проверяются все primary куски и CRC.
+     * Это логическое восстановление old-or-new, не общая транзакция реестра или writer lock.
+     * Отказ после полного commit может оставить новый снимок даже при исключении.
      * Успех сбрасывает {@link #lastError()}, ошибки сохранения передаются исключением.
+     * Повреждённые или незавершённые прежние куски заменяются только после verified карантина
+     * логических значений узла внутри CashMemory; healthy stores не очищаются.
      * @param snapshot снимок, не {@code null}
      * @throws SessionStoreException если бэкенд недоступен, запись или проверка фиксации не удалась
      */
@@ -471,9 +491,17 @@ public final class RegistrySessionStore implements SessionStore {
     public synchronized void save(SessionSnapshot snapshot) throws SessionStoreException {
         Objects.requireNonNull(snapshot, "snapshot");
         requireAvailable();
+        try {
+            requireReadableSnapshot();
+        } catch (SessionStoreException e) {
+            lastError = e.getMessage();
+            if (e.code() != SessionStoreException.Code.CORRUPT) throw e;
+            recoverBeforeSave(e);
+        }
         String json = codec.encode(snapshot);
         List<String> chunks = split(json);
         try {
+            prepareBackup();
             // 1. Снимаем маркер фиксации: пока идёт запись, снимок считается отсутствующим.
             backend.remove(KEY_SNAPSHOT_TIME);
             // 2. Читаемые дубли для regedit.
@@ -500,12 +528,68 @@ public final class RegistrySessionStore implements SessionStore {
             // 5. Маркер фиксации — строго последним.
             backend.put(KEY_SNAPSHOT_TIME, snapshot.savedAt().toString());
             backend.flush();
+        } catch (SessionStoreException e) {
+            lastError = e.getMessage();
+            throw e;
         } catch (RuntimeException e) {
-            throw new SessionStoreException(Texts.get("session.registry.writeFailed", e.getMessage()), e);
+            lastError = Texts.get("session.registry.writeFailed", e.getMessage());
+            throw new SessionStoreException(SessionStoreException.Code.IO_ERROR, lastError, e);
         }
-        requireAvailable();
-        verifyWritten(KEY_SNAPSHOT_TIME, snapshot.savedAt().toString());
+        try {
+            requireAvailable();
+            verifyWritten(KEY_SNAPSHOT_TIME, snapshot.savedAt().toString());
+            if (!loadPrimary().orElseThrow().equals(snapshot)) throw corrupted(Texts.get("session.registry.corrupt.crc"));
+            // Новый полный снимок уже flushed; поздний отказ cleanup не отменяет commit.
+            backend.remove(PENDING);
+            backend.flush();
+            for (String key : backend.keys()) if (key.startsWith(BACKUP)) backend.remove(key);
+            backend.flush();
+        } catch (SessionStoreException e) {
+            lastError = e.getMessage();
+            throw e;
+        } catch (RuntimeException e) {
+            lastError = Texts.get("session.registry.writeFailed", e.getMessage());
+            throw new SessionStoreException(SessionStoreException.Code.IO_ERROR, lastError, e);
+        }
         lastError = null;
+        if (deferredMarker != null) {
+            SessionMarker marker = deferredMarker; deferredMarker = null; markDirty(marker);
+            if (lastError != null) throw new SessionStoreException(SessionStoreException.Code.IO_ERROR, lastError);
+        }
+        recoveryCommitted = quarantine != null;
+    }
+
+    /** Отличает отсутствие snapshot от незавершённых primary chunks. */
+    private void requireReadableSnapshot() throws SessionStoreException {
+        if (load().isEmpty() && backend.keys().stream().anyMatch(key -> key.startsWith("snapshot.") || key.startsWith(BACKUP) || key.equals(PENDING)))
+            throw corrupted(Texts.get("session.registry.corrupt.noKey", KEY_SNAPSHOT_TIME));
+    }
+
+    /** Архивирует весь логический узел; удаляет только повреждённые snapshot/journal keys этого store. */
+    private void recoverBeforeSave(SessionStoreException failure) throws SessionStoreException {
+        try {
+            if (cashMemoryPath == null) throw new java.io.IOException("CASHMEMORY_REQUIRED");
+            var evidence = CorruptStoreQuarantine.registry(backend);
+            String source = backend instanceof PreferencesRegistryBackend prefs ? prefs.nodePath() : id();
+            Path archived = CorruptStoreQuarantine.preserve(Path.of(cashMemoryPath), id(), source, failure.getMessage(), evidence);
+            CorruptStoreQuarantine.unchanged(evidence, CorruptStoreQuarantine.registry(backend));
+            quarantine = archived; recoveryCommitted = false;
+        } catch (java.io.IOException error) {
+            lastError = Texts.get("session.quarantine.failed", error.getMessage());
+            throw new SessionStoreException(SessionStoreException.Code.IO_ERROR, lastError, error);
+        }
+        try {
+            for (String key : backend.keys())
+                if (key.startsWith("snapshot.") || key.startsWith(BACKUP) || key.equals(PENDING)) backend.remove(key);
+            backend.flush();
+            requireAvailable();
+            if (backend.keys().stream().anyMatch(key -> key.startsWith("snapshot.") || key.startsWith(BACKUP) || key.equals(PENDING)))
+                throw new java.io.IOException("REGISTRY_RESET_READBACK");
+        } catch (SessionStoreException | java.io.IOException | RuntimeException error) {
+            lastError = Texts.get("session.quarantine.writeFailedAfterArchive", quarantine, error.getMessage());
+            SessionStoreException.Code code = error instanceof SessionStoreException typed ? typed.code() : SessionStoreException.Code.IO_ERROR;
+            throw new SessionStoreException(code, lastError, error);
+        }
     }
 
     /**
@@ -519,6 +603,22 @@ public final class RegistrySessionStore implements SessionStore {
      */
     @Override
     public synchronized Optional<SessionSnapshot> load() throws SessionStoreException {
+        SessionStoreException failure = null;
+        try {
+            Optional<SessionSnapshot> primary = loadPrimary();
+            if (primary.isPresent() || backend.get(PENDING) == null) return primary;
+        } catch (SessionStoreException e) {
+            if (backend.get(PENDING) == null) throw e;
+            failure = e;
+        }
+        Optional<SessionSnapshot> previous = new RegistrySessionStore(new PrefixBackend(backend), client).loadPrimary();
+        if (previous.isPresent()) return previous;
+        if (failure != null) throw failure;
+        throw corrupted(Texts.get("session.registry.corrupt.noKey", BACKUP + KEY_SNAPSHOT_TIME));
+    }
+
+    /** Проверяет один полный набор кусков; журнал не подменяет CRC и строгий codec. */
+    private Optional<SessionSnapshot> loadPrimary() throws SessionStoreException {
         requireAvailable();
         String time = backend.get(KEY_SNAPSHOT_TIME);
         if (time == null) {
@@ -567,8 +667,53 @@ public final class RegistrySessionStore implements SessionStore {
         try {
             return Optional.of(codec.decode(json));
         } catch (SnapshotFormatException e) {
-            throw new SessionStoreException(Texts.get("session.registry.corrupted", e.getMessage()), e);
+            throw new SessionStoreException(SessionStoreException.Code.CORRUPT, Texts.get("session.registry.corrupted", e.getMessage()), e);
         }
+    }
+
+    /** Сохраняет полный прежний снимок и flush журнала до удаления маркера primary. */
+    private void prepareBackup() throws SessionStoreException {
+        if (backend.get(PENDING) != null) return; // При повторе после сбоя исходный backup не перезаписывается.
+        Optional<SessionSnapshot> previous = loadPrimary();
+        if (previous.isEmpty()) return;
+        String json = codec.encode(previous.get());
+        List<String> chunks = split(json);
+        for (String key : backend.keys()) if (key.startsWith(BACKUP)) backend.remove(key);
+        for (int i = 0; i < chunks.size(); i++) backend.put(BACKUP + "snapshot." + i, chunks.get(i));
+        backend.put(BACKUP + KEY_SNAPSHOT_COUNT, String.valueOf(chunks.size()));
+        backend.put(BACKUP + KEY_SNAPSHOT_LENGTH, String.valueOf(json.length()));
+        backend.put(BACKUP + KEY_SNAPSHOT_CRC, crc32(json));
+        backend.put(BACKUP + KEY_SNAPSHOT_TIME, previous.get().savedAt().toString());
+        backend.flush();
+        verifyWritten(BACKUP + KEY_SNAPSHOT_TIME, previous.get().savedAt().toString());
+        // Прочитать все persisted backup куски обязательно, одной проверки time недостаточно.
+        if (!new RegistrySessionStore(new PrefixBackend(backend), client).loadPrimary().orElseThrow().equals(previous.get())) {
+            throw corrupted(Texts.get("session.registry.corrupt.crc"));
+        }
+        backend.put(PENDING, "1");
+        backend.flush();
+        verifyWritten(PENDING, "1");
+    }
+
+    /** Read-only представление backup; пишет только внешний transaction writer. */
+    private static final class PrefixBackend implements RegistryBackend {
+        private final RegistryBackend delegate;
+        /** Сохраняет тот же actual backend без собственного кэша. */
+        PrefixBackend(RegistryBackend delegate) { this.delegate = delegate; }
+        /** Читает persisted backup ключ. */
+        @Override public String get(String key) { return delegate.get(BACKUP + key); }
+        /** Запись через представление запрещена. */
+        @Override public void put(String key, String value) { throw new UnsupportedOperationException(); }
+        /** Удаление через представление запрещено. */
+        @Override public void remove(String key) { throw new UnsupportedOperationException(); }
+        /** Возвращает только backup ключи без префикса. */
+        @Override public List<String> keys() { return delegate.keys().stream().filter(k -> k.startsWith(BACKUP)).map(k -> k.substring(BACKUP.length())).toList(); }
+        /** Не сбрасывает read-only представление. */
+        @Override public void flush() { throw new UnsupportedOperationException(); }
+        /** Использует actual состояние доступности. */
+        @Override public boolean isAvailable() { return delegate.isAvailable(); }
+        /** Возвращает actual причину отказа. */
+        @Override public String unavailableReason() { return delegate.unavailableReason(); }
     }
 
     /**
@@ -577,6 +722,10 @@ public final class RegistrySessionStore implements SessionStore {
      */
     @Override
     public Optional<Instant> lastSavedAt() {
+        if (backend.get(PENDING) != null) {
+            try { return load().map(SessionSnapshot::savedAt); }
+            catch (SessionStoreException e) { return Optional.empty(); }
+        }
         String time = backend.get(KEY_SNAPSHOT_TIME);
         if (time == null) {
             return Optional.empty();
@@ -692,7 +841,7 @@ public final class RegistrySessionStore implements SessionStore {
 
     private void requireAvailable() throws SessionStoreException {
         if (!backend.isAvailable()) {
-            throw new SessionStoreException(Texts.get("session.registry.unavailable", backend.unavailableReason()));
+            throw new SessionStoreException(SessionStoreException.Code.UNAVAILABLE, Texts.get("session.registry.unavailable", backend.unavailableReason()));
         }
     }
 
@@ -703,7 +852,7 @@ public final class RegistrySessionStore implements SessionStore {
      */
     private void verifyWritten(String key, String expected) throws SessionStoreException {
         if (!expected.equals(backend.get(key))) {
-            throw new SessionStoreException(Texts.get("session.registry.notPersisted", "HKCU\\Software\\JavaSoft\\Prefs"));
+            throw new SessionStoreException(SessionStoreException.Code.IO_ERROR, Texts.get("session.registry.notPersisted", "HKCU\\Software\\JavaSoft\\Prefs"));
         }
     }
 
@@ -714,6 +863,6 @@ public final class RegistrySessionStore implements SessionStore {
      * @return исключение с готовым сообщением
      */
     private static SessionStoreException corrupted(String detail) {
-        return new SessionStoreException(Texts.get("session.registry.corrupted", detail));
+        return new SessionStoreException(SessionStoreException.Code.CORRUPT, Texts.get("session.registry.corrupted", detail));
     }
 }

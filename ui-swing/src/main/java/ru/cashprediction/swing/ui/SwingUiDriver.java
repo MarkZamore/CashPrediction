@@ -60,6 +60,14 @@ public final class SwingUiDriver implements UiDriver {
         });
         if (neutral != null) { robot.mouseMove(neutral.x, neutral.y); robot.waitForIdle(); }
         if (command instanceof SelfTestCommand.Key key) { key(key.chord()); return; }
+        if (command instanceof SelfTestCommand.FilterType filter) {
+            JTextField target = edt(() -> port.frame.toolbar.filter());
+            // requestFocusInWindow - запрос, не факт: следующий Enter должен идти в живое поле, не старую таблицу.
+            awaitFocus(target);
+            edt(() -> { target.setText(filter.text()); return null; });
+            awaitFocus(target);
+            return;
+        }
         if (command instanceof SelfTestCommand.Field field) {
             typeCommitted(edt(() -> field(field.windowTitle(), field.label())), field.text()); return;
         }
@@ -84,7 +92,6 @@ public final class SwingUiDriver implements UiDriver {
                     if (filter.key().equals("pastExpanded")) { JComponent group = null; var table = port.frame.table.adapter.source(); for (int i = 0; i < table.rowCount(); i++) if (table.row(i).kind() == ru.cashprediction.core.ui.view.table.RowKind.PAST_HEADER) { String text = table.row(i).cells().getFirst(); boolean expanded = text.startsWith("▾"); if (expanded != filter.value()) rowMouse(table.row(i).rowId(), "date", 1); break; } }
                     else { JComponent item = find(port.frame.menus, id); if (!(item instanceof JCheckBoxMenuItem check)) throw new IllegalArgumentException("Filter " + filter.key()); if (check.isSelected() != filter.value()) press(check); }
                 }
-                case SelfTestCommand.FilterType filter -> { port.frame.toolbar.filter().requestFocusInWindow(); port.frame.toolbar.filter().setText(filter.text()); }
                 case SelfTestCommand.Select select -> select(select.rowId());
                 case SelfTestCommand.DoubleClick click -> rowMouse(click.rowId(), click.columnId(), 2);
                 case SelfTestCommand.RowClick click -> rowMouse(click.rowId(), click.columnId(), 1);

@@ -24,12 +24,12 @@ final class ChooserFormJsonTest {
         try {
             controller.start();
             port.forms().getLast().session().closeRequested();
-            var existing = root.resolve("existing.md");
+            var existing = environment.cashMemory().resolve("existing.md");
             java.nio.file.Files.writeString(existing, "fixture");
             port.chooseFileResult(existing);
             var selected = new java.util.concurrent.atomic.AtomicReference<java.util.Optional<Path>>();
             controller.choosers().chooseFile(new FileChooserSpec(FileChooserSpec.Purpose.SAVE_PLAN_AS,
-                    FileChooserSpec.Mode.SAVE, "Save", "Plans", List.of("md"), root, "existing.md"), selected::set);
+                    FileChooserSpec.Mode.SAVE, "Save", "Plans", List.of("md"), environment.cashMemory(), "existing.md"), selected::set);
             port.pump();
             var confirmation = port.pendingAlerts().getLast();
             assertEquals("replaceFile", confirmation.spec().purpose());

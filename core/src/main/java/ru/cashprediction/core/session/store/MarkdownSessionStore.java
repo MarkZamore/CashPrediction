@@ -24,12 +24,14 @@ import ru.cashprediction.core.text.Texts;
  *
  * <p>Текст несохранённого плана лежит в отдельном файле, чтобы {@code web-session.md} оставался
  * коротким и читаемым, а план — открывался в любом Markdown-редакторе как обычный план. Файл
- * плана пишется до файла сессии: файл сессии служит «фиксацией», и он никогда не ссылается на
- * ещё не записанный план. Если изменений нет, файл плана удаляется после записи файла сессии.</p>
+ * плана пишется до файла сессии: перед этим журнал сохраняет полный предыдущий снимок
+ * и hash ожидаемых bytes сессии. Если session commit не произошёл, load читает прежний
+ * inline план из журнала. Если изменений нет, sidecar удаляется после session commit.</p>
  *
  * <p>Остальная логика совпадает с {@link XmlSessionStore}: атомарная запись, {@link #markDirty}
  * сохраняет снимок, повреждённый файл даёт {@link SessionStoreException} при чтении и
- * перезаписывается следующим {@link #save}.</p>
+ * сохраняется в verified Markdown карантине до новой записи. Архив содержит session,
+ * sidecar и journal; отказ карантина запрещает мутацию исходных файлов.</p>
  *
  * <p>Класс потокобезопасен: все операции синхронизированы на экземпляре.</p>
  */
@@ -43,6 +45,8 @@ public final class MarkdownSessionStore implements SessionStore {
 
     private final Path sessionFile;
     private final Path planFile;
+    /** Полный прежний снимок и hash ожидаемого commit; только Markdown рядом с session. */
+    private final Path transactionFile;
     private final String client;
     private final MarkdownSnapshotCodec codec = new MarkdownSnapshotCodec();
 
@@ -52,6 +56,13 @@ public final class MarkdownSessionStore implements SessionStore {
     private boolean markerKnown;
     /** Ошибка последней «тихой» операции. */
     private String lastError;
+    private Path quarantine;
+    private boolean recoveryCommitted;
+
+    /** Предупреждение о подтверждённом сохранении corruption, не ошибка нового snapshot. */
+    public synchronized Optional<String> recoveryNotice() {
+        return quarantine == null || !recoveryCommitted ? Optional.empty() : Optional.of(Texts.get("session.quarantine.recovered", quarantine));
+    }
 
     /**
      * Создаёт хранилище.
@@ -63,6 +74,7 @@ public final class MarkdownSessionStore implements SessionStore {
     public MarkdownSessionStore(Path sessionFile, Path planFile, String client) {
         this.sessionFile = Objects.requireNonNull(sessionFile, "sessionFile");
         this.planFile = Objects.requireNonNull(planFile, "planFile");
+        this.transactionFile = sessionFile.resolveSibling(sessionFile.getFileName() + ".transaction.md");
         this.client = SnapshotSchema.requireClient(client);
     }
 
@@ -134,7 +146,7 @@ public final class MarkdownSessionStore implements SessionStore {
 
     /**
      * Запоминает маркер и перезаписывает документ с читаемым снимком и прежней ссылкой на план.
-     * Если старый документ не читается или повреждён, записывает только маркер.
+     * Если старый документ или его план не читается, сохраняет исходные файлы без изменений.
      * Файл плана не меняется; ошибка записи сохраняется в {@link #lastError()},
      * а новый маркер остаётся в памяти даже при неудаче.
      * @param newMarker маркер начавшегося сеанса, не {@code null}
@@ -175,31 +187,42 @@ public final class MarkdownSessionStore implements SessionStore {
      * Записывает снимок с текущим маркером: сначала несохранённый план, затем документ сессии.
      * Документ сессии фиксирует ссылку на уже записанный план; для чистого плана отдельный
      * файл удаляется после записи документа. Каждый файл заменяется через {@link AtomicFiles},
-     * с обычным перемещением при отсутствии поддержки атомарного; общей транзакции двух файлов нет.
-     * При неудаче записи сессии новый план может остаться рядом со старым документом,
-     * а ошибка удаления плана возможна уже после сохранения нового документа. Отката нет.
+     * с обычным перемещением при отсутствии поддержки атомарного; общей OS-транзакции файлов нет.
+     * Journal сохраняет previous snapshot до sidecar write и позволяет load выбирать целый
+     * old или committed new snapshot по hash сессии. Поздняя ошибка cleanup может быть после commit.
      * Успех сбрасывает {@link #lastError()}, ошибки ввода-вывода передаются исключением.
      * @param snapshot снимок, не {@code null}
-     * @throws SessionStoreException если запись файла или удаление ненужного плана не удалось
+     * @throws SessionStoreException если прежнее состояние не читается, запись или удаление не удалось
      */
     @Override
     public synchronized void save(SessionSnapshot snapshot) throws SessionStoreException {
         Objects.requireNonNull(snapshot, "snapshot");
         try {
+            boolean recovered = recoverBeforeSave();
             PlanState plan = snapshot.plan();
+            String text = codec.encodeDocument(new SessionDocument(client, currentMarker(), snapshot),
+                    plan.dirty() ? planFile.getFileName().toString() : null);
+            Optional<SessionSnapshot> previous = recovered ? Optional.empty() : load();
+            if (previous.isPresent()) {
+                String backup = codec.encodeDocument(new SessionDocument(client, currentMarker(), previous.get()), null);
+                AtomicFiles.writeString(transactionFile, sha256(text) + "\n" + backup);
+            }
             if (plan.dirty()) {
                 AtomicFiles.writeString(planFile, plan.markdown());
             }
-            String text = codec.encodeDocument(new SessionDocument(client, currentMarker(), snapshot),
-                    plan.dirty() ? planFile.getFileName().toString() : null);
             AtomicFiles.writeString(sessionFile, text);
             if (!plan.dirty()) {
                 Files.deleteIfExists(planFile);
             }
+            Files.deleteIfExists(transactionFile);
             lastError = null;
+            recoveryCommitted = quarantine != null;
+        } catch (SessionStoreException e) {
+            lastError = e.getMessage();
+            throw e;
         } catch (IOException e) {
-            throw new SessionStoreException(Texts.get("session.store.md.writeFailed", sessionFile.getFileName(),
-                    e.getMessage()), e);
+            lastError = Texts.get("session.store.md.writeFailed", sessionFile.getFileName(), e.getMessage());
+            throw new SessionStoreException(SessionStoreException.Code.IO_ERROR, lastError, e);
         }
     }
 
@@ -211,6 +234,22 @@ public final class MarkdownSessionStore implements SessionStore {
     @Override
     public synchronized Optional<SessionSnapshot> load() throws SessionStoreException {
         String text = readText();
+        if (Files.exists(transactionFile)) {
+            try {
+                String journal = AtomicFiles.readString(transactionFile);
+                int split = journal.indexOf('\n');
+                if (split != 64 || !journal.substring(0, split).matches("[0-9a-f]{64}")) {
+                    throw new SessionStoreException(SessionStoreException.Code.CORRUPT, Texts.get("session.store.md.readFailed", transactionFile.getFileName(), "SHA-256"));
+                }
+                if (text == null || !sha256(text).equals(journal.substring(0, split))) {
+                    SessionSnapshot previous = decode(journal.substring(split + 1)).snapshot();
+                    if (previous == null) throw new SessionStoreException(SessionStoreException.Code.CORRUPT, Texts.get("session.store.md.readFailed", transactionFile.getFileName(), "snapshot"));
+                    return Optional.of(previous);
+                }
+            } catch (IOException e) {
+                throw new SessionStoreException(SessionStoreException.Code.IO_ERROR, Texts.get("session.store.md.readFailed", transactionFile.getFileName(), e.getMessage()), e);
+            }
+        }
         if (text == null) {
             return Optional.empty();
         }
@@ -221,14 +260,14 @@ public final class MarkdownSessionStore implements SessionStore {
         }
         // Текст плана вынесен в отдельный файл: подставляем его в снимок.
         if (!Files.exists(planFile)) {
-            throw new SessionStoreException(Texts.get("session.store.md.planFileMissing", planFile.getFileName()));
+            throw new SessionStoreException(SessionStoreException.Code.CORRUPT, Texts.get("session.store.md.planFileMissing", planFile.getFileName()));
         }
         try {
             String markdown = AtomicFiles.readString(planFile);
             return Optional.of(new SessionSnapshot(snapshot.schemaVersion(), snapshot.savedAt(), snapshot.client(),
                     snapshot.main(), PlanState.dirty(markdown), snapshot.windows()));
         } catch (IOException e) {
-            throw new SessionStoreException(Texts.get("session.store.md.planFileReadFailed", planFile.getFileName(),
+            throw new SessionStoreException(SessionStoreException.Code.IO_ERROR, Texts.get("session.store.md.planFileReadFailed", planFile.getFileName(),
                     e.getMessage()), e);
         }
     }
@@ -252,6 +291,7 @@ public final class MarkdownSessionStore implements SessionStore {
         try {
             Files.deleteIfExists(sessionFile);
             Files.deleteIfExists(planFile);
+            Files.deleteIfExists(transactionFile);
             marker = null;
             markerKnown = true;
             lastError = null;
@@ -279,21 +319,55 @@ public final class MarkdownSessionStore implements SessionStore {
         String text = null;
         SessionSnapshot keep = null;
         try {
+            requireReadableBeforeReplacement();
             text = readText();
-            if (text != null) {
-                keep = codec.decodeDocument(text).snapshot();
-            }
-        } catch (SessionStoreException | SnapshotFormatException e) {
-            // Повреждённый файл: сохранить из него нечего.
-            keep = null;
+            keep = load().orElse(null);
+        } catch (SessionStoreException e) {
+            // Не превращаем отказ чтения в разрешение уничтожить пользовательские байты.
+            lastError = e.getMessage();
+            return;
         }
-        String external = keep != null && text != null ? MarkdownSnapshotCodec.externalPlanFile(text) : null;
+        String external = keep != null && text != null && !Files.exists(transactionFile) ? MarkdownSnapshotCodec.externalPlanFile(text) : null;
         try {
             AtomicFiles.writeString(sessionFile, codec.encodeDocument(new SessionDocument(client, newMarker, keep), external));
+            Files.deleteIfExists(transactionFile);
             lastError = null;
         } catch (IOException e) {
             lastError = Texts.get("session.store.md.writeFailed", sessionFile.getFileName(), e.getMessage());
         }
+    }
+
+    /** Проверяет также sidecar до первой записи; неисправное состояние требует явной очистки. */
+    private void requireReadableBeforeReplacement() throws SessionStoreException {
+        load();
+    }
+
+    /** Сохраняет все компоненты store до удаления broken journal и записи нового snapshot. */
+    private boolean recoverBeforeSave() throws SessionStoreException {
+        try { requireReadableBeforeReplacement(); return false; }
+        catch (SessionStoreException failure) {
+            if (failure.code() != SessionStoreException.Code.CORRUPT) throw failure;
+            try {
+                Path memory = sessionFile.toAbsolutePath().normalize().getParent();
+                var evidence = CorruptStoreQuarantine.files(memory, sessionFile, planFile, transactionFile);
+                Path archived = CorruptStoreQuarantine.preserve(memory, id(), sessionFile.toString(), failure.getMessage(), evidence);
+                CorruptStoreQuarantine.unchanged(evidence, CorruptStoreQuarantine.files(memory, sessionFile, planFile, transactionFile));
+                Files.deleteIfExists(transactionFile);
+                quarantine = archived; recoveryCommitted = false;
+                return true;
+            } catch (IOException error) {
+                lastError = Texts.get("session.quarantine.failed", error.getMessage());
+                throw new SessionStoreException(SessionStoreException.Code.IO_ERROR, lastError, error);
+            }
+        }
+    }
+
+    /** Привязывает journal к точным bytes нового session commit, не ко времени файла. */
+    private static String sha256(String text) {
+        try {
+            return java.util.HexFormat.of().formatHex(java.security.MessageDigest.getInstance("SHA-256")
+                    .digest(text.getBytes(java.nio.charset.StandardCharsets.UTF_8)));
+        } catch (java.security.NoSuchAlgorithmException e) { throw new IllegalStateException(e); }
     }
 
     private String readText() throws SessionStoreException {
@@ -303,7 +377,7 @@ public final class MarkdownSessionStore implements SessionStore {
         try {
             return AtomicFiles.readString(sessionFile);
         } catch (IOException e) {
-            throw new SessionStoreException(Texts.get("session.store.md.readFailed", sessionFile.getFileName(),
+            throw new SessionStoreException(SessionStoreException.Code.IO_ERROR, Texts.get("session.store.md.readFailed", sessionFile.getFileName(),
                     e.getMessage()), e);
         }
     }
@@ -312,7 +386,7 @@ public final class MarkdownSessionStore implements SessionStore {
         try {
             return codec.decodeDocument(text);
         } catch (SnapshotFormatException e) {
-            throw new SessionStoreException(e.getMessage(), e);
+            throw new SessionStoreException(SessionStoreException.Code.CORRUPT, e.getMessage(), e);
         }
     }
 

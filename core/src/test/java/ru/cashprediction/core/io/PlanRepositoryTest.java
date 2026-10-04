@@ -307,20 +307,28 @@ class PlanRepositoryTest {
         assertTrue(Files.isSameFile(targetAlias, service));
     }
 
-    /** Защита папки CashMemory не запрещает пользовательский план в отдельной внешней папке. */
+    /** Внешний Markdown читается; сохранение и переименование выполняются лишь для копии в CashMemory. */
     @Test
-    void normalExternalPlanCanBeSavedLoadedAndRenamed() throws IOException {
+    void normalExternalPlanIsReadOnlyAndInternalCopyCanBeRenamed() throws IOException {
         Path memory = Files.createDirectory(dir.resolve("CashMemory"));
         var repository = new PlanRepository(memory);
         Path external = Files.createDirectory(dir.resolve("External"));
         Path file = external.resolve("Budget.md");
         Plan plan = Plan.empty("Budget", TODAY);
-        repository.save(plan, file);
+        String text = PlanMarkdownWriter.write(plan);
+        Files.writeString(file, text);
         assertEquals(plan, repository.load(file, TODAY).plan());
-        Path renamed = repository.rename(file, "BudgetNext");
-        assertEquals(external.resolve("BudgetNext.md"), renamed);
-        assertFalse(Files.exists(file));
+        assertThrows(IOException.class, () -> repository.save(plan, file));
+        assertThrows(IOException.class, () -> repository.rename(file, "BudgetNext"));
+        assertEquals(text, Files.readString(file));
+        assertFalse(Files.exists(external.resolve("BudgetNext.md")));
+        Path copy = memory.resolve("Budget.md");
+        repository.save(plan, copy);
+        Path renamed = repository.rename(copy, "BudgetNext");
+        assertEquals(memory.resolve("BudgetNext.md"), renamed);
+        assertFalse(Files.exists(copy));
         assertEquals("BudgetNext", repository.load(renamed, TODAY).plan().name());
+        assertEquals(text, Files.readString(file));
     }
 
     /** Нормализация пути не позволяет спрятать служебную цель за сегментами родительской папки. */

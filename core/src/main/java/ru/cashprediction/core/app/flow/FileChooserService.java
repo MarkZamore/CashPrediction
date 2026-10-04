@@ -14,6 +14,7 @@ import ru.cashprediction.core.app.DirectoryChooserSpec;
 import ru.cashprediction.core.app.FileChooserSpec;
 import ru.cashprediction.core.io.FolderListing;
 import ru.cashprediction.core.io.CashMemoryLayout;
+import ru.cashprediction.core.io.AtomicFiles;
 import ru.cashprediction.core.session.WindowType;
 import ru.cashprediction.core.ui.alert.AlertCatalog;
 import ru.cashprediction.core.ui.forms.simple.FileBrowserForm;
@@ -38,6 +39,12 @@ public final class FileChooserService {
      */
     public void chooseFile(FileChooserSpec spec, Consumer<Optional<Path>> onResult) {
         Objects.requireNonNull(spec, "spec");
+        // SAVE всегда начинается в CashMemory, даже если текущий план прочитан из внешней папки.
+        if (spec.mode() == FileChooserSpec.Mode.SAVE) {
+            spec = new FileChooserSpec(spec.purpose(), spec.mode(), spec.title(), spec.filterDescription(),
+                    spec.extensions(), context.environment().cashMemory(), spec.initialName());
+        }
+        FileChooserSpec request = spec;
         Consumer<Optional<Path>> finish = once(onResult);
         Consumer<Optional<Path>> selected = once(value -> {
             if (value.isEmpty()) {
@@ -46,28 +53,28 @@ public final class FileChooserService {
             }
             Path original = value.get().toAbsolutePath().normalize();
             Path path = original;
-            if (spec.mode() == FileChooserSpec.Mode.SAVE && !spec.extensions().isEmpty()) {
+            if (request.mode() == FileChooserSpec.Mode.SAVE && !request.extensions().isEmpty()) {
                 String name = path.getFileName().toString();
-                boolean recognized = spec.extensions().stream().anyMatch(extension ->
+                boolean recognized = request.extensions().stream().anyMatch(extension ->
                         name.toLowerCase(Locale.ROOT).endsWith("." + extension.toLowerCase(Locale.ROOT)));
-                if (!recognized) path = path.resolveSibling(name + "." + spec.extensions().getFirst());
+                if (!recognized) path = path.resolveSibling(name + "." + request.extensions().getFirst());
             }
             Path result = path;
-            String problem = selectionProblem(result);
+            String problem = selectionProblem(result, request.mode());
             if (problem != null) {
-                rejectFile(spec, result, problem, finish);
+                rejectFile(request, result, problem, finish);
                 return;
             }
             // Нативное подтверждение относится к выбранному имени, а не к дописанному расширению.
             boolean nativeConfirmed = context.port().profile().nativeReplacePrompt() && original.equals(result);
-            if (spec.mode() == FileChooserSpec.Mode.SAVE && Files.exists(result) && !nativeConfirmed) {
+            if (request.mode() == FileChooserSpec.Mode.SAVE && Files.exists(result) && !nativeConfirmed) {
                 // JavaFX: Alert → Swing: SwingAlert → Web: dialog.
                 context.showAlert(AlertCatalog.replaceFile(result.getFileName().toString()),
                         once(button -> {
                             if (!"replace".equals(button)) { finish.accept(Optional.empty()); return; }
-                            String changed = selectionProblem(result);
+                            String changed = selectionProblem(result, request.mode());
                             if (changed == null) finish.accept(Optional.of(result));
-                            else rejectFile(spec, result, changed, finish);
+                            else rejectFile(request, result, changed, finish);
                         }));
             } else {
                 finish.accept(Optional.of(result));
@@ -86,8 +93,10 @@ public final class FileChooserService {
     }
 
     /** Проверяет окончательный путь; ошибки разрешения закрывают доступ без технических подробностей. */
-    private String selectionProblem(Path path) {
-        try { return CashMemoryLayout.isProtectedUserPath(context.environment().cashMemory(), path)
+    private String selectionProblem(Path path, FileChooserSpec.Mode mode) {
+        try {
+            if (mode == FileChooserSpec.Mode.SAVE) AtomicFiles.requireWriteScope(context.environment().cashMemory(), path);
+            return CashMemoryLayout.isProtectedUserPath(context.environment().cashMemory(), path)
                 ? UiText.get("dialog.file.protected") : null; }
         catch (IOException | RuntimeException unavailable) { return UiText.get("dialog.file.denied", path); }
     }

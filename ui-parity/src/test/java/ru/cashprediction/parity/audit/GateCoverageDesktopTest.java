@@ -1,10 +1,14 @@
 package ru.cashprediction.parity.audit;
 
 import java.awt.*;
+import java.awt.event.AWTEventListener;
+import java.awt.event.FocusEvent;
 import java.awt.event.KeyEvent;
+import java.awt.event.WindowEvent;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicReference;
 import javax.imageio.ImageIO;
 import javax.swing.*;
@@ -25,10 +29,19 @@ public final class GateCoverageDesktopTest {
         assertTrue(Toolkit.getDefaultToolkit().getScreenSize().width >= 1200, "Desktop too narrow");
         AtomicReference<JFrame> frame = new AtomicReference<>();
         AtomicReference<JTextField> field = new AtomicReference<>();
+        ConcurrentLinkedQueue<String> events = new ConcurrentLinkedQueue<>();
+        // Пассивный AWT observer: не потребляет события и не меняет ввод, фокус или окна.
+        AWTEventListener eventListener = event -> events.add(diagnosticEvent(event));
+        boolean listenerInstalled = false;
         Robot robot = null;
         Point requested = null;
         long focusStarted = 0, focusFinished = 0, deliveryStarted = 0;
         try {
+            Toolkit.getDefaultToolkit().addAWTEventListener(eventListener,
+                    AWTEvent.KEY_EVENT_MASK | AWTEvent.FOCUS_EVENT_MASK
+                            | AWTEvent.WINDOW_EVENT_MASK | AWTEvent.WINDOW_FOCUS_EVENT_MASK
+                            | AWTEvent.WINDOW_STATE_EVENT_MASK);
+            listenerInstalled = true;
             SwingUtilities.invokeAndWait(() -> {
                 JFrame f = new JFrame("Desktop preflight"); JTextField t = new JTextField(20);
                 f.add(t); f.pack(); f.setLocationRelativeTo(null); f.setVisible(true); f.toFront(); t.requestFocusInWindow();
@@ -68,8 +81,12 @@ public final class GateCoverageDesktopTest {
             }
             assertTrue(focused, "Swing focus/pointer unavailable (Windows foreground not independently observed)");
             focusFinished = System.nanoTime();
+            events.add("ROBOT_KEY_PRESS_REQUEST keyCode=" + KeyEvent.VK_7
+                    + " observedMillis=" + System.currentTimeMillis() + " observedNanos=" + System.nanoTime());
             robot.keyPress(KeyEvent.VK_7);
             try { } finally { robot.keyRelease(KeyEvent.VK_7); }
+            events.add("ROBOT_KEY_RELEASE_RETURN keyCode=" + KeyEvent.VK_7
+                    + " observedMillis=" + System.currentTimeMillis() + " observedNanos=" + System.nanoTime());
             deliveryStarted = System.nanoTime();
             deadline = deliveryStarted + Duration.ofSeconds(10).toNanos();
             robot.waitForIdle();
@@ -93,7 +110,9 @@ public final class GateCoverageDesktopTest {
                     String details = current + "\nrequestedPointer=" + requested
                             + "\nwindowsForeground=not independently observed (AWT focus only)"
                             + "\nfocusElapsedMillis=" + elapsed(focusStarted, focusFinished == 0 ? now : focusFinished)
-                            + "\ndeliveryElapsedMillis=" + elapsed(deliveryStarted, now) + "\n";
+                            + "\ndeliveryElapsedMillis=" + elapsed(deliveryStarted, now)
+                            + "\neventScope=AWT events in this JVM; not OS layout or physical input provenance"
+                            + "\neventsBegin\n" + String.join("\n", events) + "\neventsEnd\n";
                     Files.writeString(evidence.resolve("report-preflight.txt"), details);
                     Robot captureRobot = robot != null ? robot : new Robot(frame.get().getGraphicsConfiguration().getDevice());
                     assertTrue(ImageIO.write(captureRobot.createScreenCapture(current.frameBounds()),
@@ -102,9 +121,60 @@ public final class GateCoverageDesktopTest {
                 }
             } catch (Exception | AssertionError diagnosticFailure) { failure.addSuppressed(diagnosticFailure); }
             throw failure;
-        } finally { if (frame.get() != null) SwingUtilities.invokeAndWait(() -> frame.get().dispose()); }
+        } finally {
+            try { if (frame.get() != null) SwingUtilities.invokeAndWait(() -> frame.get().dispose()); }
+            finally { if (listenerInstalled) Toolkit.getDefaultToolkit().removeAWTEventListener(eventListener); }
+        }
         var probe = HotkeyCases.forClient("fx").stream().filter(p -> p.name().endsWith(" en")).findFirst().orElseThrow();
         HotkeyRun.verify(ReactorLayout.fromSystemProperties(), "fx", probe);
+    }
+
+    /** Описывает доставленное событие без consume/dispatch; char сохраняется как UTF-16 code unit. */
+    static String diagnosticEvent(AWTEvent event) {
+        long observedMillis = System.currentTimeMillis(), observedNanos = System.nanoTime();
+        String name = switch (event.getID()) {
+            case KeyEvent.KEY_PRESSED -> "KEY_PRESSED";
+            case KeyEvent.KEY_RELEASED -> "KEY_RELEASED";
+            case KeyEvent.KEY_TYPED -> "KEY_TYPED";
+            case FocusEvent.FOCUS_GAINED -> "FOCUS_GAINED";
+            case FocusEvent.FOCUS_LOST -> "FOCUS_LOST";
+            case WindowEvent.WINDOW_OPENED -> "WINDOW_OPENED";
+            case WindowEvent.WINDOW_CLOSING -> "WINDOW_CLOSING";
+            case WindowEvent.WINDOW_CLOSED -> "WINDOW_CLOSED";
+            case WindowEvent.WINDOW_ICONIFIED -> "WINDOW_ICONIFIED";
+            case WindowEvent.WINDOW_DEICONIFIED -> "WINDOW_DEICONIFIED";
+            case WindowEvent.WINDOW_ACTIVATED -> "WINDOW_ACTIVATED";
+            case WindowEvent.WINDOW_DEACTIVATED -> "WINDOW_DEACTIVATED";
+            case WindowEvent.WINDOW_GAINED_FOCUS -> "WINDOW_GAINED_FOCUS";
+            case WindowEvent.WINDOW_LOST_FOCUS -> "WINDOW_LOST_FOCUS";
+            case WindowEvent.WINDOW_STATE_CHANGED -> "WINDOW_STATE_CHANGED";
+            default -> "AWT_EVENT_" + event.getID();
+        };
+        String details = "";
+        if (event instanceof KeyEvent key) {
+            details = " whenMillis=" + key.getWhen() + " keyCode=" + key.getKeyCode()
+                    + " char=U+" + String.format(java.util.Locale.ROOT, "%04X", (int) key.getKeyChar())
+                    + " modifiersEx=" + key.getModifiersEx() + " keyLocation=" + key.getKeyLocation()
+                    + " consumed=" + key.isConsumed();
+        } else if (event instanceof FocusEvent focus) {
+            details = " temporary=" + focus.isTemporary() + " cause=" + focus.getCause()
+                    + " opposite=" + diagnosticIdentity(focus.getOppositeComponent());
+        } else if (event instanceof WindowEvent window) {
+            details = " opposite=" + diagnosticIdentity(window.getOppositeWindow())
+                    + " oldState=" + window.getOldState() + " newState=" + window.getNewState();
+        }
+        KeyboardFocusManager focus = KeyboardFocusManager.getCurrentKeyboardFocusManager();
+        return name + " observedMillis=" + observedMillis + " observedNanos=" + observedNanos
+                + " source=" + diagnosticIdentity(event.getSource()) + details
+                + " focusOwner=" + diagnosticIdentity(focus.getFocusOwner())
+                + " activeWindow=" + diagnosticIdentity(focus.getActiveWindow())
+                + " focusedWindow=" + diagnosticIdentity(focus.getFocusedWindow());
+    }
+
+    /** Идентичность объекта для сопоставления событий; без чтения или изменения пользовательского текста. */
+    private static String diagnosticIdentity(Object value) {
+        return value == null ? "null" : value.getClass().getName() + "@"
+                + Integer.toHexString(System.identityHashCode(value));
     }
 
     /** Возвращает независимые наблюдения AWT и настоящего указателя, не изменяя фокус или текст. */

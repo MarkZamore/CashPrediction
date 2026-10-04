@@ -8,6 +8,7 @@ import java.util.Objects;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import ru.cashprediction.core.format.FormatWords;
+import ru.cashprediction.core.format.FormatNormalization;
 import ru.cashprediction.core.model.Adjustment;
 import ru.cashprediction.core.model.Horizon;
 import ru.cashprediction.core.model.Kind;
@@ -43,11 +44,6 @@ import ru.cashprediction.core.util.RuText;
  * <p>Класс без состояния, потокобезопасен.</p>
  */
 public final class RuFormats {
-
-    /** Буква, которую нормализация заменяет ({@code ё}); объявлена до шаблонов, которые нормализуют слова. */
-    private static final int YO = FormatWords.get("common.char.yo").codePointAt(0);
-    /** Замена буквы {@link #YO} ({@code е}). */
-    private static final int YE = FormatWords.get("common.char.ye").codePointAt(0);
 
     /** Необязательное указание числа месяца после дня: «5-го», «5 числа». */
     private static final String DAY_SUFFIX = "(?:-?" + word("plan.recurrence.daySuffix.ordinal") + ")?(?: "
@@ -152,26 +148,7 @@ public final class RuFormats {
      * @return нормализованный текст
      */
     public static String normalize(String text) {
-        if (text == null) {
-            return "";
-        }
-        StringBuilder sb = new StringBuilder(text.length());
-        boolean pendingSpace = false;
-        for (int i = 0; i < text.length(); ) {
-            int cp = text.codePointAt(i);
-            i += Character.charCount(cp);
-            if (Character.isWhitespace(cp) || Character.isSpaceChar(cp)) {
-                pendingSpace = true;
-                continue;
-            }
-            if (pendingSpace && !sb.isEmpty()) {
-                sb.append(' ');
-            }
-            pendingSpace = false;
-            int lower = Character.toLowerCase(cp);
-            sb.appendCodePoint(lower == YO ? YE : lower);
-        }
-        return sb.toString();
+        return FormatNormalization.normalize(text);
     }
 
     /**

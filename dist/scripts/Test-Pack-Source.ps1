@@ -5,7 +5,7 @@
 Нужны PowerShell 7 и установленный 7-Zip. Проверки выполняются в отдельном
 временном каталоге, включая пробелы и русские имена. Все результаты удаляются.
 VerifyBuild дополнительно запускает mvn -B install в распакованных исходниках;
-нужны JDK 25, Maven 3.9+ и зависимости Maven. S6/S7 этим не подтверждаются.
+нужны JDK 25, Maven 3.9+ и зависимости Maven. S5/S6 этим не подтверждаются.
 FiltersOnly проверяет предикаты упаковщика в памяти без записи файлов и очистки.
 Этот режим не подтверждает сборку; VerifyBuild по-прежнему запускает все тесты.
 FixturesOnly проверяет staging и временный архив искусственного проекта, не копируя меняющиеся исходники.
@@ -85,7 +85,10 @@ function Test-SourceFilters {
         'reports/result.json', 'update-tool/build-integration.patch', '.env', 'core/src/test/resources/.env.local',
         'core/src/main/resources/private.key', 'dist/scripts/credentials.json', 'core/src/test/resources/agent-history.jsonl',
         'README.md', 'docs/ui-spec.md', 'docs/design/ui-spec-v2.md', 'docs/FORMAT.md', 'docs/ui-protocol.md',
-        'docs/design/stages.md', 'core/src/test/resources/README.md',
+        'docs/design/stages.md', 'docs/design/extra.md', 'docs/design/techstack.txt',
+        'docs/other/ui-kit.md', 'docs/ai/CurrentSprint.md', 'docs/AI/ContextDump.md',
+        'core/src/main/resources/nested/changerequest.md', 'core/src/test/resources/LEGACYWARNING.txt',
+        'core/src/test/resources/README.md',
         'CashPrediction.exe', 'CashPrediction-Swing.exe', 'CashPrediction-Web.exe')
     foreach ($path in $rejectedFiles) {
         Assert-True (-not (Test-IncludedFile $path)) "Запрещённый файл разрешён фильтром: $path"
@@ -111,6 +114,9 @@ function Test-SourceFilters {
     }
     foreach ($relative in @('.github/workflows', '.github\workflows')) {
         Assert-True (Test-ExcludedDirectory 'workflows' $relative) "Репозиторные workflows разрешены: $relative"
+    }
+    foreach ($relative in @('docs/ai', 'DOCS/AI/nested', 'docs\AI')) {
+        Assert-True (Test-ExcludedDirectory 'ai' $relative) "Рабочий AI-контекст разрешён: $relative"
     }
     foreach ($relative in @('workflows', 'web/src/test/resources/workflows', '.github/scripts')) {
         Assert-True (-not (Test-ExcludedDirectory ([IO.Path]::GetFileName($relative)) $relative)) "Папка вне репозиторных workflows исключена: $relative"
@@ -151,7 +157,9 @@ function Test-SourceFilters {
     Assert-True ((ConvertTo-DeliveredPom $expectedPom) -ceq $expectedPom) 'Повторная упаковка меняет delivered POM.'
     Assert-Rejected { ConvertTo-DeliveredPom ($pomFixture.Replace('<module>repository-doc-audits</module>', '<module>repository-doc-audits</module><module>repository-doc-audits</module>')) } 'Дублированная запись аудитора должна отклоняться.'
     Assert-Rejected { ConvertTo-DeliveredPom ($expectedPom.Replace('<module>ui-parity</module>', '<module>repository-doc-audits</module>')) } 'Запись аудитора в профиле должна отклоняться.'
-    foreach ($path in @('docs/design/architecture.md', 'LICENSE.md', 'LICENSE.txt', 'LICENCE', 'COPYING.md', 'NOTICE',
+    foreach ($path in @('docs/design/architecture.md', 'docs/design/techstack.md',
+            'docs/design/edge-cases.md', 'docs/design/db-schema.md', 'docs/design/linx.md',
+            'docs/design/ui-kit.md', 'LICENSE.md', 'LICENSE.txt', 'LICENCE', 'COPYING.md', 'NOTICE',
             'core/src/main/resources/LICENSE.md', 'core/src/test/resources/NOTICE.txt',
             'core/src/main/resources/architecture.md', 'core/src/test/resources/docs/architecture.md',
             'core/src/main/resources/help.txt', 'core/src/test/resources/requests.txt',
@@ -182,7 +190,7 @@ function Test-SourceFilters {
             if (-not (Test-Path -LiteralPath $resourceRoot -PathType Container)) { continue }
             foreach ($file in Get-ChildItem -LiteralPath $resourceRoot -Recurse -Force -File) {
                 $relative = [IO.Path]::GetRelativePath($source, $file.FullName).Replace('\', '/')
-                if ($file.Name -match '^(README|CHANGELOG|CONTRIBUTING|developer-(notes|guide))(\..*)?$') {
+                if ($file.Name -match '^(README|CHANGELOG|CONTRIBUTING|developer-(notes|guide)|CurrentSprint|ContextDump|ChangeRequest|LegacyWarning)(\..*)?$') {
                     Assert-True (-not (Test-IncludedFile $relative)) "Документ разработчика разрешён: $relative"
                     $developerResourceCount++
                     continue
@@ -243,7 +251,10 @@ function Test-DeliveredReactor([string] $Original, [string] $Delivered) {
     $deliveredDocs = @(Get-ChildItem -LiteralPath (Join-Path $Delivered 'docs') -Recurse -File | ForEach-Object {
         [IO.Path]::GetRelativePath($Delivered, $_.FullName).Replace('\', '/')
     })
-    Assert-True ($deliveredDocs.Count -eq 1 -and $deliveredDocs[0] -eq 'docs/design/architecture.md') 'В docs должен остаться только architecture.md.'
+    $expectedDocs = @('docs/design/architecture.md', 'docs/design/techstack.md',
+        'docs/design/edge-cases.md', 'docs/design/db-schema.md', 'docs/design/linx.md', 'docs/design/ui-kit.md')
+    Assert-True (($deliveredDocs | Sort-Object | ConvertTo-Json -Compress) -ceq
+        ($expectedDocs | Sort-Object | ConvertTo-Json -Compress)) 'В docs должны остаться ровно шесть технических документов.'
     Test-DeliveredIcons $Original $Delivered
 }
 
@@ -282,8 +293,9 @@ try {
         Assert-True ($path -notmatch '\.(exe|dll|class|jmod|7z|zip|tmp|log)$') "Артефакт: $path"
     }
     foreach ($path in $inventory | Where-Object { $_ -match '\.(md|markdown|rst|adoc)$' }) {
-        Assert-True ($path -eq 'docs/design/architecture.md' -or
-            $path -match '^[^/]+/src/(main|test)/resources/' -or
+        Assert-True ($path -in @('docs/design/architecture.md', 'docs/design/techstack.md',
+                'docs/design/edge-cases.md', 'docs/design/db-schema.md', 'docs/design/linx.md', 'docs/design/ui-kit.md') -or
+            $path -match '^[^/]+/src/(main|test)/resources(?:-filtered)?/' -or
             [IO.Path]::GetFileName($path) -match '^(LICENSE|LICENCE|COPYING|NOTICE)(\..*)?$') "Лишняя документация: $path"
     }
     foreach ($path in @('pom.xml', 'core/pom.xml', 'update-tool/pom.xml', 'ui-fx/pom.xml', 'ui-swing/pom.xml', 'web/pom.xml',
@@ -300,7 +312,7 @@ try {
         ForEach-Object { Get-ChildItem -LiteralPath (Join-Path $_.FullName 'src') -Recurse -File } |
         Where-Object { $_.Extension -eq '.java' -or
             ($_.FullName -match '[/\\]resources[/\\]' -and
-                $_.Name -notmatch '^(README|CHANGELOG|CONTRIBUTING|developer-(notes|guide)|AGENTS|CLAUDE)(\..*)?$' -and
+                $_.Name -notmatch '^(README|CHANGELOG|CONTRIBUTING|developer-(notes|guide)|AGENTS|CLAUDE|CurrentSprint|ContextDump|ChangeRequest|LegacyWarning)(\..*)?$' -and
                 $_.Name -notmatch '^\.?mcp\.json$' -and $_.FullName -notmatch '[/\\]\.mcp[/\\]') })
     Assert-True ($essential.Count -gt 100) 'Проверка исходников и ресурсов оказалась пустой.'
     foreach ($file in $essential) {
@@ -315,7 +327,9 @@ try {
 
     $fixture = Join-Path $testRoot 'синтетический проект'
     $kept = @('pom.xml', 'core/pom.xml', 'update-tool/pom.xml', 'ui-fx/pom.xml', 'ui-swing/pom.xml', 'web/pom.xml', 'ui-parity/pom.xml', 'dist/pom.xml',
-        'docs/design/architecture.md', '.mvn/wrapper/maven-wrapper.jar', '.mvn/wrapper/maven-wrapper.properties',
+        'docs/design/architecture.md', 'docs/design/techstack.md', 'docs/design/edge-cases.md',
+        'docs/design/db-schema.md', 'docs/design/linx.md', 'docs/design/ui-kit.md',
+        '.mvn/wrapper/maven-wrapper.jar', '.mvn/wrapper/maven-wrapper.properties',
         '.mvn/maven.config', 'mvnw', 'mvnw.cmd', '.gitignore', '.gitattributes', 'LICENSE.md', 'NOTICE',
         'LICENSE.txt', 'LICENCE', 'COPYING.md',
         'core/src/main/resources/LICENSE.md', 'core/src/test/resources/NOTICE.txt',
@@ -363,6 +377,10 @@ try {
         'core/src/main/resources/CLAUDE.md', 'core/src/test/resources/README.md', 'core/src/test/java/README.md',
         'README.md', 'docs/ui-spec.md', 'docs/design/ui-spec-v2.md', 'docs/FORMAT.md', 'docs/ui-protocol.md',
         'docs/BUILD.md', 'docs/design/stages.md', 'docs/notes.txt', 'CHANGELOG.md',
+        'docs/design/extra.md', 'docs/design/techstack.txt', 'docs/other/ui-kit.md',
+        'docs/ai/CurrentSprint.md', 'docs/AI/ContextDump.md', 'docs/ai/ChangeRequest.md', 'docs/ai/LegacyWarning.md',
+        'core/src/main/resources/nested/currentsprint.md', 'web/src/test/resources/CONTEXTDUMP.md',
+        'update-tool/src/main/resources-filtered/nested/ChangeRequest.md', 'ui-parity/src/test/resources/LegacyWarning.md',
         'ui-parity/docs/allowance-audit-20261002-1632.json', 'ui-parity/docs/nested/report.txt',
         'repository-doc-audits/pom.xml', 'repository-doc-audits/src/test/java/ru/cashprediction/audit/UiSpecCopyTest.java',
         'CashPrediction/app/settings.properties', 'CashPrediction-Swing/app/settings.properties', 'CashPrediction-Web/app/settings.properties',

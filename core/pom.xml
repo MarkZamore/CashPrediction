@@ -56,6 +56,9 @@
                 <!-- Локальный сервер проверяет updater без обращения к GitHub; в runtime ядра его нет. -->
                 <arg>--add-modules</arg><arg>jdk.httpserver</arg>
                 <arg>--add-reads</arg><arg>ru.cashprediction.core=jdk.httpserver</arg>
+                <!-- Windows fault-тесты удерживают настоящий NOSHARE_DELETE handle; только test JPMS. -->
+                <arg>--add-modules</arg><arg>jdk.unsupported</arg>
+                <arg>--add-reads</arg><arg>ru.cashprediction.core=jdk.unsupported</arg>
               </compilerArgs>
             </configuration>
           </execution>
@@ -65,7 +68,8 @@
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-surefire-plugin</artifactId>
         <configuration>
-          <argLine>-Dfile.encoding=UTF-8 -Duser.language=ru -Duser.country=RU -XX:-UsePerfData --add-modules=jdk.compiler,jdk.httpserver</argLine>
+          <!-- Surefire запускает тесты на classpath; JPMS add-reads выше нужны только testCompile. -->
+          <argLine>-Dfile.encoding=UTF-8 -Duser.language=ru -Duser.country=RU -XX:-UsePerfData --add-modules=jdk.compiler,jdk.httpserver,jdk.unsupported</argLine>
           <!-- Стандартные шаблоны surefire плюс *IT: интеграционный тест реестра Windows
                (RegistrySessionStoreIT) должен выполняться при каждой сборке. На не-Windows он пропускает себя сам. -->
           <includes>

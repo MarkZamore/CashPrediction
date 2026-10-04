@@ -40,9 +40,9 @@ class FileFlowTest {
                 FakeFileFlowContext f = new FakeFileFlowContext(temp.resolve(entry + "-" + answer));
                 Path recent = f.planFile("Recent");
                 if (answer == Answer.FAILED_SAVE) {
-                    Path blocked = f.environment.cashMemory().resolve("blocked");
-                    Files.writeString(blocked, "block");
-                    f.document.replace(f.document.plan(), blocked.resolve("Current.md"), true, List.of());
+                    // Цель внутри CashMemory занята каталогом: настоящий отказ записи, не readonly import.
+                    Files.createDirectory(f.environment.cashMemory().resolve("Current.md"));
+                    f.dirty();
                 } else {
                     if (answer == Answer.CANCEL_SAVE) f.planFile("Current");
                     f.dirty();

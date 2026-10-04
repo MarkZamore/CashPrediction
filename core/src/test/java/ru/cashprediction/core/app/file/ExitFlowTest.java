@@ -40,9 +40,9 @@ class ExitFlowTest {
     @Test
     void failedSaveAbortsExitAndPreservesRecoverySnapshot() throws Exception {
         FakeFileFlowContext f = new FakeFileFlowContext(temp);
-        Path blocker = f.environment.cashMemory().resolve("block");
-        Files.writeString(blocker, "block");
-        f.document.replace(f.document.plan(), blocker.resolve("Current.md"), true, List.of());
+        // Реальный отказ внутренней записи, без маршрутизации повреждённого пути в Save As.
+        Files.createDirectory(f.environment.cashMemory().resolve("Current.md"));
+        f.dirty();
         f.startRecorder();
         f.exit.requestExit();
         f.answer("save");

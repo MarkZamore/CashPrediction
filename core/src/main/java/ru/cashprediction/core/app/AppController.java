@@ -165,7 +165,7 @@ public final class AppController implements UiIntents, FlowContext {
                 environment.clock()::today, new EngineForecastService());
         planCommands = new LocalPlanCommands(document);
         planStorage = new FilePlanStorage(environment.cashMemory());
-        externalGuard = new ExternalChangeGuard(planStorage);
+        externalGuard = new ExternalChangeGuard(planStorage, environment.cashMemory());
         plansFolder = environment.cashMemory();
         fileFlow = new FileFlow(this);
         editFlow = new EditFlow(this);

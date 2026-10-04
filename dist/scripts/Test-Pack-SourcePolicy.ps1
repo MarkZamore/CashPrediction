@@ -88,7 +88,9 @@ try {
     $fixture = Join-Path $testRoot 'исходники [1] с пробелами'
     $modulePom = '<project xmlns="http://maven.apache.org/POM/4.0.0"><modelVersion>4.0.0</modelVersion></project>'
     $rootPom = '<project xmlns="http://maven.apache.org/POM/4.0.0"><modules><module>core</module><module>update-tool</module><module>ui-fx</module><module>ui-swing</module><module>web</module><module>repository-doc-audits</module></modules><profiles><profile><id>dist</id><modules><module>dist</module></modules></profile><profile><id>ui-tests</id><modules><module>ui-parity</module></modules></profile></profiles></project>'
-    $kept = @('pom.xml', 'docs/design/architecture.md', 'repository-doc-audits/pom.xml',
+    $kept = @('pom.xml', 'docs/design/architecture.md', 'docs/design/techstack.md',
+        'docs/design/edge-cases.md', 'docs/design/db-schema.md', 'docs/design/linx.md',
+        'docs/design/ui-kit.md', 'repository-doc-audits/pom.xml',
         'dist/scripts/Set-LauncherUtf8.ps1', 'dist/scripts/Test-Icon-Source.ps1', 'dist/icons/make-icon.ps1',
         'dist/scripts/Test-IconPayloadIntegrity.ps1', 'dist/scripts/Normalize-AppModules.ps1',
         'dist/launchers/swing.properties', 'dist/launchers/web.properties',
@@ -120,6 +122,10 @@ try {
         'update-tool/target/update.jar', 'update-tool/build-integration.patch',
         'reports/build.json', 'ui-parity/docs/report.json', 'dist/scripts/notes.html', 'dist/scripts/build-report.json',
         'docs/LICENSE.txt', 'docs/other/architecture.md', 'update-tool/implementation-report.md',
+        'docs/design/extra.md', 'docs/design/techstack.txt', 'docs/other/ui-kit.md',
+        'docs/ai/CurrentSprint.md', 'docs/ai/ContextDump.md', 'docs/ai/ChangeRequest.md', 'docs/ai/LegacyWarning.md',
+        'core/src/main/resources/nested/CURRENTSPRINT.md', 'web/src/test/resources/contextdump.md',
+        'update-tool/src/main/resources-filtered/nested/ChangeRequest.txt', 'ui-parity/src/test/resources/legacywarning.MD',
         'core/src/test/resources/agent-history.jsonl', 'agent-sessions.json', '.env.production',
         'core/src/main/resources/.env', 'core/src/test/resources/id_ed25519',
         'core/src/test/resources/private.pem', 'core/src/test/resources/private.pfx',
@@ -168,6 +174,10 @@ try {
         Test-MissingFixture $relative ('Обязательный файл поставки отсутствует: ' + [regex]::Escape($relative))
     }
     Test-MissingFixture 'core/src/main/java/ru/cashprediction/core/update/Update.java' 'core\.update'
+    foreach ($document in @('architecture', 'techstack', 'edge-cases', 'db-schema', 'linx', 'ui-kit')) {
+        $relative = "docs/design/$document.md"
+        Test-MissingFixture $relative ('Обязательный файл поставки отсутствует: ' + [regex]::Escape($relative))
+    }
     Test-MissingFixture 'update-tool/src/main/java/Example.java' 'исходники обязательного модуля: update-tool'
     foreach ($case in @(
         @{ Name = 'потерянный update-tool'; Text = $rootPom.Replace('<module>update-tool</module>', ''); Error = 'основном reactor: update-tool' },

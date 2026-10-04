@@ -99,7 +99,8 @@ class DirectoryChooserProbeTest {
         for (String step : List.of("directory-pending", "directory-cancelled")) result.put(step,
                 new UiDump(UiDump.SCHEMA, client, DirectoryChooserProbe.SCENARIO, step, null, null, null, null,
                         null, null, null, null, null, null, null, null,
-                        List.of(new UiDump.ChooserRequest(kind, "", "", "", "", "")),
+                        List.of(new UiDump.ChooserRequest(kind, "", ru.cashprediction.core.ui.text.UiText.get(
+                                "s2.file.folderTitle", "<CashMemory>"), "", "<CashMemory>", "")),
                         Map.of("DirectoryChooser", count), Map.of(CommandId.FILE_CASH_MEMORY.id(), fires)));
         return result;
     }

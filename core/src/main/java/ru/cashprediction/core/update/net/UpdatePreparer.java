@@ -22,6 +22,8 @@ import java.time.Duration;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
+import ru.cashprediction.core.update.model.UpdateProblem;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
@@ -64,6 +66,7 @@ public final class UpdatePreparer implements AutoCloseable {
     private boolean result;
     private Thread worker;
     private RequestSlot activeRequest;
+    private UpdateProblem lastProblem;
 
     /**
      * Создаёт подготовитель с фиксированным production endpoint.
@@ -256,6 +259,7 @@ public final class UpdatePreparer implements AutoCloseable {
                 }
             }
         } catch (IOException | IllegalArgumentException ex) {
+            recordProblem(ex);
             // Технический отказ не препятствует текущему приложению; valid cache сохраняется.
         } finally {
             synchronized (state) {
@@ -265,6 +269,25 @@ public final class UpdatePreparer implements AutoCloseable {
             }
         }
         synchronized (state) { return result; }
+    }
+
+    /**
+     * Возвращает data-only диагностику отказа после действующей политики повторов.
+     * Отсутствие более нового релиза, занятая блокировка и явная отмена сами по себе не являются отказом.
+     * @return машинная причина с исходной диагностикой, если она возникла
+     */
+    public Optional<UpdateProblem> lastProblem() {
+        synchronized (state) { return Optional.ofNullable(lastProblem); }
+    }
+
+    /** Сохраняет отказ внутри владельца без зависимости от UI или lifecycle пакета. */
+    private void recordProblem(Exception failure) {
+        synchronized (state) {
+            if (closed) return;
+            String message = failure.getMessage();
+            lastProblem = new UpdateProblem(UpdateProblem.Code.PREPARATION_FAILED,
+                    message == null || message.isBlank() ? failure.getClass().getSimpleName() : message);
+        }
     }
 
     private UpdateManifest manifest() throws IOException {
@@ -280,6 +303,7 @@ public final class UpdatePreparer implements AutoCloseable {
             } catch (IOException | IllegalArgumentException ex) {
                 checkCancelled();
                 if (attempt < 2) pause(attempt == 0 ? firstBackoff : secondBackoff);
+                else recordProblem(ex);
             }
         }
         return null;

@@ -13,6 +13,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.io.TempDir;
 import ru.cashprediction.core.session.MainWindowState;
 import ru.cashprediction.core.session.PlanState;
@@ -30,8 +31,11 @@ class MarkdownSessionStoreTest {
     @TempDir
     Path dir;
 
+    /** Настоящий CashMemory scope нужен для verified quarantine, а не произвольный Temp root. */
+    @BeforeEach void createCashMemory() throws IOException { Files.createDirectory(dir.resolve("CashMemory")); }
+
     private MarkdownSessionStore store() {
-        return MarkdownSessionStore.inCashMemory(dir);
+        return MarkdownSessionStore.inCashMemory(dir.resolve("CashMemory"));
     }
 
     @Test
@@ -45,7 +49,7 @@ class MarkdownSessionStoreTest {
         assertTrue(session.contains("- Несохранённые изменения: да (web-session.plan.md)\n"), session);
         assertFalse(session.contains("## Несохранённый план"), "текст плана не дублируется в файле сессии");
         assertEquals(Optional.of(snapshot), store.load());
-        try (Stream<Path> files = Files.list(dir)) {
+        try (Stream<Path> files = Files.list(dir.resolve("CashMemory"))) {
             assertEquals(List.of("web-session.md", "web-session.plan.md"),
                     files.map(p -> p.getFileName().toString()).sorted().toList());
         }
@@ -84,12 +88,17 @@ class MarkdownSessionStoreTest {
     void corruptFileThrowsAndSaveRecovers() throws IOException, SessionStoreException {
         MarkdownSessionStore store = store();
         Files.writeString(store.sessionFile(), "# Не тот файл\n", StandardCharsets.UTF_8);
+        byte[] original=Files.readAllBytes(store.sessionFile());
         SessionStoreException e = assertThrows(SessionStoreException.class, store::load);
         assertTrue(e.getMessage().startsWith("Файл сессии повреждён"), e.getMessage());
         assertEquals(Optional.empty(), store.readMarker());
         SessionSnapshot snapshot = SessionFixtures.simple("web");
         store.save(snapshot);
         assertEquals(Optional.of(snapshot), store.load());
+        try(var archives=Files.list(dir.resolve("CashMemory/Recovery"))) {
+            var retained=archives.toList(); assertEquals(1,retained.size());
+            assertTrue(Files.readString(retained.getFirst()).contains(java.util.Base64.getEncoder().encodeToString(original)));
+        }
     }
 
     @Test
