@@ -1,13 +1,19 @@
 name: Проверка сборки
 
-# Push проверяет затронутые области относительно успешного предка; PR и ручной запуск проверяют всё.
-# Недоказанная база означает полный прогон. Main проверяет release.yml.
+# Автоматически: compilation и короткие critical tests; полный набор только вручную.
+# Полная локальная приёмка точного SHA обязательна до push; quick CI её не доказывает.
 on:
   push:
     branches-ignore:
       - main
   pull_request:
   workflow_dispatch:
+    inputs:
+      full_checks:
+        description: 'Полные units, негативные fixtures, GUI/E2E и portable parity'
+        type: boolean
+        required: false
+        default: false
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -42,12 +48,13 @@ jobs:
         shell: pwsh
         run: |
           & .github/scripts/Test-CiImpact.ps1
-          & .github/scripts/Test-CiWorkflowImpact.ps1
+          if ('${{ github.event_name }}' -eq 'workflow_dispatch' -and '${{ inputs.full_checks }}' -eq 'true') {
+            & .github/scripts/Test-CiWorkflowImpact.ps1
+          }
           $full = '${{ steps.baseline.outputs.force_full }}' -ne 'false'
           & .github/scripts/Get-CiImpact.ps1 -BaseSha '${{ steps.baseline.outputs.base_sha }}' -ForceFull:$full -GithubOutput $env:GITHUB_OUTPUT
 
       - name: Setup Java
-        if: steps.impact.outputs.unitModules != '' || steps.impact.outputs.ui == 'true' || steps.impact.outputs.e2e == 'true' || steps.impact.outputs.portable == 'true'
         uses: actions/setup-java@v5
         with:
           # Та же сборка OpenJDK, что у разработчика: в ней есть папка jmods, нужная jlink.
@@ -56,13 +63,12 @@ jobs:
           cache: maven
 
       - name: Prepare interactive desktop
-        if: steps.impact.outputs.ui == 'true' || steps.impact.outputs.e2e == 'true' || steps.impact.outputs.portable == 'true'
+        if: github.event_name == 'workflow_dispatch' && inputs.full_checks == true && (steps.impact.outputs.ui == 'true' || steps.impact.outputs.e2e == 'true' || steps.impact.outputs.portable == 'true')
         shell: pwsh
         run: |
           & .github/scripts/Initialize-CiDesktop.ps1
 
       - name: Build and test
-        if: steps.impact.outputs.unitModules != '' || steps.impact.outputs.ui == 'true' || steps.impact.outputs.e2e == 'true' || steps.impact.outputs.portable == 'true'
         shell: pwsh
         run: |
           # Аудит документов обязателен в исходном reactor, независимо от наличия docs или .git.
@@ -70,7 +76,8 @@ jobs:
           if (@($repositoryReactor.project.modules.module) -notcontains 'repository-doc-audits') {
             throw 'Обязательный модуль repository-doc-audits отсутствует в reactor.'
           }
-          if ('${{ steps.impact.outputs.preflight }}' -eq 'true') {
+          $fullChecks = '${{ github.event_name }}' -eq 'workflow_dispatch' -and '${{ inputs.full_checks }}' -eq 'true'
+          if ($fullChecks -and '${{ steps.impact.outputs.preflight }}' -eq 'true') {
           # Постоянные негативные проверки выполняются до дорогих GUI/portable-прогонов.
           & .github/scripts/Test-PortableSafety.ps1
           & .github/scripts/Test-GateOutcomePayload.ps1
@@ -86,7 +93,6 @@ jobs:
           & pwsh -NoProfile -File .github/scripts/Test-ReleaseExpectedErrorFixtures.ps1 -ReceiptPath $expectedErrorReceipt
           if ($LASTEXITCODE -ne 0) { throw 'Expected-error fixtures failed.' }
           }
-          # Все тесты приложения и документов; потеря любого обязательного документа ломает сборку.
           # Независимое наблюдение Windows identity для диагностики закрытого Web-хранилища, без ключей и изменения ACL.
           $identityProbe = Join-Path $env:RUNNER_TEMP ('reconnect-owner-' + [guid]::NewGuid())
           New-Item -ItemType Directory -Path $identityProbe | Out-Null
@@ -96,27 +102,21 @@ jobs:
             Write-Host "Reconnect identity: process=$processIdentity; newDirectoryOwner=$directoryOwner"
           } finally { Remove-Item -LiteralPath $identityProbe }
           $modules = '${{ steps.impact.outputs.unitModules }}'
-          $runtimeNeeded = '${{ steps.impact.outputs.compile }}' -eq 'true' -or
-            '${{ steps.impact.outputs.ui }}' -eq 'true' -or '${{ steps.impact.outputs.e2e }}' -eq 'true' -or
-            '${{ steps.impact.outputs.portable }}' -eq 'true' -or ($modules -ne '' -and $modules -ne 'repository-doc-audits')
-          if ($runtimeNeeded) {
-            # Один reactor-install готовит зависимости; выбранные unit-тесты идут отдельно, без повторной сборки reactor.
-            & mvn -B -ntp -DskipTests install
-            if ($LASTEXITCODE -ne 0) { throw 'Compilation failed.' }
-          }
-          if (($modules -split ',') -ccontains 'core') {
-            # Ранние Windows-контракты не ждут долгого bootstrap sweep; полный unit-набор остаётся ниже.
-            $earlyReports = Join-Path $env:GITHUB_WORKSPACE 'core/target/early-platform-preflight-reports'
-            & mvn -B -ntp -pl core '-Dtest=StartupDataBoundaryIntegrationTest,UpdateLifecycleOutcomeContractTest,ReconnectCredentialsTest' "-Dsurefire.reportsDirectory=$earlyReports" test
-            if ($LASTEXITCODE -ne 0) { throw 'Early platform preflight failed.' }
-          }
+          # Один reactor-install компилирует production и tests, но не запускает полный unit-набор.
+          & mvn -B -ntp -DskipTests install
+          if ($LASTEXITCODE -ne 0) { throw 'Compilation failed.' }
           if ($modules -ne '') {
-            & mvn -B -ntp -pl $modules test
-            if ($LASTEXITCODE -ne 0) { throw 'Affected unit tests failed.' }
+            if ($fullChecks) {
+              & mvn -B -ntp -pl $modules test
+              if ($LASTEXITCODE -ne 0) { throw 'Affected unit tests failed.' }
+            } else {
+              & .github/scripts/Invoke-CiSmoke.ps1 -Modules $modules
+              if ($LASTEXITCODE -ne 0) { throw 'Critical smoke tests failed.' }
+            }
           }
 
       - name: Actual UI gates (S4, blocking)
-        if: steps.impact.outputs.ui == 'true'
+        if: github.event_name == 'workflow_dispatch' && inputs.full_checks == true && steps.impact.outputs.ui == 'true'
         id: ui_gates
         timeout-minutes: 90
         shell: pwsh
@@ -124,7 +124,7 @@ jobs:
           & .github/scripts/Invoke-UiGates.ps1 -Mode UI
 
       - name: Actual recovery gates (S4, blocking)
-        if: steps.impact.outputs.e2e == 'true'
+        if: github.event_name == 'workflow_dispatch' && inputs.full_checks == true && steps.impact.outputs.e2e == 'true'
         id: recovery_gates
         timeout-minutes: 60
         shell: pwsh
@@ -132,7 +132,7 @@ jobs:
           & .github/scripts/Invoke-UiGates.ps1 -Mode E2E
 
       - name: Complete UI and E2E profile lifecycles
-        if: steps.impact.outputs.ui == 'true' || steps.impact.outputs.e2e == 'true'
+        if: github.event_name == 'workflow_dispatch' && inputs.full_checks == true && (steps.impact.outputs.ui == 'true' || steps.impact.outputs.e2e == 'true')
         timeout-minutes: 30
         shell: pwsh
         run: |
@@ -146,7 +146,7 @@ jobs:
           }
 
       - name: Portable build
-        if: steps.impact.outputs.portable == 'true'
+        if: github.event_name == 'workflow_dispatch' && inputs.full_checks == true && steps.impact.outputs.portable == 'true'
         shell: pwsh
         run: |
           # Та же портативная сборка, что публикуется из main, но без публикации.
@@ -154,7 +154,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "Портативная сборка не собралась." }
 
       - name: Verify portable build
-        if: steps.impact.outputs.portable == 'true'
+        if: github.event_name == 'workflow_dispatch' && inputs.full_checks == true && steps.impact.outputs.portable == 'true'
         timeout-minutes: 30
         shell: pwsh
         run: |

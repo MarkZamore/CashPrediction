@@ -1,12 +1,19 @@
 name: Сборка и публикация CashPrediction
 
-# Изменения продукта в main: полная приёмка и публикация свежей сборки latest.
-# Docs/test-only изменения выполняют затронутые проверки, не перепубликуя старый executable.
+# Изменения продукта в main: compilation, critical smoke и публикация свежей сборки latest.
+# Полная локальная приёмка точного SHA обязательна до push; full CI только opt-in вручную.
+# Docs/test-only изменения не перепубликуют старый executable.
 on:
   push:
     branches:
       - main
   workflow_dispatch:
+    inputs:
+      full_checks:
+        description: 'Полные units, негативные fixtures, GUI/E2E и portable parity'
+        type: boolean
+        required: false
+        default: false
 
 concurrency:
   group: cashprediction-latest-release
@@ -43,12 +50,13 @@ jobs:
         shell: pwsh
         run: |
           & .github/scripts/Test-CiImpact.ps1
-          & .github/scripts/Test-CiWorkflowImpact.ps1
+          if ('${{ github.event_name }}' -eq 'workflow_dispatch' -and '${{ inputs.full_checks }}' -eq 'true') {
+            & .github/scripts/Test-CiWorkflowImpact.ps1
+          }
           $full = '${{ steps.baseline.outputs.force_full }}' -ne 'false'
           & .github/scripts/Get-CiImpact.ps1 -BaseSha '${{ steps.baseline.outputs.base_sha }}' -ForceFull:$full -GithubOutput $env:GITHUB_OUTPUT
 
       - name: Setup Java
-        if: steps.impact.outputs.release == 'true' || steps.impact.outputs.unitModules != '' || steps.impact.outputs.ui == 'true' || steps.impact.outputs.e2e == 'true' || steps.impact.outputs.portable == 'true'
         uses: actions/setup-java@v5
         with:
           # Сборка Microsoft содержит jmods, из которых jlink собирает встроенную Java.
@@ -83,7 +91,7 @@ jobs:
           Write-Host "Версия ${releaseNumber}: $($match.Groups['line'].Value.Trim())"
 
       - name: Prepare interactive desktop
-        if: steps.impact.outputs.release == 'true' || steps.impact.outputs.ui == 'true' || steps.impact.outputs.e2e == 'true' || steps.impact.outputs.portable == 'true'
+        if: steps.impact.outputs.release == 'true' || (github.event_name == 'workflow_dispatch' && inputs.full_checks == true && (steps.impact.outputs.ui == 'true' || steps.impact.outputs.e2e == 'true' || steps.impact.outputs.portable == 'true'))
         shell: pwsh
         run: |
           & .github/scripts/Initialize-CiDesktop.ps1
@@ -97,7 +105,9 @@ jobs:
           if (@($repositoryReactor.project.modules.module) -notcontains 'repository-doc-audits') {
             throw 'Обязательный модуль repository-doc-audits отсутствует в reactor.'
           }
-          # Ошибки границ очистки и ложный успех XML блокируют публикацию до GUI-прогонов.
+          $fullChecks = '${{ github.event_name }}' -eq 'workflow_dispatch' -and '${{ inputs.full_checks }}' -eq 'true'
+          # Тяжёлые негативные fixtures обязательны локально, в Actions только по явному opt-in.
+          if ($fullChecks) {
           & .github/scripts/Test-PortableSafety.ps1
           & .github/scripts/Test-GateOutcomePayload.ps1
           & .github/scripts/Test-GateReportExport.ps1
@@ -108,36 +118,53 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Expected-error fixtures failed.' }
           & .github/scripts/Test-ReleaseIdentityGuard.ps1
           & .github/scripts/Test-S7Release.ps1
-          # Общий каталог иконок проверяется до GUI: ошибки источников не маскируются дампами.
-          & dist/scripts/Test-Icon-Source.ps1
           & dist/scripts/Test-Icon-SourceFixtures.ps1
           & pwsh -NoProfile -File dist/scripts/Test-FinalDeliveryFixtures.ps1
           if ($LASTEXITCODE -ne 0) { throw 'Final delivery guard fixtures failed.' }
-          # Модули и все тесты, затем портативная папка: jlink + jpackage + zip.
+          }
+          # Проверка настоящих общих assets остаётся автоматической, не заменяется mocks.
+          & dist/scripts/Test-Icon-Source.ps1
+          # Свежая компиляция, выбранные tests, затем jlink + jpackage + zip.
           # Номер релиза и коммит попадают в окно «О программе» и в свойства exe.
           $common = @('-B', '-ntp', "-Dapp.release=$env:RELEASE_NUMBER", "-Dapp.commit=${{ github.sha }}")
-          & mvn @common install
-          if ($LASTEXITCODE -ne 0) { throw "Сборка или тесты не прошли." }
+          & mvn @common -DskipTests install
+          if ($LASTEXITCODE -ne 0) { throw 'Compilation failed.' }
+          $modules = 'core,update-tool,ui-fx,ui-swing,web,repository-doc-audits'
+          if ($fullChecks) {
+            & mvn @common -pl $modules test
+            if ($LASTEXITCODE -ne 0) { throw 'Full unit tests failed.' }
+          } else {
+            # Smoke Maven должен сохранить release identity при повторной фильтрации ресурсов.
+            $previousMavenArgs = $env:MAVEN_ARGS
+            try {
+              $env:MAVEN_ARGS = "$previousMavenArgs -Dapp.release=$env:RELEASE_NUMBER -Dapp.commit=${{ github.sha }}".Trim()
+              & .github/scripts/Invoke-CiSmoke.ps1 -Modules $modules
+              if ($LASTEXITCODE -ne 0) { throw 'Critical smoke tests failed.' }
+            } finally { $env:MAVEN_ARGS = $previousMavenArgs }
+          }
           & mvn @common -Pdist -pl dist package
           if ($LASTEXITCODE -ne 0) { throw "Портативная сборка не собралась." }
 
       - name: Non-release affected tests
-        if: steps.impact.outputs.release != 'true' && (steps.impact.outputs.unitModules != '' || steps.impact.outputs.ui == 'true' || steps.impact.outputs.e2e == 'true' || steps.impact.outputs.portable == 'true')
+        if: steps.impact.outputs.release != 'true'
         shell: pwsh
         run: |
           $modules = '${{ steps.impact.outputs.unitModules }}'
-          if ($modules -ne 'repository-doc-audits' -or '${{ steps.impact.outputs.ui }}' -eq 'true' -or
-              '${{ steps.impact.outputs.e2e }}' -eq 'true' -or '${{ steps.impact.outputs.portable }}' -eq 'true') {
-            & mvn -B -ntp -DskipTests install
-            if ($LASTEXITCODE -ne 0) { throw 'Compilation failed.' }
-          }
+          $fullChecks = '${{ github.event_name }}' -eq 'workflow_dispatch' -and '${{ inputs.full_checks }}' -eq 'true'
+          & mvn -B -ntp -DskipTests install
+          if ($LASTEXITCODE -ne 0) { throw 'Compilation failed.' }
           if ($modules -ne '') {
-            & mvn -B -ntp -pl $modules test
-            if ($LASTEXITCODE -ne 0) { throw 'Affected tests failed.' }
+            if ($fullChecks) {
+              & mvn -B -ntp -pl $modules test
+              if ($LASTEXITCODE -ne 0) { throw 'Affected tests failed.' }
+            } else {
+              & .github/scripts/Invoke-CiSmoke.ps1 -Modules $modules
+              if ($LASTEXITCODE -ne 0) { throw 'Critical smoke tests failed.' }
+            }
           }
 
       - name: Non-release portable test image
-        if: steps.impact.outputs.release != 'true' && steps.impact.outputs.portable == 'true'
+        if: github.event_name == 'workflow_dispatch' && inputs.full_checks == true && steps.impact.outputs.release != 'true' && steps.impact.outputs.portable == 'true'
         shell: pwsh
         run: |
           # Test-only изменения не публикуют релиз, но проверяют свежий portable image.
@@ -145,7 +172,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Portable test build failed.' }
 
       - name: Actual UI gates (S4, blocking)
-        if: steps.impact.outputs.release == 'true' || steps.impact.outputs.ui == 'true'
+        if: github.event_name == 'workflow_dispatch' && inputs.full_checks == true && (steps.impact.outputs.release == 'true' || steps.impact.outputs.ui == 'true')
         id: ui_gates
         timeout-minutes: 90
         shell: pwsh
@@ -153,7 +180,7 @@ jobs:
           & .github/scripts/Invoke-UiGates.ps1 -Mode UI
 
       - name: Actual recovery gates (S4, blocking)
-        if: steps.impact.outputs.release == 'true' || steps.impact.outputs.e2e == 'true'
+        if: github.event_name == 'workflow_dispatch' && inputs.full_checks == true && (steps.impact.outputs.release == 'true' || steps.impact.outputs.e2e == 'true')
         id: recovery_gates
         timeout-minutes: 60
         shell: pwsh
@@ -161,7 +188,7 @@ jobs:
           & .github/scripts/Invoke-UiGates.ps1 -Mode E2E
 
       - name: Complete UI and E2E profile lifecycles
-        if: steps.impact.outputs.release == 'true' || steps.impact.outputs.ui == 'true' || steps.impact.outputs.e2e == 'true'
+        if: github.event_name == 'workflow_dispatch' && inputs.full_checks == true && (steps.impact.outputs.release == 'true' || steps.impact.outputs.ui == 'true' || steps.impact.outputs.e2e == 'true')
         timeout-minutes: 30
         shell: pwsh
         run: |
@@ -188,17 +215,18 @@ jobs:
           if-no-files-found: error
 
       - name: Verify portable build
-        if: steps.impact.outputs.release == 'true' || steps.impact.outputs.portable == 'true'
+        if: steps.impact.outputs.release == 'true' || (github.event_name == 'workflow_dispatch' && inputs.full_checks == true && steps.impact.outputs.portable == 'true')
         timeout-minutes: 30
         shell: pwsh
         run: |
           # Запускаем готовые exe из копии папки с пробелами и кириллицей в пути:
           # все три клиента должны стартовать и создать только CashMemory.
+          $fullChecks = '${{ github.event_name }}' -eq 'workflow_dispatch' -and '${{ inputs.full_checks }}' -eq 'true'
           & "$env:GITHUB_WORKSPACE\.github\scripts\Test-Portable.ps1" `
             -PortableDir "$env:GITHUB_WORKSPACE\dist\target\dist\CashPrediction" `
             -WorkDir "$env:RUNNER_TEMP\portable test" `
             -EvidenceRoot "$env:RUNNER_TEMP\safe-portable-evidence" `
-            -Parity `
+            -Parity:$fullChecks `
             -CleanRegistry
           if ($LASTEXITCODE -ne 0) { throw "Проверка портативной сборки не прошла." }
 
@@ -227,7 +255,9 @@ jobs:
           $commandFile = Join-Path $env:RUNNER_TEMP 's7-tool-command.json'
           & .github/scripts/S7-ToolCommand.ps1 -Java "$env:JAVA_HOME/bin/java.exe" `
             -ToolJar $toolJars[0].FullName -CoreJar $coreJars[0].FullName -Out $commandFile
-          & .github/scripts/Test-S7Pipeline.ps1 -ToolCommandFile $commandFile
+          if ('${{ github.event_name }}' -eq 'workflow_dispatch' -and '${{ inputs.full_checks }}' -eq 'true') {
+            & .github/scripts/Test-S7Pipeline.ps1 -ToolCommandFile $commandFile
+          }
           $stateFile = Join-Path $env:RUNNER_TEMP 's7-state.json'
           & .github/scripts/S7-Capture.ps1 -ReleaseNumber ([int]$env:RELEASE_NUMBER) `
             -CommitSha '${{ github.sha }}' -Repository $env:GH_REPO `
@@ -244,7 +274,7 @@ jobs:
         env:
           S7_APPROVED_SHA: ${{ vars.S7_APPROVED_SHA }}
         run: |
-          # Ведущий связывает разрешение публикации с SHA полной принятой матрицы S4-S7.
+          # Ведущий связывает SHA с полной локальной приёмкой; quick CI не заменяет её.
           if ($env:S7_APPROVED_SHA -cne '${{ github.sha }}') { throw 'S7_RELEASE_MATRIX_NOT_APPROVED' }
 
       - name: Verify release Git and embedded AppInfo

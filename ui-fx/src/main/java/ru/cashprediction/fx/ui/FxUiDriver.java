@@ -22,6 +22,7 @@ import ru.cashprediction.core.ui.selftest.paint.WidgetCapture;
 public final class FxUiDriver implements UiDriver {
     private final FxUiPort port;
     private final AppEnvironment environment;
+    private final AppController controller;
     private final FxUiDumper dumper;
     private volatile long pendingDelay;
     private Node hoveredCard;
@@ -29,7 +30,7 @@ public final class FxUiDriver implements UiDriver {
 
     /** Сохраняет исходный конкретный порт отдельно от контроллера. */
     public FxUiDriver(FxUiPort port, AppController controller, AppEnvironment environment) {
-        this.port = port; this.environment = environment; dumper = new FxUiDumper(port, controller);
+        this.port = port; this.controller = controller; this.environment = environment; dumper = new FxUiDumper(port, controller);
     }
     /** Возвращает идентичность настоящего клиента. */
     @Override public ClientKind client() { return ClientKind.FX; }
@@ -91,13 +92,95 @@ public final class FxUiDriver implements UiDriver {
         catch (ExecutionException | TimeoutException e) { throw new IllegalStateException(e); }
     }
     /** Ждёт очереди JavaFX и задержек реального ввода, не блокируя поток интерфейса. */
-    @Override public void awaitIdle(Duration timeout) throws InterruptedException {
+    @Override public void awaitIdle(Duration timeout) throws Exception {
         if (Platform.isFxApplicationThread()) throw new IllegalStateException("UI wait");
+        long deadline = System.nanoTime() + timeout.toNanos();
         long delay = pendingDelay; pendingDelay = 0;
-        // Idle включает настоящую отложенную запись сеанса, как и общий контракт драйвера.
-        long settle = delay + ru.cashprediction.core.session.SessionRecorder.DEBOUNCE.toMillis();
-        fx(() -> null); Thread.sleep(Math.min(settle + 40, timeout.toMillis())); fx(() -> null);
+        // Задержка нужна только действительному вводу, не каждому чтению дампа.
+        idleHandoff(deadline, () -> null, Platform::runLater);
+        long settle = idleDelayMillis(delay, Long.MAX_VALUE);
+        idlePause(deadline, TimeUnit.MILLISECONDS.toNanos(settle));
+        idleHandoff(deadline, () -> null, Platform::runLater);
+        Supplier<Boolean> readiness = () -> {
+            var recorder = controller.recorder();
+            if (port.exited || recorder != null && (!recorder.isEnabled() || recorder.isClosed())) return true;
+            var state = controller.state();
+            boolean questionVisible = port.windows.values().stream()
+                    .anyMatch(w -> w instanceof FxAlerts a && a.showing() && startupDecision(a.spec.purpose()));
+            if (snapshotWaitNotRequired(state.recorder(), questionVisible)) return true;
+            if (state.recorder() == RecorderStatus.PENDING_RESTORE) return false;
+            if (recorder == null && questionVisible) return true;
+            return recorder != null && recorder.isStarted()
+                    && snapshotStoresReady(recorder, state.stores())
+                    && port.windows.values().stream().allMatch(w -> !(w instanceof FxFormDialog f)
+                            || formReady(f.session.isClosed(), f.showing()));
+        };
+        awaitSnapshotIdle(deadline, readiness, Platform::runLater);
     }
+    /** Второй handoff дренирует доставленные outcomes и перепроверяет readiness в финальном UI turn. */
+    static void awaitSnapshotIdle(long deadline, Supplier<Boolean> readiness,
+                                  java.util.function.Consumer<Runnable> dispatch) throws Exception {
+        while (true) {
+            if (idleHandoff(deadline, readiness, dispatch) && idleHandoff(deadline, readiness, dispatch)) return;
+            idlePause(deadline, Math.min(remaining(deadline), TimeUnit.MILLISECONDS.toNanos(20)));
+        }
+    }
+    /** Очередь и даже успешный поздний ответ ограничены общим deadline; interruption не теряется. */
+    static void idlePause(long deadline, long nanos) throws TimeoutException, InterruptedException {
+        if (nanos >= remaining(deadline)) throw new TimeoutException("FX idle settle exceeds deadline");
+        try { TimeUnit.NANOSECONDS.sleep(nanos); }
+        catch (InterruptedException failure) { Thread.currentThread().interrupt(); throw failure; }
+        remaining(deadline);
+    }
+    /** Ограничивает очередь тем же бюджетом, что задержки и predicate. */
+    static <T> T idleHandoff(long deadline, Supplier<T> action, java.util.function.Consumer<Runnable> dispatch) throws Exception {
+        remaining(deadline);
+        var task = new FutureTask<T>(() -> { remaining(deadline); return action.get(); });
+        dispatch.accept(task);
+        try {
+            T value = task.get(remaining(deadline), TimeUnit.NANOSECONDS);
+            remaining(deadline);
+            return value;
+        } catch (ExecutionException failure) {
+            if (failure.getCause() instanceof Exception cause) throw cause;
+            if (failure.getCause() instanceof Error cause) throw cause;
+            throw new IllegalStateException(failure.getCause());
+        } catch (TimeoutException failure) { task.cancel(false); throw failure; }
+        catch (InterruptedException failure) {
+            task.cancel(false); Thread.currentThread().interrupt(); throw failure;
+        }
+    }
+    /** Старый savedAt подтверждает только startup outcome, не текущий dirty snapshot. */
+    static boolean snapshotStoresReady(ru.cashprediction.core.session.SessionRecorder recorder,
+                                       List<ru.cashprediction.core.session.StoreStatus> stores) {
+        return recorder.hasCompleteCurrentCapture()
+                && startupStoresReady(recorder.stores().stream().map(s -> s.id()).toList(), stores);
+    }
+    /** Ограничивает только задержку текущего жеста; debounce записи не является паузой каждого idle. */
+    static long idleDelayMillis(long pending, long timeout) {
+        long limit = Math.max(0, timeout);
+        long gesture = Math.min(Math.max(0, pending), limit);
+        return gesture + Math.min(40, limit - gesture);
+    }
+    /** Требует фактический результат всех ожидаемых stores, без дубликатов и подмены успеха. */
+    static boolean startupStoresReady(List<String> expected, List<ru.cashprediction.core.session.StoreStatus> stores) {
+        var ids = new HashSet<>(expected);
+        return ids.size() == expected.size() && stores.size() == expected.size()
+                && stores.stream().map(ru.cashprediction.core.session.StoreStatus::storeId).distinct().count() == stores.size()
+                && stores.stream().allMatch(s -> ids.contains(s.storeId())
+                        && (s.savedAt() != null || !s.ok() && !s.message().isBlank()));
+    }
+    /** Не ждёт записи, намеренно отключённой до ответа или во втором экземпляре. */
+    static boolean snapshotWaitNotRequired(RecorderStatus status, boolean questionVisible) {
+        return status == RecorderStatus.DISABLED_SECOND_INSTANCE
+                || status == RecorderStatus.PENDING_RESTORE && questionVisible;
+    }
+    /** Вопрос запуска должен получить ответ до установки регистратора. */
+    static boolean startupDecision(String purpose) {
+        return Set.of("crashRecovery", "alreadyRunning", "restoreReport", "recorderNotStarted", "loadDiagnostics").contains(purpose);
+    }
+    /** Закрытая форма остаётся в истории порта, но не задерживает следующий dump. */
+    static boolean formReady(boolean closed, boolean showing) { return closed || showing; }
     /** Читает реальные виджеты на потоке интерфейса. */
     @Override public UiDump dump(String step) { return fx(() -> {
         port.windows.values().stream().filter(WindowHandle::showing).filter(w -> w instanceof FxFormDialog).map(w -> (FxFormDialog) w).forEach(w -> w.printLayoutMetrics(step));

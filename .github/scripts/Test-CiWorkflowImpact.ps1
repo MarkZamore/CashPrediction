@@ -1,11 +1,11 @@
 <# Проверяет условия affected workflow, синтаксис pwsh-блоков и выбор успешной базы без сети/GUI. #>
 #requires -Version 7.0
 [CmdletBinding()]
-param([string]$Repository=(Join-Path $PSScriptRoot '../..'), [string]$ReceiptPath, [switch]$BaselineOutputOnly, [switch]$EarlyPlatformOnly)
+param([string]$Repository=(Join-Path $PSScriptRoot '../..'), [string]$ReceiptPath, [switch]$BaselineOutputOnly, [switch]$EarlyPlatformOnly, [switch]$SmokeOnly, [switch]$LightweightOnly)
 $ErrorActionPreference='Stop'
-if ($BaselineOutputOnly -and $EarlyPlatformOnly) { throw 'CI_FIXTURE_SCOPE_CONFLICT' }
+if (@($BaselineOutputOnly,$EarlyPlatformOnly,$SmokeOnly,$LightweightOnly | Where-Object { $_ }).Count -gt 1) { throw 'CI_FIXTURE_SCOPE_CONFLICT' }
 $checks=0
-$inputPaths=@('.github/scripts/Get-CiImpact.ps1','.github/scripts/Resolve-CiBaseline.ps1','.github/scripts/Test-CiWorkflowImpact.ps1','.github/scripts/Initialize-CiDesktop.ps1','.github/scripts/CiDesktopProbe.java','.github/workflows/ci.yml','.github/workflows/release.yml')
+$inputPaths=@('.github/scripts/Invoke-CiSmoke.ps1','.github/scripts/Get-CiImpact.ps1','.github/scripts/Resolve-CiBaseline.ps1','.github/scripts/Test-CiWorkflowImpact.ps1','.github/scripts/Initialize-CiDesktop.ps1','.github/scripts/CiDesktopProbe.java','.github/workflows/ci.yml','.github/workflows/release.yml')
 $inputHashes=@{}
 foreach ($path in $inputPaths) { $inputHashes[$path]=(Get-FileHash -LiteralPath (Join-Path $Repository $path)).Hash }
 # Проверяет утверждение и считает только выполненные проверки.
@@ -95,7 +95,85 @@ function Invoke-Gh {
         return [ordered]@{temp=$taskTemp;cases=@($observations.ToArray());mockScope='full CLI copy; only local Git/GhRetry transport; exact call counts';network=$false;maven=$false;gui=$false}
     } finally { $global:LASTEXITCODE=$previousExit }
 }
-$baselineOutput=if (-not $EarlyPlatformOnly) { Test-CiBaselineCliOutput } else { $null }
+# Actual smoke CLI использует только mvn argv seam; источник tests проверяется, JUnit не запускается.
+function Test-CiSmokeContract {
+    $ScriptUnderTest=Join-Path $Repository '.github/scripts/Invoke-CiSmoke.ps1'
+    $previousExit=$global:LASTEXITCODE
+    $hadState=Test-Path Variable:global:CpCiSmokeFixture
+    $previousState=if($hadState){$global:CpCiSmokeFixture}else{$null}
+    $taskTemp=Join-Path ([IO.Path]::GetTempPath()) ('cp-ci-smoke-contract-'+[guid]::NewGuid().ToString('N'))
+    $null=New-Item -ItemType Directory -Path $taskTemp
+    $ReceiptPath=Join-Path $taskTemp 'receipt.json'
+    try {
+        $ErrorActionPreference='Stop'
+        $global:CpCiSmokeFixture=@{checks=0;findings=[Collections.Generic.List[string]]::new();calls=[Collections.Generic.List[object]]::new();exitCode=0}
+        $cases=[Collections.Generic.List[object]]::new()
+        function Assert-Smoke([bool]$Condition,[string]$Label) {
+            $global:CpCiSmokeFixture.checks++
+            if(-not $Condition){$global:CpCiSmokeFixture.findings.Add($Label)}
+        }
+        $tokens=$null;$errors=$null
+        $null=[Management.Automation.Language.Parser]::ParseFile($ScriptUnderTest,[ref]$tokens,[ref]$errors)
+        Assert-Smoke ($errors.Count -eq 0) 'actual PS syntax'
+        $global:LASTEXITCODE=0
+        function mvn {$global:CpCiSmokeFixture.calls.Add([string[]]$args);$global:LASTEXITCODE=$global:CpCiSmokeFixture.exitCode}
+        $plan=& $ScriptUnderTest -Modules 'core,update-tool,ui-fx,ui-swing,web,repository-doc-audits' -Repository $Repository -PlanOnly
+        Assert-Smoke ($plan.executed -eq $false -and $global:CpCiSmokeFixture.calls.Count -eq 0) 'all selected modules PlanOnly never executes Maven'
+        $required=@('StartupDataBoundaryIntegrationTest','UpdateLifecycleOutcomeContractTest','ReconnectCredentialsTest',
+            'UpdateCodecTest','TreeDeltaEngineTest','SearchTextTest','UpdateToolTransportTest',
+            'FxUpdateSessionTest','SwingUpdateSessionTest','WebUpdateSessionTest','SharedHttpContractTest',
+            'DeveloperDocumentationTest','RepositoryDocumentsTest','ServiceBoundaryContractsTest','UiSpecCopyTest')
+        foreach($test in $required){Assert-Smoke (($plan.tests -split ',') -ccontains $test) "critical semantic selector retained: $test"}
+        Assert-Smoke ($plan.arguments -contains '-Dsurefire.failIfNoSpecifiedTests=true' -and
+            $plan.arguments -notcontains '-DskipTests' -and $plan.arguments[-1] -ceq 'test') 'selected tests must execute and empty selection cannot pass'
+        Assert-Smoke ($plan.tests -notmatch 'Robot|PortableBootstrap|PowerShellHelperTest|ParityTest|CrashRestore') 'no named heavy class in automatic selector'
+        foreach($modules in @('','unknown','core,core','CORE','core,CORE','core,','core, web')) {
+            $before=$global:CpCiSmokeFixture.calls.Count;$failure=$null
+            try{& $ScriptUnderTest -Modules $modules -Repository $Repository|Out-Null}catch{$failure=$_.Exception.Message}
+            $rejected=$failure -like 'CI_SMOKE_MODULE:*' -or $failure -ceq 'CI_SMOKE_EMPTY_MODULES'
+            Assert-Smoke ($rejected -and $global:CpCiSmokeFixture.calls.Count -eq $before) "reject exact invalid modules before mvn: [$modules]"
+            $cases.Add(@{modules=$modules;error=$failure;calls=$global:CpCiSmokeFixture.calls.Count-$before})
+        }
+        $global:CpCiSmokeFixture.exitCode=17;$before=$global:CpCiSmokeFixture.calls.Count;$failure=$null
+        try{& $ScriptUnderTest -Modules 'web' -Repository $Repository|Out-Null}catch{$failure=$_.Exception.Message}
+        Assert-Smoke ($failure -ceq 'CI_SMOKE_FAILED' -and $global:CpCiSmokeFixture.calls.Count -eq $before+1) 'selected Maven nonzero fails actual script'
+        $argv=$global:CpCiSmokeFixture.calls[-1]
+        Assert-Smoke (($argv -join '|') -ceq '-B|-ntp|-pl|web|-Dtest=NoDashesInWebUiTest,SharedHttpContractTest,WebUpdateSessionTest|-Dsurefire.failIfNoSpecifiedTests=true|test') 'exact web argv, no global skipping or reactor sweep'
+        $fixture=Join-Path ([IO.Path]::GetTempPath()) ('cp-ci-smoke-files-'+[guid]::NewGuid().ToString('N'))
+        $testRoot=Join-Path $fixture 'update-tool/src/test/java'
+        [void][IO.Directory]::CreateDirectory($testRoot)
+        foreach($mode in @('missing','ambiguous')) {
+            if($mode -eq 'ambiguous') {
+                foreach($dir in @('a','b')) {
+                    [void][IO.Directory]::CreateDirectory((Join-Path $testRoot $dir))
+                    [IO.File]::WriteAllText((Join-Path $testRoot "$dir/UpdateToolTransportTest.java"),'// Synthetic filename-resolution fixture only.')
+                }
+            }
+            $failure=$null;$before=$global:CpCiSmokeFixture.calls.Count
+            try{& $ScriptUnderTest -Modules 'update-tool' -Repository $fixture|Out-Null}catch{$failure=$_.Exception.Message}
+            Assert-Smoke ($failure -ceq 'CI_SMOKE_TEST_MISSING_OR_AMBIGUOUS: update-tool/UpdateToolTransportTest' -and
+                $global:CpCiSmokeFixture.calls.Count -eq $before) "$mode test source rejected before mvn"
+        }
+        @{scope='ACTUAL_PS_SELECTOR_AND_MOCK_MVN_ARGV';checks=$($global:CpCiSmokeFixture.checks);findings=@($global:CpCiSmokeFixture.findings.ToArray());invalidCases=@($cases.ToArray());
+            scriptSha256=(Get-FileHash -LiteralPath $ScriptUnderTest).Hash;syntheticFilenameFixture=$fixture;
+            mavenExecuted=$false;javaTestsExecuted=$false;guiExecuted=$false} |
+            ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $ReceiptPath -Encoding utf8
+        Write-Host "Smoke contract: checks=$($global:CpCiSmokeFixture.checks) findings=$($global:CpCiSmokeFixture.findings.Count), no Maven/JUnit/GUI."
+        if($global:CpCiSmokeFixture.findings.Count){throw ($global:CpCiSmokeFixture.findings -join '; ')}
+        return (Get-Content -LiteralPath $ReceiptPath -Raw | ConvertFrom-Json)
+    } finally {
+        $global:LASTEXITCODE=$previousExit
+        if($hadState){$global:CpCiSmokeFixture=$previousState}
+        else {Remove-Variable -Name CpCiSmokeFixture -Scope Global -ErrorAction SilentlyContinue}
+    }
+}
+if($SmokeOnly) {
+    $smoke=Test-CiSmokeContract
+    if($ReceiptPath){[IO.File]::WriteAllText($ReceiptPath,($smoke|ConvertTo-Json -Depth 8),[Text.UTF8Encoding]::new($false))}
+    Write-Host 'RESULT: smoke selector contract PASS; actual CLI, only mvn argv mocked; no Maven/JUnit/GUI.'
+    return
+}
+$baselineOutput=if (-not $EarlyPlatformOnly -and -not $LightweightOnly) { Test-CiBaselineCliOutput } else { $null }
 if ($BaselineOutputOnly) {
     $outputReceipt=[ordered]@{checks=$checks;failed=0;baselineOutput=$baselineOutput;inputs=@($inputPaths | ForEach-Object {
         [ordered]@{path=[IO.Path]::GetFullPath((Join-Path $Repository $_));sha256=$inputHashes[$_]}
@@ -113,70 +191,110 @@ function Read-CiSteps([string]$Path) {
 }
 # Проверяет настоящий порядок CI-кода с локальным mvn seam: никаких процессов Maven или product fixtures.
 function Test-CiEarlyPlatformPreflight {
-    $steps=Read-CiSteps (Join-Path $Repository '.github/workflows/ci.yml')
-    $body=@($steps | Where-Object name -CEQ 'Build and test')[0].body
-    $run=[regex]::Match($body,'(?ms)^        run: \|\r?\n(?<code>.*)').Groups['code'].Value -replace '(?m)^          ',''
-    $start=$run.IndexOf('$modules =',[StringComparison]::Ordinal)
-    Assert-Ci ($start -ge 0) 'actual module planning statements found'
-    $code=$run.Substring($start).Replace('$env:GITHUB_WORKSPACE','$fixtureRepository')
-    $selector='-Dtest=StartupDataBoundaryIntegrationTest,UpdateLifecycleOutcomeContractTest,ReconnectCredentialsTest'
     $observations=[Collections.Generic.List[object]]::new()
-    $previousExit=$global:LASTEXITCODE
+    $previousExit=$global:LASTEXITCODE; $previousArgs=$env:MAVEN_ARGS
     try {
-        foreach ($case in @(
-            @{modules='core';failure='';expected=3},
-            @{modules='core,update-tool,ui-fx,ui-swing,web,repository-doc-audits';failure='';expected=3},
-            @{modules='repository-doc-audits';failure='';expected=1},
-            @{modules='ui-swing,repository-doc-audits';failure='';expected=2},
-            @{modules='';failure='';expected=0},
-            @{modules='core';failure='focused';expected=2},
-            @{modules='core';failure='compile';expected=1})) {
-            $modules=$case.modules
-            $actual=$code.Replace('${{ steps.impact.outputs.unitModules }}',$modules)
-            $actual=[regex]::Replace($actual,'\$\{\{ steps\.impact\.outputs\.(compile|ui|e2e|portable) \}\}','false')
-            $tokens=$null; $errors=$null
-            $null=[Management.Automation.Language.Parser]::ParseInput($actual,[ref]$tokens,[ref]$errors)
-            Assert-Ci ($errors.Count -eq 0) "early/$modules actual PS syntax"
-            $calls=[Collections.Generic.List[object]]::new()
-            $failure=$case.failure; $caught=$null
-            & {
-                $fixtureRepository=$Repository
-                # Функция только в дочернем scope; записывает argv и выдаёт заданный exit без запуска mvn.
-                function mvn {
-                    $calls.Add([string[]]$args)
-                    $global:LASTEXITCODE=if (($failure -ceq 'focused' -and $args -contains $selector) -or
-                        ($failure -ceq 'compile' -and $args -contains 'install')) { 1 } else { 0 }
+        foreach ($workflow in 'ci','release') {
+            $steps=Read-CiSteps (Join-Path $Repository ".github/workflows/$workflow.yml")
+            $names=if ($workflow -ceq 'ci') { @('Build and test') } else { @('Build and test','Non-release affected tests') }
+            foreach ($name in $names) {
+                $body=@($steps | Where-Object name -CEQ $name)[0].body
+                $run=[regex]::Match($body,'(?ms)^        run: \|\r?\n(?<code>.*)').Groups['code'].Value -replace '(?m)^          ',''
+                $release=$workflow -ceq 'release' -and $name -ceq 'Build and test'
+                $marker=if ($release) { '$common = ' } else { '$modules = ' }
+                $start=$run.IndexOf($marker,[StringComparison]::Ordinal)
+                Assert-Ci ($start -ge 0) "$workflow/$name actual build suffix"
+                $suffix=$run.Substring($start).Replace('& .github/scripts/Invoke-CiSmoke.ps1','& Invoke-SmokeFixture')
+                foreach ($full in $false,$true) {
+                    foreach ($failure in '','compile','tests') {
+                        $modules=if ($release) { 'core,update-tool,ui-fx,ui-swing,web,repository-doc-audits' } else { 'core,web' }
+                        $actual=$suffix.Replace('${{ steps.impact.outputs.unitModules }}',$modules).Replace('${{ github.sha }}',('2'*40))
+                        $actual=$actual.Replace('${{ github.event_name }}','workflow_dispatch').Replace('${{ inputs.full_checks }}',$full.ToString().ToLowerInvariant())
+                        $tokens=$null; $errors=$null
+                        $null=[Management.Automation.Language.Parser]::ParseInput($actual,[ref]$tokens,[ref]$errors)
+                        Assert-Ci ($errors.Count -eq 0) "$workflow/$name suffix syntax"
+                        $state=[pscustomobject]@{calls=[Collections.Generic.List[object]]::new();error=$null;full=$full;failure=$failure}
+                        $env:MAVEN_ARGS='-Dprior=preserved'
+                        $oldRelease=$env:RELEASE_NUMBER; $env:RELEASE_NUMBER='42'
+                        try {
+                            & {
+                                $fullChecks=$state.full
+                                function mvn {
+                                    $state.calls.Add([pscustomobject]@{kind='mvn';argv=[string[]]$args;env=$env:MAVEN_ARGS})
+                                    $global:LASTEXITCODE=if (($state.failure -ceq 'compile' -and $args -contains 'install') -or ($state.failure -ceq 'tests' -and $args -contains 'test')) { 17 } else { 0 }
+                                }
+                                function Invoke-SmokeFixture {
+                                    $state.calls.Add([pscustomobject]@{kind='smoke';argv=[string[]]$args;env=$env:MAVEN_ARGS})
+                                    $global:LASTEXITCODE=if ($state.failure -ceq 'tests') { 17 } else { 0 }
+                                }
+                                try { & ([scriptblock]::Create($actual)) } catch { $state.error=$_.Exception.Message }
+                            }
+                        } finally { $env:RELEASE_NUMBER=$oldRelease }
+                        $expected=if ($failure -ceq 'compile') { 1 } elseif ($release -and -not $failure) { 3 } else { 2 }
+                        Assert-Ci ($state.calls.Count -eq $expected) "$workflow/$name/$full/$failure stops after failed operation"
+                        Assert-Ci ($state.calls[0].argv -contains '-DskipTests' -and $state.calls[0].argv[-1] -ceq 'install') 'compile first, no automatic full tests'
+                        if ($failure -cne 'compile') {
+                            $test=$state.calls[1]
+                            Assert-Ci ($test.kind -ceq $(if ($full) { 'mvn' } else { 'smoke' })) 'manual full versus automatic smoke'
+                            Assert-Ci ($test.argv -notcontains '-DskipTests') 'selected tests never globally skipped'
+                            if ($full) { Assert-Ci ($test.argv -contains '-pl' -and $test.argv -contains $modules -and $test.argv[-1] -ceq 'test') 'exact selected unit modules' }
+                            else { Assert-Ci (($test.argv -join '|') -ceq "-Modules|$modules") 'actual smoke selected modules argv' }
+                            if ($release -and -not $full) {
+                                Assert-Ci ($test.env -ceq ("-Dprior=preserved -Dapp.release=42 -Dapp.commit="+('2'*40))) 'release smoke inherits exact version and commit'
+                            }
+                        }
+                        Assert-Ci ($env:MAVEN_ARGS -ceq '-Dprior=preserved') 'MAVEN_ARGS restored on success and failure'
+                        Assert-Ci (($null -ne $state.error) -eq [bool]$failure) 'failure is not swallowed'
+                        $observations.Add([ordered]@{workflow=$workflow;step=$name;full=$full;failure=$failure;calls=@($state.calls.ToArray());error=$state.error})
+                    }
                 }
-                try { & ([scriptblock]::Create($actual)) }
-                catch { Set-Variable -Name caught -Value $_.Exception.Message -Scope 1 }
             }
-            Assert-Ci ($calls.Count -eq $case.expected) "early/$modules/$failure exact invocation count"
-            $core=($modules -split ',') -ccontains 'core'
-            $focused=@($calls.ToArray() | Where-Object { $_ -contains $selector })
-            Assert-Ci ($focused.Count -eq $(if ($core -and $failure -cne 'compile') { 1 } else { 0 })) "early/$modules exact core token gate"
-            if ($core -and $failure -cne 'compile') {
-                Assert-Ci (($calls[0] -join '|') -ceq '-B|-ntp|-DskipTests|install' -and
-                    ($calls[1] -join '|') -ceq ('-B|-ntp|-pl|core|'+$selector+'|-Dsurefire.reportsDirectory='+(Join-Path $Repository 'core/target/early-platform-preflight-reports')+'|test')) 'compile before exact three-class preflight, separate reports'
-            }
-            if ($failure) {
-                $expectedError=if ($failure -ceq 'focused') { 'Early platform preflight failed.' } else { 'Compilation failed.' }
-                Assert-Ci ($caught -ceq $expectedError) "$failure failure blocks later full units"
-            } else {
-                Assert-Ci ($null -eq $caught) "early/$modules success"
-                if ($modules) { Assert-Ci (($calls[-1] -join '|') -ceq "-B|-ntp|-pl|$modules|test") 'full affected unit command remains unchanged, no exclusions' }
-            }
-            $observations.Add([ordered]@{modules=$modules;failure=$failure;calls=@($calls.ToArray());error=$caught})
         }
-        foreach ($name in 'Actual UI gates (S4, blocking)','Actual recovery gates (S4, blocking)','Complete UI and E2E profile lifecycles','Verify portable build') {
-            Assert-Ci (@($steps | Where-Object name -CEQ $name).Count -eq 1) "early retains mandatory $name"
-        }
-        $sanitize=@($steps | Where-Object name -CEQ 'Sanitize default test reports')[0].body
-        Assert-Ci ($sanitize.Contains("'early-platform-preflight-reports'") -and $sanitize.Contains('Protect-GateText')) 'early reports preserved through same sanitizer and upload'
         return @($observations.ToArray())
-    } finally { $global:LASTEXITCODE=$previousExit }
+    } finally { $global:LASTEXITCODE=$previousExit; $env:MAVEN_ARGS=$previousArgs }
 }
 $earlyPlatform=@(Test-CiEarlyPlatformPreflight)
-if ($EarlyPlatformOnly) {
+# Новый закрытый контракт использует те же функции, что полный набор ниже, без baseline/desktop повторов.
+function Test-CiLightweightGates {
+    $tokens=$null; $errors=$null
+    $ast=[Management.Automation.Language.Parser]::ParseFile($PSCommandPath,[ref]$tokens,[ref]$errors)
+    Assert-Ci ($errors.Count -eq 0) 'validator permanent PS syntax'
+    foreach ($name in 'Test-CiStepEnabled','Get-CiStep','Test-CiApprovalRefusal') {
+        $definition=@($ast.EndBlock.Statements | Where-Object { $_ -is [Management.Automation.Language.FunctionDefinitionAst] -and $_.Name -ceq $name })
+        Assert-Ci ($definition.Count -eq 1) "actual predicate $name"
+        . ([scriptblock]::Create($definition[0].Extent.Text))
+    }
+    $impact=[pscustomobject]@{ui=$true;e2e=$true;portable=$true;release=$true}
+    foreach ($workflow in 'ci','release') {
+        $source=Get-Content (Join-Path $Repository ".github/workflows/$workflow.yml") -Raw
+        Assert-Ci ($source -match '(?s)full_checks:.*?type: boolean.*?default: false') "$workflow opt-in default false"
+        $steps=Read-CiSteps (Join-Path $Repository ".github/workflows/$workflow.yml")
+        foreach ($name in 'Actual UI gates (S4, blocking)','Actual recovery gates (S4, blocking)','Complete UI and E2E profile lifecycles') {
+            $step=Get-CiStep $steps $name
+            foreach ($event in 'push','pull_request','workflow_dispatch') {
+                Assert-Ci (-not (Test-CiStepEnabled $step $impact $event $false)) "$workflow/$name no automatic heavy"
+            }
+            Assert-Ci (Test-CiStepEnabled $step $impact 'workflow_dispatch' $true) "$workflow/$name full manual retained"
+            $missing=[pscustomobject]@{body=$step.body -replace '(?m)^        if: [^\r\n]+',''}
+            Assert-Ci (Test-CiStepEnabled $missing $impact 'push' $false) 'negative missing if violates automatic-heavy contract'
+        }
+        Assert-Ci ((Get-CiStep $steps 'Complete UI and E2E profile lifecycles').body.Contains('-pl ui-parity verify')) 'profile no duplicate default reactor'
+    }
+    $releaseSteps=Read-CiSteps (Join-Path $Repository '.github/workflows/release.yml')
+    foreach ($name in 'Prepare','Build and test','Verify portable build','Prepare S7 update payloads','S7 release acceptance gate','Verify release Git and embedded AppInfo','Publish latest release') {
+        $step=Get-CiStep $releaseSteps $name
+        Assert-Ci (Test-CiStepEnabled $step $impact 'push' $false) "automatic release retains $name"
+        $docs=[pscustomobject]@{ui=$false;e2e=$false;portable=$false;release=$false}
+        Assert-Ci (-not (Test-CiStepEnabled $step $docs 'push' $false)) "docs do not publish/$name"
+    }
+    Assert-Ci (Test-CiStepEnabled (Get-CiStep $releaseSteps 'Non-release affected tests') $docs 'push' $false) 'docs still audited'
+    $approval=(Get-CiStep $releaseSteps 'S7 release acceptance gate').body
+    Assert-Ci (Test-CiApprovalRefusal $approval '') 'missing approval denied'
+    Assert-Ci (Test-CiApprovalRefusal $approval ('1'*40)) 'foreign approval denied'
+    Assert-Ci ((Get-CiStep $releaseSteps 'Publish latest release').body.Contains('-ApprovedCommitSha $env:S7_APPROVED_SHA')) 'publisher exact approved SHA'
+}
+Test-CiLightweightGates
+if ($EarlyPlatformOnly -or $LightweightOnly) {
     $earlyReceipt=[ordered]@{checks=$checks;failed=0;earlyPlatform=$earlyPlatform;network=$false;maven=$false;gui=$false;inputs=@($inputPaths | ForEach-Object {
         [ordered]@{path=[IO.Path]::GetFullPath((Join-Path $Repository $_));sha256=$inputHashes[$_]}
     })}
@@ -203,7 +321,7 @@ foreach ($workflow in 'ci','release') {
     Assert-Ci ($lifecycle.body.Contains('-pl ui-parity verify')) "$workflow no duplicate full reactor lifecycle"
     foreach ($name in 'Actual UI gates (S4, blocking)','Actual recovery gates (S4, blocking)','Verify portable build') {
         $step=@($steps | Where-Object name -eq $name)[0]
-        Assert-Ci ($null -ne $step -and $step.body -match '(?m)^        if: steps\.impact\.outputs\.') "$workflow/$name conditional but retained"
+        Assert-Ci ($null -ne $step -and $step.body -match '(?m)^        if: .*steps\.impact\.outputs\.') "$workflow/$name conditional but retained"
     }
     if ($workflow -eq 'release') {
         foreach ($name in 'Prepare','Prepare S7 update payloads','S7 release acceptance gate',
@@ -253,10 +371,13 @@ function Assert-CiAudit([bool]$Condition,[string]$Label) {
     if (-not $Condition) { $script:findings.Add($Label); Write-Host "FAIL: $Label" }
 }
 # Интерпретирует только закрытую грамматику impact if, не выполняя workflow run-команды.
-function Test-CiStepEnabled($Step,$Impact) {
+function Test-CiStepEnabled($Step,$Impact,[string]$Event='workflow_dispatch',[bool]$Full=$true) {
     $condition=[regex]::Match($Step.body,'(?m)^        if: (?<if>[^\r\n]+)')
     if (-not $condition.Success) { return $true }
     $text=$condition.Groups['if'].Value
+    if ($Event -cnotin @('push','pull_request','workflow_dispatch')) { throw 'FIXTURE_EVENT_GRAMMAR' }
+    $text=$text.Replace('github.event_name',"'$Event'").Replace('inputs.full_checks',$(if ($Full) { "'true'" } else { "'false'" }))
+    $text=[regex]::Replace($text,'(?<![a-z0-9\x27])true(?![a-z0-9\x27])',"'true'")
     $text=[regex]::Replace($text,'steps\.impact\.outputs\.(\w+)',{
         param($match)
         $property=$Impact.PSObject.Properties[$match.Groups[1].Value]
@@ -265,7 +386,7 @@ function Test-CiStepEnabled($Step,$Impact) {
         if ($value -cnotmatch '^[a-z0-9,-]*$') { throw 'FIXTURE_OUTPUT_GRAMMAR' }
         "'$value'"
     })
-    if ($text -cnotmatch "^[a-z0-9,' ()=!&|-]*$") { throw 'FIXTURE_IF_GRAMMAR' }
+    if ($text -cnotmatch "^[a-z0-9_,' ()=!&|-]*$") { throw 'FIXTURE_IF_GRAMMAR' }
     $text=$text.Replace('==','-ceq').Replace('!=','-cne').Replace('&&','-and').Replace('||','-or')
     return [bool](& ([scriptblock]::Create($text)))
 }
@@ -301,8 +422,8 @@ $releaseSteps=Read-CiSteps (Join-Path $Repository '.github/workflows/release.yml
 foreach ($workflow in 'ci','release') {
     $steps=if ($workflow -eq 'ci') { $ciSteps } else { $releaseSteps }
     $desktop=Get-CiStep $steps 'Prepare interactive desktop'
-    $condition="steps.impact.outputs.ui == 'true' || steps.impact.outputs.e2e == 'true' || steps.impact.outputs.portable == 'true'"
-    if ($workflow -eq 'release') { $condition="steps.impact.outputs.release == 'true' || "+$condition }
+    $condition="github.event_name == 'workflow_dispatch' && inputs.full_checks == true && (steps.impact.outputs.ui == 'true' || steps.impact.outputs.e2e == 'true' || steps.impact.outputs.portable == 'true')"
+    if ($workflow -eq 'release') { $condition="steps.impact.outputs.release == 'true' || ("+$condition+")" }
     Assert-CiAudit ($desktop.body.Contains("        if: $condition")) "$workflow desktop exact affected condition"
     Assert-CiAudit ($desktop.body -match '(?m)^          & \.github/scripts/Initialize-CiDesktop\.ps1\s*$' -and
         $desktop.body -notmatch 'continue-on-error: true|ValidateInteropOnly') "$workflow actual blocking helper invocation"
@@ -369,10 +490,10 @@ foreach ($client in 'ui-fx','ui-swing','web') {
 }
 $toolImpact=Get-CiImpact -Paths @('update-tool/src/main/java/Changed.java')
 Assert-CiAudit ($toolImpact.release -and -not $toolImpact.ui -and -not $toolImpact.e2e) 'tool-only actual release adversarial flags'
-Assert-CiAudit (Test-CiReleaseAcceptance $releaseSteps $toolImpact) 'every actual release forces full acceptance even tool-only change'
+Assert-CiAudit (Test-CiReleaseAcceptance $releaseSteps $toolImpact) 'manual full release retains gates even tool-only change; automatic publication separately requires SHA approval'
 $build=(Get-CiStep $releaseSteps 'Build and test').body
 Assert-CiAudit ($build.Contains('-Dapp.release=$env:RELEASE_NUMBER') -and $build.Contains('-Dapp.commit=${{ github.sha }}') -and
-    $build.Contains('& mvn @common install') -and $build.Contains('& mvn @common -Pdist -pl dist package')) 'fresh release AppInfo passed to both install and portable build'
+    $build.Contains('& mvn @common -DskipTests install') -and $build.Contains('& mvn @common -Pdist -pl dist package')) 'fresh release AppInfo passed to both install and portable build'
 $approval=(Get-CiStep $releaseSteps 'S7 release acceptance gate').body
 Assert-CiAudit (Test-CiApprovalRefusal $approval ('1'*40)) 'mismatched approved SHA hard fails actual approval code'
 Assert-CiAudit (Test-CiApprovalRefusal $approval '') 'missing approved SHA hard fails actual approval code'

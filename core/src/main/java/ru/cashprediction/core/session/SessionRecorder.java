@@ -65,8 +65,10 @@ public final class SessionRecorder {
      *
      * @param snapshot снимок
      * @param sequence номер: чем больше, тем новее
+     * @param complete все зарегистрированные окна дали состояние
+     * @param epoch поколение clear/disable/re-enable
      */
-    private record Captured(SessionSnapshot snapshot, long sequence) {
+    private record Captured(SessionSnapshot snapshot, long sequence, boolean complete, long epoch) {
     }
 
     private final String client;
@@ -95,6 +97,12 @@ public final class SessionRecorder {
     /** Защищает таймеры и переходы состояния. */
     private final Object stateLock = new Object();
     private Scheduler.Task pendingTouch;
+    private long touchGeneration;
+    private int snapshotWork;
+    private long workSequence;
+    private long acknowledgedWork;
+    private long failedDispatch;
+    private volatile long snapshotEpoch;
     private Scheduler.Task periodic;
     private boolean markerWritten;
 
@@ -237,7 +245,8 @@ public final class SessionRecorder {
             if (pendingTouch != null) {
                 pendingTouch.cancel();
             }
-            pendingTouch = scheduler.schedule(this::onDebounceElapsed, DEBOUNCE);
+            long generation = ++touchGeneration;
+            pendingTouch = scheduler.schedule(() -> onDebounceElapsed(generation), DEBOUNCE);
         }
     }
 
@@ -335,6 +344,7 @@ public final class SessionRecorder {
         // Под блокировкой записи: идущая фоновая запись не должна вклиниться между очисткой и новым маркером.
         writeLock.lock();
         try {
+            synchronized (stateLock) { invalidateSnapshotEpoch(); }
             lastWrittenByStore.clear();
             lastSuccessByStore.clear();
             statuses = collectStatuses(SessionStore::clear);
@@ -362,7 +372,12 @@ public final class SessionRecorder {
      * @param value {@code true} — писать снимки
      */
     public void setEnabled(boolean value) {
-        enabled = value;
+        boolean changed;
+        synchronized (stateLock) {
+            changed = enabled != value;
+            if (changed) invalidateSnapshotEpoch();
+            enabled = value;
+        }
         if (!value) {
             cancelPendingTouch();
             return;
@@ -374,6 +389,7 @@ public final class SessionRecorder {
         if (needMarker) {
             writeMarker();
         }
+        if (changed) touch();
     }
 
     /**
@@ -455,33 +471,90 @@ public final class SessionRecorder {
         return enabled;
     }
 
-    // ------------------------------------------------------------------ внутреннее
-
-    private void onDebounceElapsed() {
+    /**
+     * Проверяет завершение текущей работы без capture/save и без сравнения wall-clock времени.
+     * Ждёт pending touch, queued capture и весь write/outcome callback.
+     * Это только settlement; settled store/capture error не означает полный capture или store PASS.
+     * Отказ dispatch остаётся неготовым до более нового завершённого запроса или отключения клиента.
+     * @return нет незавершённой snapshot работы; не гарантия успешности отдельных stores
+     */
+    public boolean isSnapshotIdle() {
         synchronized (stateLock) {
-            pendingTouch = null;
+            return pendingTouch == null && snapshotWork == 0 && acknowledgedWork >= failedDispatch
+                    && !writeLock.isLocked() && !writeLock.hasQueuedThreads();
         }
-        captureAndWriteInBackground();
+    }
+    /**
+     * Проверяет полноту последней попытки capture в текущем lifecycle без повторного снятия.
+     * Неполное окно, capture failure или fallback старого снимка не подтверждают текущий capture.
+     * @return полный актуальный capture и settlement, атомарно под stateLock; не storage success
+     */
+    public boolean hasCompleteCurrentCapture() {
+        synchronized (stateLock) {
+            Captured captured = lastCaptured;
+            return isSnapshotIdle() && started && !closed && enabled && captured != null && captured.complete()
+                    && captured.sequence() == captureSequence.get() && captured.epoch() == snapshotEpoch;
+        }
+    }
+    private void invalidateSnapshotEpoch() {
+        snapshotEpoch++;
+        acknowledgedWork = 0; failedDispatch = 0;
     }
 
-    /** Снимает снимок в UI-потоке и отдаёт запись фоновому потоку планировщика. */
-    private void captureAndWriteInBackground() {
-        if (closed || !enabled) {
-            return;
+    // ------------------------------------------------------------------ внутреннее
+
+    private void onDebounceElapsed(long generation) {
+        long work, epoch;
+        synchronized (stateLock) {
+            if (generation != touchGeneration || closed || !enabled) return;
+            pendingTouch = null;
+            work = ++workSequence; snapshotWork++;
+            epoch = snapshotEpoch;
         }
+        dispatchSnapshotWork(work, epoch);
+    }
+
+    /** Резервирует работу до постановки capture в UI-очередь: промежуток не выглядит idle. */
+    private void captureAndWriteInBackground() {
+        long work, epoch;
+        synchronized (stateLock) {
+            if (closed || !enabled) return;
+            work = ++workSequence; snapshotWork++;
+            epoch = snapshotEpoch;
+        }
+        dispatchSnapshotWork(work, epoch);
+    }
+
+    /** Учитывает всю цепочку capture -> scheduler write -> store outcomes, включая отказы очередей. */
+    private void dispatchSnapshotWork(long work, long epoch) {
+        var completed = new java.util.concurrent.atomic.AtomicBoolean();
+        java.util.function.Consumer<Boolean> finish = acknowledged -> {
+            if (!completed.compareAndSet(false, true)) return;
+            synchronized (stateLock) {
+                snapshotWork--;
+                if (epoch == snapshotEpoch) {
+                    if (acknowledged) acknowledgedWork = Math.max(acknowledgedWork, work);
+                    else failedDispatch = Math.max(failedDispatch, work);
+                }
+            }
+        };
         try {
             ui.execute(() -> {
-                if (closed || !enabled) {
-                    return;
-                }
-                Captured captured = capture();
-                if (captured != null) {
-                    scheduler.execute(() -> write(captured, false, false));
-                }
+                try {
+                    synchronized (stateLock) {
+                        if (closed || !enabled || epoch != snapshotEpoch) { finish.accept(true); return; }
+                    }
+                    Captured captured = capture();
+                    if (captured == null) { finish.accept(true); return; } // capture разослал явные ошибки
+                    scheduler.execute(() -> {
+                        try { write(captured, false, false); finish.accept(true); }
+                        catch (RuntimeException | Error failure) { finish.accept(false); throw failure; }
+                    });
+                } catch (RuntimeException | Error failure) { finish.accept(false); throw failure; }
             });
-        } catch (RuntimeException e) {
-            // UI-инструментарий уже остановлен (выход): писать больше нечего.
-        }
+        } catch (RuntimeException failure) {
+            finish.accept(false); // прежний контракт не бросает при остановленном UI
+        } catch (Error failure) { finish.accept(false); throw failure; }
     }
 
     /**
@@ -495,22 +568,32 @@ public final class SessionRecorder {
      * @return снимок или {@code null}, если состояние снять не удалось
      */
     private Captured capture() {
+        long sequence = captureSequence.incrementAndGet();
+        long epoch;
+        synchronized (stateLock) { epoch = snapshotEpoch; }
         try {
             MainWindowState main = source.captureMain();
             PlanState plan = source.capturePlan();
             List<WindowState> states = new ArrayList<>();
+            boolean complete = true;
             for (StatefulWindow window : windows) {
                 try {
                     WindowState state = window.captureState();
                     if (state != null) {
                         states.add(state);
-                    }
+                        String owner = window.ownerId();
+                        if (!state.id().equals(window.windowId()) || state.type() != window.windowType()
+                                || state.modal() != window.modal()
+                                || !state.ownerId().equals(owner == null || owner.isBlank() ? WindowState.MAIN_OWNER : owner))
+                            complete = false;
+                    } else complete = false;
                 } catch (Throwable e) {
                     // Одно сломанное окно не должно лишить пользователя снимка остальных.
+                    complete = false;
                 }
             }
             SessionSnapshot snapshot = SessionSnapshot.of(clock.instant(), client, main, plan, states);
-            Captured captured = new Captured(snapshot, captureSequence.incrementAndGet());
+            Captured captured = new Captured(snapshot, sequence, complete, epoch);
             lastCaptured = captured;
             return captured;
         } catch (Throwable e) {
@@ -587,7 +670,7 @@ public final class SessionRecorder {
                 writeLock.lock();
                 locked = true;
             }
-            if (closed || !enabled || captured.sequence() < lastWrittenSequence.get()) {
+            if (closed || !enabled || captured.epoch() != snapshotEpoch || captured.sequence() < lastWrittenSequence.get()) {
                 return;
             }
             SessionSnapshot snapshot = captured.snapshot();
@@ -676,6 +759,7 @@ public final class SessionRecorder {
             if (pendingTouch != null) {
                 pendingTouch.cancel();
                 pendingTouch = null;
+                touchGeneration++;
             }
         }
     }
@@ -685,6 +769,7 @@ public final class SessionRecorder {
             if (pendingTouch != null) {
                 pendingTouch.cancel();
                 pendingTouch = null;
+                touchGeneration++;
             }
             if (periodic != null) {
                 periodic.cancel();

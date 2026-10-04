@@ -81,6 +81,8 @@ mvn -B -Pdist -DskipTests package
 
 ## 5. Что проверяет каждая команда
 
+Новая политика пользователя (04.10.2026): автоматический GitHub CI/CD должен оставаться лёгким (подготовка/компиляция и ограниченные проверки); тяжёлые полные UI/E2E/portable и остальные обязательные acceptance checks выполняются локально либо явно вручную в GitHub с `full_checks=true`. Перечень команд ниже описывает возможности и необходимые проверки, а не обязательный автоматический запуск всех команд на каждый push/PR. Неизвестная affected-база расширяет лёгкий scope fail-closed; docs-only сохраняет аудит документов. Новые workflows подключены в рамках S4; удалённый результат проверяется отдельно. Ни smoke, ни compile, ни unit PASS не доказывают полную приёмку/нативное исполнение. Для публикации сохраняются свежий AppInfo, совпадение source/artifact SHA, S7_APPROVED_SHA и реальные применимые gates одного кандидата.
+
 ```powershell
 mvn -B -pl core "-Dtest=ru.cashprediction.core.service.plan.LocalPlanCommandsTest,ru.cashprediction.core.service.storage.FilePlanStorageTest,ru.cashprediction.core.forecast.service.EngineForecastServiceTest" test
 mvn -B -Pui-tests verify
