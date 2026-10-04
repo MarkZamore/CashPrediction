@@ -27,7 +27,7 @@ function Assert-Impact([string]$Name,$Actual,$Expected) {
     }
     $results.Add([ordered]@{name=$Name;passed=$true;impact=$Actual})
 }
-foreach ($path in @('pom.xml','.mvn/jvm.config','.github/workflows/ci.yml','.github/scripts/X.ps1','dist/scripts/X.ps1',
+foreach ($path in @('pom.xml','.mvn/jvm.config','.github/workflows/ci.yml','.github/scripts/X.ps1','.github/scripts/Initialize-CiDesktop.ps1','dist/scripts/X.ps1',
     'core/pom.xml','ui-fx/pom.xml','ui-swing/pom.xml','web/pom.xml','update-tool/pom.xml','ui-parity/pom.xml',
     'repository-doc-audits/pom.xml','future-module/pom.xml','unknown.txt','.gitignore','core/unknown.bin','future/src/main/Test.java',
     '/docs/x.md','C:/docs/x.md','docs/../core/x','./docs/x','docs//x.md',' docs/x.md','docs/x.md ',"docs/x`n.md",'',"docs/x`t.md")) {
@@ -143,6 +143,7 @@ function Invoke-FixtureCli([string]$Name,[hashtable]$Spec,$Expected) {
 }
 Invoke-FixtureCli 'empty' @{diff=''} $none
 Invoke-FixtureCli 'deleted-doc' @{diff="docs/deleted.md$([char]0)"} $docs
+Invoke-FixtureCli 'desktop-helper' @{diff=".github/scripts/Initialize-CiDesktop.ps1$([char]0)"} $full
 # Actual CLI/NUL parsing и все восемь GitHub outputs: transport остаётся явно mock, не remote PASS.
 Invoke-FixtureCli 'six-technical-docs' @{diff=(@($technicalDocs) -join [char]0)+[char]0} $docs
 Invoke-FixtureCli 'four-ai-docs' @{diff=(@($aiDocs) -join [char]0)+[char]0} $docs

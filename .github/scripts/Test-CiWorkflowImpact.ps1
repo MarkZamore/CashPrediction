@@ -5,7 +5,7 @@ param([string]$Repository=(Join-Path $PSScriptRoot '../..'), [string]$ReceiptPat
 $ErrorActionPreference='Stop'
 if ($BaselineOutputOnly -and $EarlyPlatformOnly) { throw 'CI_FIXTURE_SCOPE_CONFLICT' }
 $checks=0
-$inputPaths=@('.github/scripts/Get-CiImpact.ps1','.github/scripts/Resolve-CiBaseline.ps1','.github/scripts/Test-CiWorkflowImpact.ps1','.github/workflows/ci.yml','.github/workflows/release.yml')
+$inputPaths=@('.github/scripts/Get-CiImpact.ps1','.github/scripts/Resolve-CiBaseline.ps1','.github/scripts/Test-CiWorkflowImpact.ps1','.github/scripts/Initialize-CiDesktop.ps1','.github/scripts/CiDesktopProbe.java','.github/workflows/ci.yml','.github/workflows/release.yml')
 $inputHashes=@{}
 foreach ($path in $inputPaths) { $inputHashes[$path]=(Get-FileHash -LiteralPath (Join-Path $Repository $path)).Hash }
 # Проверяет утверждение и считает только выполненные проверки.
@@ -297,6 +297,45 @@ function Test-CiApprovalRefusal([string]$Body,[string]$Approved) {
 . (Join-Path $PSScriptRoot 'Get-CiImpact.ps1')
 $ciSteps=Read-CiSteps (Join-Path $Repository '.github/workflows/ci.yml')
 $releaseSteps=Read-CiSteps (Join-Path $Repository '.github/workflows/release.yml')
+# Обязательные статические связи; desktop/helper/Java probe здесь не исполняются.
+foreach ($workflow in 'ci','release') {
+    $steps=if ($workflow -eq 'ci') { $ciSteps } else { $releaseSteps }
+    $desktop=Get-CiStep $steps 'Prepare interactive desktop'
+    $condition="steps.impact.outputs.ui == 'true' || steps.impact.outputs.e2e == 'true' || steps.impact.outputs.portable == 'true'"
+    if ($workflow -eq 'release') { $condition="steps.impact.outputs.release == 'true' || "+$condition }
+    Assert-CiAudit ($desktop.body.Contains("        if: $condition")) "$workflow desktop exact affected condition"
+    Assert-CiAudit ($desktop.body -match '(?m)^          & \.github/scripts/Initialize-CiDesktop\.ps1\s*$' -and
+        $desktop.body -notmatch 'continue-on-error: true|ValidateInteropOnly') "$workflow actual blocking helper invocation"
+    $names=@($steps.name)
+    Assert-CiAudit ([Array]::IndexOf($names,'Prepare interactive desktop') -lt [Array]::IndexOf($names,'Build and test')) "$workflow desktop before compilation"
+}
+$desktopSource=Get-Content -LiteralPath (Join-Path $Repository '.github/scripts/Initialize-CiDesktop.ps1') -Raw
+Assert-CiAudit ($desktopSource.Contains("& java (Join-Path `$PSScriptRoot 'CiDesktopProbe.java')") -and
+    $desktopSource.Contains("if (`$LASTEXITCODE -ne 0) { throw 'JDK logical desktop qualification failed before compilation.' }")) 'actual source-launch probe fail blocks compilation'
+Assert-CiAudit ($desktopSource.IndexOf('if ($ValidateInteropOnly)') -lt $desktopSource.IndexOf('[CashPrediction.Ci.Desktop]::EnumDisplaySettings') -and
+    $desktopSource.IndexOf('if (-not $IsWindows -or $env:GITHUB_ACTIONS') -lt $desktopSource.IndexOf('[CashPrediction.Ci.Desktop]::EnumDisplaySettings')) 'validation and outside-Actions guard precede native calls'
+# Свежие дочерние pwsh проверяют настоящий ABI и отказ без Actions; переменные родителя не меняются.
+foreach ($validateOnly in $true,$false) {
+    $info=[Diagnostics.ProcessStartInfo]::new(); $info.FileName=(Get-Command pwsh -ErrorAction Stop).Source
+    $info.UseShellExecute=$false; $info.RedirectStandardOutput=$true; $info.RedirectStandardError=$true
+    $info.Environment['GITHUB_ACTIONS']='false'
+    foreach ($arg in @('-NoProfile','-File',(Join-Path $Repository '.github/scripts/Initialize-CiDesktop.ps1'))) { $info.ArgumentList.Add($arg) }
+    if ($validateOnly) { $info.ArgumentList.Add('-ValidateInteropOnly') }
+    $child=[Diagnostics.Process]::new(); $child.StartInfo=$info; $childStarted=$false
+    try {
+        $childStarted=$child.Start(); $stdout=$child.StandardOutput.ReadToEndAsync(); $stderr=$child.StandardError.ReadToEndAsync()
+        if (-not $child.WaitForExit(20000)) { throw 'DESKTOP_ABI_FIXTURE_TIMEOUT' }
+        $out=$stdout.GetAwaiter().GetResult(); $err=$stderr.GetAwaiter().GetResult()
+        if ($validateOnly) {
+            Assert-CiAudit ($child.ExitCode -eq 0 -and $out.Contains('DEVMODEW=220; no native calls')) 'actual child ValidateInteropOnly ABI PASS, not desktop acceptance'
+        } else {
+            Assert-CiAudit ($child.ExitCode -ne 0 -and $err.Contains('Desktop provisioning is restricted to an ephemeral GitHub Actions Windows runner.')) 'actual child rejects outside Actions before native calls'
+        }
+    } finally {
+        if ($childStarted -and -not $child.HasExited) { $child.Kill($true); if (-not $child.WaitForExit(5000)) { throw 'DESKTOP_ABI_FIXTURE_CLEANUP_TIMEOUT' } }
+        $child.Dispose()
+    }
+}
 $docs=Get-CiImpact -Paths @('docs/design/design.md')
 foreach ($name in 'Prepare','Build and test','Prepare S7 update payloads','S7 release acceptance gate',
     'Verify release Git and embedded AppInfo','Publish latest release') {

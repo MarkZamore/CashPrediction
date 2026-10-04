@@ -55,6 +55,12 @@ jobs:
           java-version: '25'
           cache: maven
 
+      - name: Prepare interactive desktop
+        if: steps.impact.outputs.ui == 'true' || steps.impact.outputs.e2e == 'true' || steps.impact.outputs.portable == 'true'
+        shell: pwsh
+        run: |
+          & .github/scripts/Initialize-CiDesktop.ps1
+
       - name: Build and test
         if: steps.impact.outputs.unitModules != '' || steps.impact.outputs.ui == 'true' || steps.impact.outputs.e2e == 'true' || steps.impact.outputs.portable == 'true'
         shell: pwsh
