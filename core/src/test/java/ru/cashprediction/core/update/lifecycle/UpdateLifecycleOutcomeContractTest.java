@@ -16,7 +16,7 @@ class UpdateLifecycleOutcomeContractTest {
 
     /** Ошибка настоящего lock сохраняет прежний fail-open, но не выглядит здоровым барьером. */
     @Test void barrierFailureIsTypedCachedAndRetainsPolicy() throws Exception {
-        Path root = Files.createDirectory(temporary.resolve("copy"));
+        Path root = Files.createDirectory(temporary.resolve("copy")).toRealPath();
         Path memory = Files.createDirectory(root.resolve("CashMemory"));
         Files.writeString(memory.resolve("Updates"), "blocker");
         InstallCoordinator coordinator = new InstallCoordinator(root, memory, "fx", new String[0], 1);
@@ -35,7 +35,7 @@ class UpdateLifecycleOutcomeContractTest {
 
     /** Ошибка inventory возникает до HTTP, lifecycle публикует её, закрытый snapshot не меняется. */
     @Test void backgroundLocalFailureIsObservableWithoutNetworkOrNative() throws Exception {
-        Path copy = Files.createDirectory(temporary.resolve("copy"));
+        Path copy = Files.createDirectory(temporary.resolve("copy")).toRealPath();
         Path memory = copy.resolve("CashMemory");
         InstallCoordinator coordinator = new InstallCoordinator(copy, memory, "fx", new String[0], 1);
         Path blocker = temporary.resolve("tree-blocker");

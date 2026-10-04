@@ -40,19 +40,23 @@ public final class ReconnectCredentials {
         try {
             acquired = local.tryLock(500, TimeUnit.MILLISECONDS);
             if (!acquired) return Optional.empty();
+            long deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(500);
             Path lockPath = directory.resolve(LOCK);
             if (!Files.exists(lockPath, LinkOption.NOFOLLOW_LINKS)) {
                 try { createPrivate(lockPath); }
                 catch (FileAlreadyExistsException race) { /* Другой процесс создал постоянный файл блокировки. */ }
             }
-            if (!regular(lockPath) || !privatePermissions(lockPath, false)) return Optional.empty();
+            // Имя lock уже видно после createFile, но creator может ещё завершать setOwner.
+            // Ждём только строгой private-проверки, не исправляем права существующего файла.
+            if (!regular(lockPath) || !awaitPrivateLock(lockPath, deadline)) return Optional.empty();
             try (FileChannel channel = FileChannel.open(lockPath, StandardOpenOption.WRITE, LinkOption.NOFOLLOW_LINKS)) {
-                long deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(500);
                 FileLock lock = null;
                 do {
                     try { lock = channel.tryLock(); }
                     catch (java.nio.channels.OverlappingFileLockException overlap) { return Optional.empty(); }
-                    if (lock == null) Thread.sleep(10);
+                    long remaining = deadline - System.nanoTime();
+                    if (lock == null && remaining > 0)
+                        TimeUnit.NANOSECONDS.sleep(Math.min(remaining, TimeUnit.MILLISECONDS.toNanos(10)));
                 } while (lock == null && System.nanoTime() < deadline);
                 if (lock == null) return Optional.empty();
                 try (FileLock held = lock) {
@@ -102,6 +106,38 @@ public final class ReconnectCredentials {
     }
 
     private static boolean regular(Path file) { return Files.isRegularFile(file, LinkOption.NOFOLLOW_LINKS) && !Files.isSymbolicLink(file); }
+
+    /** Ожидает завершения private initialization без изменения файла или его прав. */
+    private static boolean awaitPrivateLock(Path file, long deadline) throws IOException, InterruptedException {
+        return awaitPrivateLock(() -> regular(file) && privatePermissions(file, false),
+                System::nanoTime, nanos -> TimeUnit.NANOSECONDS.sleep(nanos), deadline);
+    }
+
+    /** Строгая проверка private lock; seam не подменяет production permission policy. */
+    @FunctionalInterface
+    interface PrivateLockProbe {
+        /** Возвращает true только при выполненной проверке; ошибки не превращаются в доступ. */
+        boolean isPrivate() throws IOException;
+    }
+
+    /** Прерываемая пауза для ограниченного ожидания; в тесте время продвигается детерминированно. */
+    @FunctionalInterface
+    interface PrivateLockPause {
+        /** Приостанавливает ожидание на заданное число наносекунд. */
+        void sleep(long nanos) throws InterruptedException;
+    }
+
+    /** Проверяет переход false -> true в пределах общего deadline, не ослабляя строгий предикат. */
+    static boolean awaitPrivateLock(PrivateLockProbe probe, java.util.function.LongSupplier clock,
+                                   PrivateLockPause pause, long deadline) throws IOException, InterruptedException {
+        while (clock.getAsLong() < deadline) {
+            if (probe.isPrivate()) return true;
+            long remaining = deadline - clock.getAsLong();
+            if (remaining <= 0) return false;
+            pause.sleep(Math.min(remaining, TimeUnit.MILLISECONDS.toNanos(10)));
+        }
+        return false;
+    }
 
     private static void createPrivate(Path file) throws IOException {
         if (Files.getFileStore(file.getParent()).supportsFileAttributeView(PosixFileAttributeView.class))

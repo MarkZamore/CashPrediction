@@ -13,8 +13,11 @@
 Документальная партия: авторство всех десяти документов закончено; независимые reviews
 получены, точечные corrections и обновление guard выполнены. Это не закрытая приёмка S4
 и не восемь активных авторских задач. Сейчас приоритет - зелёный CI S4; дальнейшее
-расширение Graphify и S5/S6 отложено с сохранением прогресса. Actual source build,
-актуальный CI и полная native-приёмка остаются pending.
+расширение Graphify и интеграция S5/S6 отложены с сохранением прогресса. По новому
+назначению пользователя шесть агентов готовят изолированные S5-only patches;
+два собирают свидетельства CI и actual extracted-source build. Извлечённая
+S4 rehearsal сборка завершилась успешно; актуальный CI отказал на четырёх core cases,
+устраняются точные причины. Полная native-приёмка остаётся pending.
 Шесть технических документов описывают фактический код по-русски,
 без вымышленных возможностей, SQL, Storybook или CoreUI. Эта документальная партия
 не разрешает новые запуски Maven/GUI или изменения кода.
@@ -30,9 +33,11 @@
 | Desktop preflight | По разрешению пользователя повторён с пассивной диагностикой: один тест PASS, без отказов, ошибок и пропусков, завершение 17:15:48, session15115. Строгий expected `7` и однократный Robot-ввод сохранены. Это не вся UI-матрица; причина прежнего `?` не установлена. |
 | Документы | Все десять документов написаны и reviewed. После исправления guard полный doc-audit: 35 тестов PASS, без пропусков, 17:13:37. После устранения навигационной зависимости AI-документов от локального scratch те же 35 тестов успешны внутри полного install 17:42:27. |
 | Упаковка | Политика требует шесть технических документов и исключает AI-контекст. Сохранённые focused receipts: FinalDelivery 469 checks / 72 cases PASS, embedded candidate pins 16 PASS, boundaries 68 PASS, agent policy 30 PASS, SKILL staging 108 PASS. Это synthetic/mock/StageOnly, не реальный source build или native PASS. |
-| Actual source build | Настоящий S4 rehearsal архив создан, integrity/extraction PASS: 1924 файла, шесть технических документов, без агентских файлов. SHA-256 архива `7E764B30AC7EE9649BB8772F71ACCB61DC71C359BE2AEABFC77F6A838E385DDB`. Сборка извлечённого дерева pending; это не конечная поставка S5/S6. |
-| Удалённый CI текущих изменений | Не подтверждён: текущие изменения ещё не опубликованы. Успех старого коммита не принимается. |
+| Actual source build | Настоящий S4 rehearsal архив создан, integrity/extraction PASS: 1924 файла, шесть технических документов, без агентских файлов. SHA-256 архива `7E764B30AC7EE9649BB8772F71ACCB61DC71C359BE2AEABFC77F6A838E385DDB`. Извлечённый `mvn install` с собственным изначально пустым Maven repository завершился BUILD SUCCESS, session3342 exit 0: все шесть поставляемых модулей, 24:50 мин, 18:10:03. Rehearsal соответствует app source 8bead73; более поздний fix двух CI-скриптов не включён в этот архив. Это не конечная поставка S5/S6. |
+| Удалённый CI текущих изменений | Первый run 37203159067, SHA8bead73, отказал до компиляции на PowerShell AppendAllLines. Writer исправлен, полный workflow fixture 210 PASS. [Run 37203591501](https://github.com/MarkZamore/CashPrediction/actions/runs/37203591501), SHA `fb0cea7306b8ccee8ac4661bf8aaa5037c775eb5`, завершился FAILURE: core 2553 tests, 1 failure, 3 errors, 1 skip. Три ошибки CASHMEMORY_ROOT в новых fixtures: runner использует `C:/Users/RUNNER~1`, canonical root отличается от входного alias. Fixture roots приведены через toRealPath, без изменения production guards. В ReconnectCredentials добавлено bounded ожидание строгой private lock initialization в прежнем общем межпроцессном budget, без расширения ACL. Targeted 27/27 PASS без пропусков, 18:36:07; workflow fixture 251/0 и отдельный отказ конфликтующих scope switches проверены. Полный install исправленного root работает: session43980, log cp-s4-ci-fixes-full-install.log. Новый коммит/push ещё не выполнен. UI/E2E/portable steps прежнего run не выполнялись. Green не подтверждён. |
 | S5, S6 и конечная поставка | Не завершены. Статусы требований и приёмки не повышать по наличию черновиков. |
+
+Новое подтверждение после исправлений CI: полный root install session43980 завершился exit0 / BUILD SUCCESS в 19:02:59, 25:44 мин, все семь модулей. Всего 3246 tests, 0 failures/errors, 133 environment/opt-in skips; core 2559, update-tool 24, FX 252, Swing 236, Web 140, doc-audits 35. Пропуски не считаются GUI/native PASS. Финальная actual версия workflow fixtures после scope-conflict guard: 251/0. Исправления готовятся к отдельному commit/push; нового удалённого green ещё нет.
 
 Источники статуса: локальный `.claude/scratch/integration-2026-10-04-audit-complete.md`
 фиксирует session67475 (полный install с отказами, исходные отчёты сохранены в
@@ -72,8 +77,8 @@ F1/F3 дополнены в schema, F2 имеет отдельный локал�
 
 - Авторы готовых технических документов: Huygens - `architecture.md`, Peirce - `techstack.md`, Halley - `ui-kit.md`, Einstein - `db-schema.md`, Heisenberg - `edge-cases.md`, Sartre - `linx.md`. Авторство закончено; текущие точечные corrections не означают повторное создание документов.
 - Четыре AI-документа reviewed: `CurrentSprint.md`, `ContextDump.md`, `ChangeRequest.md`, `LegacyWarning.md`; очереди на создание последних двух больше нет.
-- Текущее назначение: MAIN завершает полный install и интеграцию кандидата; до восьми непересекающихся агентских задач проверяют готовность обязательных S4 gates. Maven, GUI, commit и push выполняет только MAIN.
-- Pasteur: ContextDump reviewed; focused guards/отрицательные fixtures имеют receipt выше. Реальная сборка извлечённого текущего source archive этим не доказана.
+- Текущие восемь назначений: Peirce наблюдает полный исправленный root install session43980; Huygens завершает SOA consumer migration; Descartes исправляет найденные ограничения Swing Tab acknowledgement; Halley закрывает cleanup новых Swing buffer-close fixtures; Sartre подключает Web capture envelope к авторизованному маршруту и commit-last persistence; Einstein готовит валидатор настоящих manual recovery receipts S6; Heisenberg готовит isolated orchestration реальных B1/B2/T с provenance; Pasteur проверяет offline release cleanup/retry cases. Это отдельные непересекающиеся задачи, не повтор выполненного аудита. Все восемь статусов running проверены после назначения; исторический список не доказывает их дальнейшее состояние.
+- Шесть подготовительных S5 задач пишут только собственные scratch patches/handoffs или temp mirrors. Root app source, workflows и эталоны S4 не меняют. Новый Maven/GUI/native/network/commit/push им не назначен. MAIN принимает изменения только после отдельного review; готовый patch не равен integration или PASS.
 - Ведущий (MAIN): обновление guard, назначения и интеграция corrections, этапы, аудит документов и состава поставки, общий Maven, настоящий GUI и GitHub CI. Количество активных исполнителей не выводить из исторического списка владельцев; новые назначения уточнять у MAIN.
 
 ## Ограничения и критерии завершения
@@ -94,9 +99,10 @@ S4 завершается только актуальными обязатель
 новую политику упаковки: MAIN отдельно проверяет фактический состав и отрицательные fixtures,
 не ослабляя остальные gates. До этих свидетельств документальная партия не закрывает S4.
 
-Порядок следующих шагов: зафиксировать проверенный кандидат и опубликовать ветку
-`mvp-unified-ui`. Пройти обязательный GitHub CI того же SHA; параллельно, на отдельной
-машине от runner, закончить сборку уже извлечённого S4 source-packaging rehearsal.
+Порядок следующих шагов: получить обязательный GitHub CI опубликованного SHA;
+параллельно, на отдельной машине от runner, закончить уже запущенную сборку извлечённого
+S4 source-packaging rehearsal. При отказе исправлять точную причину, а не ослаблять gate.
+Рабочие metadata updates не публиковать посреди живого run, чтобы не отменять его.
 Уже выполненные focused pack fixtures без изменения входов не повторять;
 успешный focused desktop preflight не заменяет всю UI/E2E-матрицу.
 Конечная поставка остаётся после S5/S6.

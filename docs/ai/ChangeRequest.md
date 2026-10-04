@@ -4,21 +4,32 @@
 
 ## Текущее назначение и порядок работы
 
-Все десять документальных черновиков существуют, четыре AI-документа reviewed.
-Текущий batch - завершающие точечные исправления согласованности документов,
-каждое по отдельному назначению MAIN, не более восьми исполнителей одновременно.
-Исторические владельцы технических черновиков: Huygens - architecture, Peirce - techstack,
-Heisenberg - edge-cases, Einstein - db-schema, Sartre - linx, Halley - ui-kit.
-Этот список не означает шесть активных задач или разрешение менять соседние документы.
-Descartes сейчас исправляет только устаревшие назначения в этом `docs/ai/ChangeRequest.md`;
-CurrentSprint и ContextDump не менять. Очереди на создание LegacyWarning больше нет.
-Pasteur завершил документальную задачу ContextDump и возобновил pack guards/negative fixtures
-по набору шести обязательных технических документов. MAIN координирует принятие guards,
-интеграцию и source-packaging rehearsal с проверкой извлечённого дерева.
-Успешный doc-audit MAIN (34 теста, 16:43:02) не доказывает успешность этих следующих шагов
-и не закрывает S4. Rehearsal S4 не является конечной доставкой: финальные source/portable
-остаются после S5 и независимой S6. GUI/preflight пока отложены до отдельного назначения MAIN;
-завершение документальной правки не разрешает самостоятельно возвращаться к ним или упаковке.
+Все десять документов написаны, reviewed и интегрированы в кандидат S4. Не создавать
+их повторно. Root `mvn install` завершён успешно в 17:42:27; 35 doc-audit tests также
+успешны после link corrections. Это ещё не завершённый S4 или native signoff.
+
+Текущий приоритет пользователя - зелёный CI S4. Run37203591501 для SHA
+`fb0cea7306b8ccee8ac4661bf8aaa5037c775eb5` завершился отказом четырёх core cases.
+Canonical fixture roots и private lock initialization исправлены без ослабления guards.
+Required root install session43980: exit0, BUILD SUCCESS, семь модулей, 25:44 мин,
+19:02:59. Targeted 27 tests и окончательные workflow fixtures 251/0 также успешны.
+Actual extracted-source rehearsal session3342 ранее завершился exit0, 24:50 мин;
+это не финальная S5/S6 поставка. Следующий шаг MAIN - отдельный commit/push исправлений
+и actual новый CI. Живые запуски не перезапускать из-за таймаута наблюдения.
+
+По отдельному запросу пользователя возобновлены восемь непересекающихся назначений:
+Peirce - read-only install/CI evidence; Einstein - S6 manual receipt wiring;
+Huygens - SOA owner/query migration; Descartes - Swing strict capture; Halley - FX strict capture;
+Sartre - Web strict capture; Heisenberg - независимый SOA review; Pasteur - review настоящей
+build provenance. S5/S6 задачи готовят изменения только в собственных scratch patches
+и temp mirrors. Не применять их к проверяемому root, не переписывать интегрированные
+исправления и не выполнять Maven/GUI/native/Git/network без нового назначения MAIN.
+Сравнивать существующие proposals с current HEAD: наличие старого patch не означает,
+что его изменения всё ещё отсутствуют.
+
+MAIN владеет интеграцией, общим Maven/desktop и commit/push. Metadata документов
+не публиковать посреди живого CI, чтобы не отменять его. S4 rehearsal не является
+конечной доставкой: финальные source/portable остаются после S5 и независимой S6.
 
 Документы MAIN уже созданы: уточнять существующее содержание через `apply_patch`,
 не создавать заново и не терять историю. Текущий статус и сохранённые receipts:
@@ -38,7 +49,8 @@ Pasteur завершил документальную задачу ContextDump �
 
 ## Где изменить
 
-Сейчас этому исполнителю разрешён только `docs/ai/ChangeRequest.md`.
+Сейчас metadata этого документа и CurrentSprint обновляет только MAIN. Каждому агенту
+разрешён собственный явно назначенный scratch/temp output, но не общий root code.
 Следующий список - карта общей интеграции, а не разрешение на одновременные правки:
 
 - `docs/design/{architecture,techstack,edge-cases,db-schema,linx,ui-kit}.md` - документация разработчика.
@@ -68,20 +80,25 @@ MAIN координирует изменения stages/checklist/requirements, 
 
 ## Отложенные задачи и сохранённый прогресс
 
-Desktop preflight остаётся обязательным незакрытым gate, а не отменённой проверкой.
+Desktop preflight остаётся обязательным gate, а не отменённой проверкой. Сохранённая
+ниже первичная история не является последним статусом: отдельный повтор MAIN
+session15115 завершился успешно в 17:15:48, один тест/0 skips, strict `7` и однократный
+Robot-ввод сохранены. Полную обязательную UI-матрицу выполняет текущий CI.
 Run: `ui-parity/target/gates/a4430ee6-bcef-4242-88ab-431490c95ebf`,
 `reports-04-GateCoverageDesktopTest`, evidence
 `actual/parity/desktop-preflight-11969564840112729722`.
 Поле содержит `?` вместо строгого `7`; итоговый снимок показывает потерю фокуса,
 но не доказывает её момент или причину. Подробный вывод сохранён в CurrentSprint;
 копия теста - `C:/Users/Oscar/AppData/Local/Temp/cp-desktop-preflight-diagnostic-a4430ee6/source/GateCoverageDesktopTest.java`.
-Диагностический патч ещё не подготовлен, новых запусков нет. Сохраняются один реальный
-Robot input и строгое ожидание; раскладку или модификаторы нельзя объявлять причиной без evidence.
+После первичного отказа добавлены пассивные наблюдения и выполнен успешный повтор;
+причина прежнего `?` не доказана. Раскладку, модификаторы или вмешательство пользователя
+нельзя объявлять установленной причиной только по успешному повтору.
 
 Упаковка, её fixtures, extracted-source build и окончательные архив/portable здесь не выполняются.
 Прежние scratch-патчи, staging receipts, s18 и S5 runner preparation сохраняются;
 черновик или mock не становится native PASS. Общая компиляция с пропуском тестов,
-144 выборочных теста и один s18 probe не закрывают полный install, UI/E2E или remote CI.
+144 выборочных теста и один s18 probe сами по себе не закрывают install, UI/E2E или remote CI.
+Полный install теперь подтверждён отдельным MAIN receipt, но остальные gates этим не заменены.
 Финальные root-артефакты остаются после независимой S6 приёмки; тихое обновление входит в S5,
 отдельного S7 нет. Checklist не удалять до выполнения его конечного условия.
 

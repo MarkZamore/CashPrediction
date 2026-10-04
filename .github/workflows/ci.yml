@@ -98,6 +98,12 @@ jobs:
             & mvn -B -ntp -DskipTests install
             if ($LASTEXITCODE -ne 0) { throw 'Compilation failed.' }
           }
+          if (($modules -split ',') -ccontains 'core') {
+            # Ранние Windows-контракты не ждут долгого bootstrap sweep; полный unit-набор остаётся ниже.
+            $earlyReports = Join-Path $env:GITHUB_WORKSPACE 'core/target/early-platform-preflight-reports'
+            & mvn -B -ntp -pl core '-Dtest=StartupDataBoundaryIntegrationTest,UpdateLifecycleOutcomeContractTest,ReconnectCredentialsTest' "-Dsurefire.reportsDirectory=$earlyReports" test
+            if ($LASTEXITCODE -ne 0) { throw 'Early platform preflight failed.' }
+          }
           if ($modules -ne '') {
             & mvn -B -ntp -pl $modules test
             if ($LASTEXITCODE -ne 0) { throw 'Affected unit tests failed.' }
@@ -171,7 +177,7 @@ jobs:
           $safeReports = Join-Path $env:RUNNER_TEMP 'safe-test-reports'
           New-Item -ItemType Directory -Force -Path $safeReports | Out-Null
           foreach ($file in Get-ChildItem -LiteralPath $env:GITHUB_WORKSPACE -Recurse -File |
-              Where-Object { $_.Directory.Name -eq 'surefire-reports' -and
+              Where-Object { $_.Directory.Name -in @('surefire-reports','early-platform-preflight-reports') -and
                 ($_.Extension -eq '.txt' -or $_.Name -like 'TEST-*.xml') }) {
             $relative = [IO.Path]::GetRelativePath($env:GITHUB_WORKSPACE, $file.FullName)
             $destination = Join-Path $safeReports $relative

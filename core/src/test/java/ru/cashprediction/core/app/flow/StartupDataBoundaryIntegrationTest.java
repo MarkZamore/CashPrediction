@@ -26,7 +26,7 @@ class StartupDataBoundaryIntegrationTest {
 
     /** Реальная ошибка update lock проходит клиентский gate и настоящий controller.start/StartupFlow. */
     @Test void realUpdaterBarrierFailureStillStartsControllerAndRecorder() throws Exception {
-        Path home = Files.createDirectory(temporary.resolve("update-copy"));
+        Path home = Files.createDirectory(temporary.resolve("update-copy")).toRealPath();
         Path memory = Files.createDirectory(home.resolve("CashMemory"));
         Path blocker = memory.resolve("Updates");
         Files.writeString(blocker, "lock-blocker-sentinel");

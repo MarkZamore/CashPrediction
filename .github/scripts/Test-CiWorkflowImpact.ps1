@@ -1,8 +1,9 @@
 <# Проверяет условия affected workflow, синтаксис pwsh-блоков и выбор успешной базы без сети/GUI. #>
 #requires -Version 7.0
 [CmdletBinding()]
-param([string]$Repository=(Join-Path $PSScriptRoot '../..'), [string]$ReceiptPath, [switch]$BaselineOutputOnly)
+param([string]$Repository=(Join-Path $PSScriptRoot '../..'), [string]$ReceiptPath, [switch]$BaselineOutputOnly, [switch]$EarlyPlatformOnly)
 $ErrorActionPreference='Stop'
+if ($BaselineOutputOnly -and $EarlyPlatformOnly) { throw 'CI_FIXTURE_SCOPE_CONFLICT' }
 $checks=0
 $inputPaths=@('.github/scripts/Get-CiImpact.ps1','.github/scripts/Resolve-CiBaseline.ps1','.github/scripts/Test-CiWorkflowImpact.ps1','.github/workflows/ci.yml','.github/workflows/release.yml')
 $inputHashes=@{}
@@ -94,7 +95,7 @@ function Invoke-Gh {
         return [ordered]@{temp=$taskTemp;cases=@($observations.ToArray());mockScope='full CLI copy; only local Git/GhRetry transport; exact call counts';network=$false;maven=$false;gui=$false}
     } finally { $global:LASTEXITCODE=$previousExit }
 }
-$baselineOutput=Test-CiBaselineCliOutput
+$baselineOutput=if (-not $EarlyPlatformOnly) { Test-CiBaselineCliOutput } else { $null }
 if ($BaselineOutputOnly) {
     $outputReceipt=[ordered]@{checks=$checks;failed=0;baselineOutput=$baselineOutput;inputs=@($inputPaths | ForEach-Object {
         [ordered]@{path=[IO.Path]::GetFullPath((Join-Path $Repository $_));sha256=$inputHashes[$_]}
@@ -109,6 +110,79 @@ function Read-CiSteps([string]$Path) {
     @([regex]::Matches($source,'(?ms)^      - name: (?<name>[^\r\n]+)\r?\n(?<body>.*?)(?=^      - name: |\z)') | ForEach-Object {
         [pscustomobject]@{name=$_.Groups['name'].Value;body=$_.Groups['body'].Value}
     })
+}
+# Проверяет настоящий порядок CI-кода с локальным mvn seam: никаких процессов Maven или product fixtures.
+function Test-CiEarlyPlatformPreflight {
+    $steps=Read-CiSteps (Join-Path $Repository '.github/workflows/ci.yml')
+    $body=@($steps | Where-Object name -CEQ 'Build and test')[0].body
+    $run=[regex]::Match($body,'(?ms)^        run: \|\r?\n(?<code>.*)').Groups['code'].Value -replace '(?m)^          ',''
+    $start=$run.IndexOf('$modules =',[StringComparison]::Ordinal)
+    Assert-Ci ($start -ge 0) 'actual module planning statements found'
+    $code=$run.Substring($start).Replace('$env:GITHUB_WORKSPACE','$fixtureRepository')
+    $selector='-Dtest=StartupDataBoundaryIntegrationTest,UpdateLifecycleOutcomeContractTest,ReconnectCredentialsTest'
+    $observations=[Collections.Generic.List[object]]::new()
+    $previousExit=$global:LASTEXITCODE
+    try {
+        foreach ($case in @(
+            @{modules='core';failure='';expected=3},
+            @{modules='core,update-tool,ui-fx,ui-swing,web,repository-doc-audits';failure='';expected=3},
+            @{modules='repository-doc-audits';failure='';expected=1},
+            @{modules='ui-swing,repository-doc-audits';failure='';expected=2},
+            @{modules='';failure='';expected=0},
+            @{modules='core';failure='focused';expected=2},
+            @{modules='core';failure='compile';expected=1})) {
+            $modules=$case.modules
+            $actual=$code.Replace('${{ steps.impact.outputs.unitModules }}',$modules)
+            $actual=[regex]::Replace($actual,'\$\{\{ steps\.impact\.outputs\.(compile|ui|e2e|portable) \}\}','false')
+            $tokens=$null; $errors=$null
+            $null=[Management.Automation.Language.Parser]::ParseInput($actual,[ref]$tokens,[ref]$errors)
+            Assert-Ci ($errors.Count -eq 0) "early/$modules actual PS syntax"
+            $calls=[Collections.Generic.List[object]]::new()
+            $failure=$case.failure; $caught=$null
+            & {
+                $fixtureRepository=$Repository
+                # Функция только в дочернем scope; записывает argv и выдаёт заданный exit без запуска mvn.
+                function mvn {
+                    $calls.Add([string[]]$args)
+                    $global:LASTEXITCODE=if (($failure -ceq 'focused' -and $args -contains $selector) -or
+                        ($failure -ceq 'compile' -and $args -contains 'install')) { 1 } else { 0 }
+                }
+                try { & ([scriptblock]::Create($actual)) }
+                catch { Set-Variable -Name caught -Value $_.Exception.Message -Scope 1 }
+            }
+            Assert-Ci ($calls.Count -eq $case.expected) "early/$modules/$failure exact invocation count"
+            $core=($modules -split ',') -ccontains 'core'
+            $focused=@($calls.ToArray() | Where-Object { $_ -contains $selector })
+            Assert-Ci ($focused.Count -eq $(if ($core -and $failure -cne 'compile') { 1 } else { 0 })) "early/$modules exact core token gate"
+            if ($core -and $failure -cne 'compile') {
+                Assert-Ci (($calls[0] -join '|') -ceq '-B|-ntp|-DskipTests|install' -and
+                    ($calls[1] -join '|') -ceq ('-B|-ntp|-pl|core|'+$selector+'|-Dsurefire.reportsDirectory='+(Join-Path $Repository 'core/target/early-platform-preflight-reports')+'|test')) 'compile before exact three-class preflight, separate reports'
+            }
+            if ($failure) {
+                $expectedError=if ($failure -ceq 'focused') { 'Early platform preflight failed.' } else { 'Compilation failed.' }
+                Assert-Ci ($caught -ceq $expectedError) "$failure failure blocks later full units"
+            } else {
+                Assert-Ci ($null -eq $caught) "early/$modules success"
+                if ($modules) { Assert-Ci (($calls[-1] -join '|') -ceq "-B|-ntp|-pl|$modules|test") 'full affected unit command remains unchanged, no exclusions' }
+            }
+            $observations.Add([ordered]@{modules=$modules;failure=$failure;calls=@($calls.ToArray());error=$caught})
+        }
+        foreach ($name in 'Actual UI gates (S4, blocking)','Actual recovery gates (S4, blocking)','Complete UI and E2E profile lifecycles','Verify portable build') {
+            Assert-Ci (@($steps | Where-Object name -CEQ $name).Count -eq 1) "early retains mandatory $name"
+        }
+        $sanitize=@($steps | Where-Object name -CEQ 'Sanitize default test reports')[0].body
+        Assert-Ci ($sanitize.Contains("'early-platform-preflight-reports'") -and $sanitize.Contains('Protect-GateText')) 'early reports preserved through same sanitizer and upload'
+        return @($observations.ToArray())
+    } finally { $global:LASTEXITCODE=$previousExit }
+}
+$earlyPlatform=@(Test-CiEarlyPlatformPreflight)
+if ($EarlyPlatformOnly) {
+    $earlyReceipt=[ordered]@{checks=$checks;failed=0;earlyPlatform=$earlyPlatform;network=$false;maven=$false;gui=$false;inputs=@($inputPaths | ForEach-Object {
+        [ordered]@{path=[IO.Path]::GetFullPath((Join-Path $Repository $_));sha256=$inputHashes[$_]}
+    })}
+    if ($ReceiptPath) { [IO.File]::WriteAllText($ReceiptPath,($earlyReceipt | ConvertTo-Json -Depth 8),[Text.UTF8Encoding]::new($false)) }
+    Write-Host "RESULT: early-platform checks=$checks failed=0; only local mvn argv seam, no Maven/GUI/network."
+    return
 }
 foreach ($workflow in 'ci','release') {
     $steps=Read-CiSteps (Join-Path $Repository ".github/workflows/$workflow.yml")
@@ -486,7 +560,7 @@ Assert-CiAudit ($baselineSource -notmatch '(?m)^\s*(?:&\s+)?gh\s+' -and $baselin
 foreach ($path in $inputPaths) {
     Assert-CiAudit ((Get-FileHash -LiteralPath (Join-Path $Repository $path)).Hash -ceq $inputHashes[$path]) "input stable during fixture: $path"
 }
-$receipt=[ordered]@{checks=$checks;failed=$findings.Count;findings=@($findings.ToArray());baselineOutput=$baselineOutput;baselineObservations=@($script:baselineObservations.ToArray());network=$false;maven=$false;gui=$false;
+$receipt=[ordered]@{checks=$checks;failed=$findings.Count;findings=@($findings.ToArray());baselineOutput=$baselineOutput;earlyPlatform=$earlyPlatform;baselineObservations=@($script:baselineObservations.ToArray());network=$false;maven=$false;gui=$false;
     inputs=$inputPaths | ForEach-Object {
         $p=[IO.Path]::GetFullPath((Join-Path $Repository $_)); [ordered]@{path=$p;sha256=$inputHashes[$_];endSha256=(Get-FileHash -LiteralPath $p).Hash}
     }}
