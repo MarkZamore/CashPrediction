@@ -310,6 +310,12 @@ foreach ($workflow in 'ci','release') {
     Assert-CiAudit ([Array]::IndexOf($names,'Prepare interactive desktop') -lt [Array]::IndexOf($names,'Build and test')) "$workflow desktop before compilation"
 }
 $desktopSource=Get-Content -LiteralPath (Join-Path $Repository '.github/scripts/Initialize-CiDesktop.ps1') -Raw
+# Воспроизводим прежний дефект binder без обращения к Win32 или рабочему столу.
+Add-Type 'public static class CiDefaultDeviceArgumentProbe { public static bool IsNull(string device) { return device == null; } }'
+Assert-CiAudit (-not [CiDefaultDeviceArgumentProbe]::IsNull($null)) 'negative control: PowerShell null becomes empty string for typed device'
+Assert-CiAudit ([CiDefaultDeviceArgumentProbe]::IsNull([NullString]::Value)) 'actual NullString preserves null pointer argument through binder'
+Assert-CiAudit ([regex]::Matches($desktopSource, '\[CashPrediction\.Ci\.Desktop\]::(?:EnumDisplaySettings|ChangeDisplaySettingsEx)\(\[NullString\]::Value,').Count -eq 5 -and
+    $desktopSource -notmatch '::(?:EnumDisplaySettings|ChangeDisplaySettingsEx)\(\$null,') 'all five actual native device calls use true default-device NULL'
 Assert-CiAudit ($desktopSource.Contains("& java (Join-Path `$PSScriptRoot 'CiDesktopProbe.java')") -and
     $desktopSource.Contains("if (`$LASTEXITCODE -ne 0) { throw 'JDK logical desktop qualification failed before compilation.' }")) 'actual source-launch probe fail blocks compilation'
 Assert-CiAudit ($desktopSource.IndexOf('if ($ValidateInteropOnly)') -lt $desktopSource.IndexOf('[CashPrediction.Ci.Desktop]::EnumDisplaySettings') -and

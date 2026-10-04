@@ -48,14 +48,15 @@ if (-not $IsWindows -or $env:GITHUB_ACTIONS -cne 'true') {
 }
 
 $before = [CashPrediction.Ci.DisplayMode]::Empty()
-if (-not [CashPrediction.Ci.Desktop]::EnumDisplaySettings($null, -1, [ref]$before)) {
+# PowerShell преобразует $null для string-параметра в пустую строку; нужен настоящий Win32 NULL.
+if (-not [CashPrediction.Ci.Desktop]::EnumDisplaySettings([NullString]::Value, -1, [ref]$before)) {
     throw 'Cannot read current primary display mode.'
 }
 Write-Host "Desktop before: $($before.Width)x$($before.Height), $($before.BitsPerPel)bpp, $($before.Frequency)Hz"
 $modes = @()
 for ($index = 0; $index -lt 4096; $index++) {
     $mode = [CashPrediction.Ci.DisplayMode]::Empty()
-    if (-not [CashPrediction.Ci.Desktop]::EnumDisplaySettings($null, $index, [ref]$mode)) { break }
+    if (-not [CashPrediction.Ci.Desktop]::EnumDisplaySettings([NullString]::Value, $index, [ref]$mode)) { break }
     if ($mode.Width -ge 1920 -and $mode.Height -ge 1080 -and $mode.BitsPerPel -ge 32) { $modes += $mode }
 }
 if ($index -eq 4096) { throw 'Display mode enumeration exceeded its safety bound.' }
@@ -65,15 +66,15 @@ if ($modes.Count -eq 0) { throw 'Windows exposes no supported primary mode of at
     @{Expression='Frequency';Descending=$true} | Select-Object -First 1
 $target.DriverExtra = 0
 $target.Fields = 0x00040000 -bor 0x00080000 -bor 0x00100000 -bor 0x00200000 -bor 0x00400000
-$testResult = [CashPrediction.Ci.Desktop]::ChangeDisplaySettingsEx($null, [ref]$target, [IntPtr]::Zero, 2, [IntPtr]::Zero)
+$testResult = [CashPrediction.Ci.Desktop]::ChangeDisplaySettingsEx([NullString]::Value, [ref]$target, [IntPtr]::Zero, 2, [IntPtr]::Zero)
 if ($testResult -ne 0) { throw "Windows rejected candidate display mode: code=$testResult" }
 # Без CDS_UPDATEREGISTRY: меняется только текущая сессия одноразового runner.
-$applyResult = [CashPrediction.Ci.Desktop]::ChangeDisplaySettingsEx($null, [ref]$target, [IntPtr]::Zero, 0, [IntPtr]::Zero)
+$applyResult = [CashPrediction.Ci.Desktop]::ChangeDisplaySettingsEx([NullString]::Value, [ref]$target, [IntPtr]::Zero, 0, [IntPtr]::Zero)
 if ($applyResult -ne 0) { throw "Windows did not apply display mode: code=$applyResult" }
 $deadline = [DateTime]::UtcNow.AddSeconds(10)
 do {
     $actual = [CashPrediction.Ci.DisplayMode]::Empty()
-    $read = [CashPrediction.Ci.Desktop]::EnumDisplaySettings($null, -1, [ref]$actual)
+    $read = [CashPrediction.Ci.Desktop]::EnumDisplaySettings([NullString]::Value, -1, [ref]$actual)
     if ($read -and $actual.Width -eq $target.Width -and $actual.Height -eq $target.Height) { break }
     Start-Sleep -Milliseconds 100
 } while ([DateTime]::UtcNow -lt $deadline)
