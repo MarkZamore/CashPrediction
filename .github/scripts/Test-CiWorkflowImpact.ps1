@@ -1,7 +1,7 @@
 <# Проверяет условия affected workflow, синтаксис pwsh-блоков и выбор успешной базы без сети/GUI. #>
 #requires -Version 7.0
 [CmdletBinding()]
-param([string]$Repository=(Join-Path $PSScriptRoot '../..'), [string]$ReceiptPath)
+param([string]$Repository=(Join-Path $PSScriptRoot '../..'), [string]$ReceiptPath, [switch]$BaselineOutputOnly)
 $ErrorActionPreference='Stop'
 $checks=0
 $inputPaths=@('.github/scripts/Get-CiImpact.ps1','.github/scripts/Resolve-CiBaseline.ps1','.github/scripts/Test-CiWorkflowImpact.ps1','.github/workflows/ci.yml','.github/workflows/release.yml')
@@ -11,6 +11,97 @@ foreach ($path in $inputPaths) { $inputHashes[$path]=(Get-FileHash -LiteralPath 
 function Assert-Ci([bool]$Condition,[string]$Label) {
     if (-not $Condition) { throw "CI_WORKFLOW_CONTRACT: $Label" }
     $script:checks++
+}
+# Запускает полный настоящий CLI в собственной копии; только Git/API заменены закрытым локальным транспортом.
+function Test-CiBaselineCliOutput {
+    $sourcePath=Join-Path $Repository '.github/scripts/Resolve-CiBaseline.ps1'
+    $source=Get-Content -LiteralPath $sourcePath -Raw -Encoding utf8
+    $taskTemp=Join-Path ([IO.Path]::GetTempPath()) ('cp-ci-baseline-output-'+[guid]::NewGuid())
+    $null=New-Item -ItemType Directory -Path $taskTemp
+    $encoding=[Text.UTF8Encoding]::new($false,$true)
+    $currentPath=Join-Path $taskTemp 'Resolve-CiBaseline.ps1'
+    [IO.File]::WriteAllText($currentPath,$source,$encoding)
+    # Шов GhRetry существует лишь рядом с копией: root библиотека и процессные команды не вызываются.
+    $transport=@'
+function git {
+    $fixtureObservation.gitCalls++
+    $global:LASTEXITCODE=0
+    $request=$args -join '|'
+    if ($request -ceq "-C|$Repository|rev-parse|--is-shallow-repository") { return 'false' }
+    if ($request -ceq "-C|$Repository|rev-parse|--verify|$('1'*40)^{commit}") { return ('1'*40) }
+    if ($request -ceq "-C|$Repository|merge-base|--is-ancestor|$('1'*40)|$('2'*40)") { return }
+    $fixtureObservation.unexpected++
+    throw 'UNEXPECTED_FIXTURE_GIT'
+}
+function Invoke-Gh {
+    $fixtureObservation.apiCalls++
+    if (($args -join '|') -cne 'api|repos/owner/repo/actions/workflows/ci.yml/runs?branch=work&event=push&status=success&per_page=100&page=1') {
+        $fixtureObservation.unexpected++
+        throw 'UNEXPECTED_FIXTURE_API'
+    }
+    if ($fixtureCase -ceq 'fallback') { $global:LASTEXITCODE=1; return 'fixture API unavailable' }
+    $global:LASTEXITCODE=0
+    return ('{"workflow_runs":[{"id":101,"status":"completed","conclusion":"success","event":"push","head_branch":"work","head_sha":"'+('1'*40)+'"}]}')
+}
+'@
+    [IO.File]::WriteAllText((Join-Path $taskTemp 'GhRetry.ps1'),$transport,$encoding)
+    # Отрицательный mutant возвращает только прежнюю строку writer; selection/fallback остаются теми же.
+    $writer='(?m)^\s*\[IO\.File\]::AppendAllText\(\$GithubOutput,[^\r\n]*$'
+    Assert-Ci ([regex]::Matches($source,$writer).Count -eq 1) 'one actual GithubOutput AppendAllText writer'
+    $oldWriter='        [IO.File]::AppendAllLines($GithubOutput, @("base_sha=$base", "force_full=$($fallback.ToString().ToLowerInvariant())"), [Text.UTF8Encoding]::new($false))'
+    $oldPath=Join-Path $taskTemp 'Resolve-CiBaseline-old.ps1'
+    [IO.File]::WriteAllText($oldPath,[regex]::Replace($source,$writer,[Text.RegularExpressions.MatchEvaluator]{ param($match) $oldWriter }),$encoding)
+    $observations=[Collections.Generic.List[object]]::new()
+    $previousExit=$global:LASTEXITCODE
+    try {
+        foreach ($variant in 'old','current') {
+            foreach ($case in 'success','force-full','fallback') {
+                $outputPath=Join-Path $taskTemp "$variant-$case.output"
+                $prefix="prior=сохранено`n"
+                [IO.File]::WriteAllText($outputPath,$prefix,$encoding)
+                $observation=[pscustomobject]@{variant=$variant;case=$case;gitCalls=0;apiCalls=0;unexpected=0;error=$null;errorId=$null;result=$null;output=$outputPath;sha256=$null}
+                $path=if ($variant -ceq 'old') { $oldPath } else { $currentPath }
+                try {
+                    $raw=& {
+                        $fixtureCase=$case; $fixtureObservation=$observation
+                        & $path -Mode CI -Repository $taskTemp -GithubRepository owner/repo -Branch work `
+                            -HeadSha ('2'*40) -WorkflowFile ci.yml -GithubOutput $outputPath `
+                            -ForceFull:($case -ceq 'force-full') -WarningAction SilentlyContinue
+                    }
+                    $observation.result=($raw -join "`n" | ConvertFrom-Json)
+                } catch { $observation.error=$_.Exception.Message; $observation.errorId=$_.FullyQualifiedErrorId }
+                Assert-Ci ($observation.unexpected -eq 0) "$variant/$case closed mock scope"
+                $expectedApi=if ($case -ceq 'force-full') { 0 } else { 1 }
+                $expectedGit=if ($case -ceq 'success') { 3 } elseif ($case -ceq 'fallback') { 1 } else { 0 }
+                Assert-Ci ($observation.apiCalls -eq $expectedApi -and $observation.gitCalls -eq $expectedGit) "$variant/$case exact transport calls"
+                if ($variant -ceq 'old') {
+                    Assert-Ci ($observation.errorId -like '*MethodCountCouldNotFindBest*' -and $observation.error -match 'AppendAllLines') "$case reproduces old overload failure"
+                    $expected=$prefix
+                } else {
+                    Assert-Ci ($null -eq $observation.error) "$case actual CLI completes"
+                    $base=if ($case -ceq 'success') { '1'*40 } else { '' }
+                    $full=$case -cne 'success'
+                    Assert-Ci ($observation.result.baseSha -ceq $base -and $observation.result.forceFull -eq $full) "$case actual selection/fallback result"
+                    $expected=$prefix+"base_sha=$base`nforce_full=$($full.ToString().ToLowerInvariant())`n"
+                }
+                $bytes=[IO.File]::ReadAllBytes($outputPath)
+                Assert-Ci ([Convert]::ToHexString($bytes) -ceq [Convert]::ToHexString($encoding.GetBytes($expected))) "$variant/$case exact lowercase LF append, preserved prefix, no BOM"
+                $observation.sha256=(Get-FileHash -LiteralPath $outputPath).Hash
+                $observations.Add($observation)
+            }
+        }
+        Assert-Ci ((Get-FileHash -LiteralPath $sourcePath).Hash -ceq $inputHashes['.github/scripts/Resolve-CiBaseline.ps1']) 'actual baseline source stable during output fixture'
+        return [ordered]@{temp=$taskTemp;cases=@($observations.ToArray());mockScope='full CLI copy; only local Git/GhRetry transport; exact call counts';network=$false;maven=$false;gui=$false}
+    } finally { $global:LASTEXITCODE=$previousExit }
+}
+$baselineOutput=Test-CiBaselineCliOutput
+if ($BaselineOutputOnly) {
+    $outputReceipt=[ordered]@{checks=$checks;failed=0;baselineOutput=$baselineOutput;inputs=@($inputPaths | ForEach-Object {
+        [ordered]@{path=[IO.Path]::GetFullPath((Join-Path $Repository $_));sha256=$inputHashes[$_]}
+    })}
+    if ($ReceiptPath) { [IO.File]::WriteAllText($ReceiptPath,($outputReceipt | ConvertTo-Json -Depth 8),[Text.UTF8Encoding]::new($false)) }
+    Write-Host "RESULT: baseline-output checks=$checks failed=0; old overload reproduced, three actual CLI cases PASS; no Maven/GUI/network."
+    return
 }
 # Извлекает шаги workflow с неизменными границами, не выполняя их run-команды.
 function Read-CiSteps([string]$Path) {
@@ -395,7 +486,7 @@ Assert-CiAudit ($baselineSource -notmatch '(?m)^\s*(?:&\s+)?gh\s+' -and $baselin
 foreach ($path in $inputPaths) {
     Assert-CiAudit ((Get-FileHash -LiteralPath (Join-Path $Repository $path)).Hash -ceq $inputHashes[$path]) "input stable during fixture: $path"
 }
-$receipt=[ordered]@{checks=$checks;failed=$findings.Count;findings=@($findings.ToArray());baselineObservations=@($script:baselineObservations.ToArray());network=$false;maven=$false;gui=$false;
+$receipt=[ordered]@{checks=$checks;failed=$findings.Count;findings=@($findings.ToArray());baselineOutput=$baselineOutput;baselineObservations=@($script:baselineObservations.ToArray());network=$false;maven=$false;gui=$false;
     inputs=$inputPaths | ForEach-Object {
         $p=[IO.Path]::GetFullPath((Join-Path $Repository $_)); [ordered]@{path=$p;sha256=$inputHashes[$_];endSha256=(Get-FileHash -LiteralPath $p).Hash}
     }}

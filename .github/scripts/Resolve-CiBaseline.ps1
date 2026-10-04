@@ -137,7 +137,9 @@ if ($MyInvocation.InvocationName -ne '.') {
         }
     }
     if ($GithubOutput) {
-        [IO.File]::AppendAllLines($GithubOutput, @("base_sha=$base", "force_full=$($fallback.ToString().ToLowerInvariant())"), [Text.UTF8Encoding]::new($false))
+        # Явная строка не требует преобразования PowerShell object[] в IEnumerable<string> на runner.
+        $outputLines = @("base_sha=$base", "force_full=$($fallback.ToString().ToLowerInvariant())")
+        [IO.File]::AppendAllText($GithubOutput, ($outputLines -join "`n") + "`n", [Text.UTF8Encoding]::new($false))
     }
     [pscustomobject]@{baseSha=$base;forceFull=$fallback} | ConvertTo-Json -Compress
 }
