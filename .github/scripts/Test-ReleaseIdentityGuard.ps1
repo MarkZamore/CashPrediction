@@ -7,6 +7,8 @@
 #>
 #requires -Version 7.0
 $ErrorActionPreference = 'Stop'
+# Проверяет Prepare из того же workflow; Git-моки живут только в дочерней области скрипта.
+& (Join-Path $PSScriptRoot 'Test-ReleasePrepare.ps1')
 $workflow = [IO.File]::ReadAllText((Join-Path $PSScriptRoot '../workflows/release.yml'))
 $guardName = 'Verify release Git and embedded AppInfo'
 $section = [regex]::Match($workflow, '(?ms)^      - name: ' + $guardName + '\r?\n.*?        run: \|\r?\n(?<body>.*?)(?=^      - name: )')

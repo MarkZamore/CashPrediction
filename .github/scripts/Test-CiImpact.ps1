@@ -11,9 +11,14 @@ if (-not $ReceiptPath) { $ReceiptPath=Join-Path $owned 'receipt.json' }
 if (Test-Path -LiteralPath $ReceiptPath) { throw 'RECEIPT_ALREADY_EXISTS' }
 $results=[Collections.Generic.List[object]]::new()
 $all='core,update-tool,ui-fx,ui-swing,web,repository-doc-audits'
-# Строит независимое ожидаемое значение всех восьми публичных outputs.
-function New-Expected([string[]]$Enabled=@(),[string]$Units='') {
-    [pscustomobject][ordered]@{compile=('compile' -in $Enabled);docs=('docs' -in $Enabled);unitModules=$Units;
+# Строит независимое ожидаемое значение девяти outputs: smoke и default-reactor compile разделены.
+function New-Expected([string[]]$Enabled=@(),[string]$Units='',[string]$CompileUnits='') {
+    if (-not $CompileUnits) {
+        $selected=@($Units.Split(',') | Where-Object { $_ })
+        $CompileUnits=(@('core','update-tool','ui-fx','ui-swing','web','repository-doc-audits') |
+            Where-Object { $_ -in $selected }) -join ','
+    }
+    [pscustomobject][ordered]@{compile=('compile' -in $Enabled);docs=('docs' -in $Enabled);unitModules=$Units;compileModules=$CompileUnits;
         ui=('ui' -in $Enabled);e2e=('e2e' -in $Enabled);portable=('portable' -in $Enabled);
         preflight=('preflight' -in $Enabled);release=('release' -in $Enabled)}
 }
@@ -30,14 +35,17 @@ function Assert-Impact([string]$Name,$Actual,$Expected) {
 foreach ($path in @('pom.xml','.mvn/jvm.config','.github/workflows/ci.yml','.github/scripts/X.ps1','.github/scripts/Initialize-CiDesktop.ps1','dist/scripts/X.ps1',
     'core/pom.xml','ui-fx/pom.xml','ui-swing/pom.xml','web/pom.xml','update-tool/pom.xml','ui-parity/pom.xml',
     'repository-doc-audits/pom.xml','future-module/pom.xml','unknown.txt','.gitignore','core/unknown.bin','future/src/main/Test.java',
-    '/docs/x.md','C:/docs/x.md','docs/../core/x','./docs/x','docs//x.md',' docs/x.md','docs/x.md ',"docs/x`n.md",'',"docs/x`t.md")) {
+    '/docs/x.md','C:/docs/x.md','docs/../core/x','./docs/x','docs//x.md',' docs/x.md','docs/x.md ',"docs/x`n.md",'',"docs/x`t.md",
+    'repository-doc-audits/scripts/build.ps1','repository-doc-audits/unknown.bin','repository-doc-audits/src/custom/X.java',
+    'docs/build.ps1','docs/design/build.xml','docs/design/release.yml','docs/nested/pom.xml','future/deep/pom.xml',
+    'docs/ai/graphify-out/not-the-dedicated-subtree.py')) {
     Assert-Impact "full:$path" (Get-CiImpact -Paths @($path)) $full
 }
 foreach ($path in @('docs/design/x.md','README.md','readme','ARCHITECTURE.md','PROJECT_REQUIREMENTS.md','CHANGELOG.md',
     'licenses/a.md','LICENSE','NOTICE.txt','repository-doc-audits/src/test/java/A.java','DoCs/Раздел с пробелами.md')) {
     Assert-Impact "docs:$path" (Get-CiImpact -Paths @($path)) $docs
 }
-# Technical и repo-only AI/graphify имеют общий docs consumer, несмотря на разный состав source-архива.
+# Technical и AI имеют docs consumer; Graphify tool/cache исключены, но его README является целью AI-ссылки.
 $technicalDocs=@('architecture','techstack','edge-cases','db-schema','linx','ui-kit') |
     ForEach-Object { "docs/design/$_.md" }
 $aiDocs=@('CurrentSprint','ContextDump','ChangeRequest','LegacyWarning') |
@@ -46,13 +54,21 @@ $graphifyDocs=@('docs/ai/graphify/README.md','docs/ai/graphify/project_graph.py'
     'docs/ai/graphify/Invoke-Graphify.ps1','docs/ai/graphify/graphify-out/ast.json',
     'docs/ai/graphify/graphify-out/corpus.json','docs/ai/graphify/graphify-out/inventory.json',
     'docs/ai/graphify/graphify-out/file-layer.json','docs/ai/graphify/graphify-out/cache/stat-index.json')
-foreach ($path in @($technicalDocs)+@($aiDocs)+@($graphifyDocs)) {
+foreach ($path in @($technicalDocs)+@($aiDocs)+@('docs/ai/graphify/README.md')) {
     Assert-Impact "document-consumer:$path" (Get-CiImpact -Paths @($path)) $docs
+}
+foreach ($path in @($graphifyDocs | Where-Object { $_ -ne 'docs/ai/graphify/README.md' })+
+    @('docs/ai/graphify/graphify-out/semantic-new.json','docs/ai/graphify/graphify-out/history/old.json',
+      'docs/ai/graphify/graphify-out/graph.html','docs/ai/graphify/graphify_commands.py')) {
+    Assert-Impact "graphify-no-product:$path" (Get-CiImpact -Paths @($path)) $none
+}
+foreach ($path in @('repository-doc-audits/src/main/java/A.java','repository-doc-audits/src/test/resources/fixture.txt')) {
+    Assert-Impact "independent-auditor:$path" (Get-CiImpact -Paths @($path)) $docs
 }
 # Planner получает обе стороны rename и пути delete, не требует наличия удалённого файла.
 Assert-Impact 'doc-rename technical to AI' (Get-CiImpact -Paths @('docs/design/edge-cases.md','docs/ai/LegacyWarning.md')) $docs
 Assert-Impact 'doc-rename AI to graphify' (Get-CiImpact -Paths @('docs/ai/ContextDump.md','docs/ai/graphify/README.md')) $docs
-Assert-Impact 'doc-rename graphify nested cache' (Get-CiImpact -Paths @('docs/ai/graphify/graphify-out/cache/deleted-old.json','docs/ai/graphify/graphify-out/cache/new-index.json')) $docs
+Assert-Impact 'doc-rename graphify nested cache' (Get-CiImpact -Paths @('docs/ai/graphify/graphify-out/cache/deleted-old.json','docs/ai/graphify/graphify-out/cache/new-index.json')) $none
 Assert-Impact 'doc-delete technical missing path' (Get-CiImpact -Paths @('docs/design/deleted-technical-fixture.md')) $docs
 Assert-Impact 'doc-delete AI missing path' (Get-CiImpact -Paths @('docs/ai/deleted-ai-fixture.md')) $docs
 Assert-Impact 'doc-mixed six technical four AI' (Get-CiImpact -Paths (@($technicalDocs)+@($aiDocs))) $docs
@@ -80,10 +96,19 @@ $golden=New-Expected @('docs','ui','e2e','portable','preflight') 'core,repositor
 foreach ($name in @('ui-golden','ui-goldens','golden','goldens','ui-scenarios','ui-json')) {
     Assert-Impact "golden:$name" (Get-CiImpact -Paths @("core/src/test/resources/$name/scenario/a.json")) $golden
 }
-$parity=New-Expected @('docs','ui','e2e','portable','preflight') 'repository-doc-audits'
+$parity=New-Expected @('docs','ui','e2e','portable','preflight') 'repository-doc-audits' 'core,ui-fx,ui-swing,web,repository-doc-audits'
 foreach ($path in @('ui-parity/src/test/java/A.java','UI-PARITY/src/test/resources/x','ui-parity/README.md')) {
     Assert-Impact "parity:$path" (Get-CiImpact -Paths @($path)) $parity
 }
+# Прямая проверка контракта MAIN: default compile содержит клиентские jar, не неактивный ui-parity.
+$parityCompile='core,ui-fx,ui-swing,web,repository-doc-audits'
+Assert-Impact 'parity compile separate from finite smoke catalog' (Get-CiImpact -Paths @('ui-parity/src/test/java/NewTest.java')) (
+    New-Expected @('docs','ui','e2e','portable','preflight') 'repository-doc-audits' $parityCompile)
+Assert-Impact 'graphify plus parity preserves runtime compilation' (Get-CiImpact -Paths @('docs/ai/graphify/graphify_commands.py','ui-parity/src/test/resources/new.json')) $parity
+Assert-Impact 'graphify plus workflow remains full' (Get-CiImpact -Paths @('docs/ai/graphify/graphify-out/graph.json','.github/workflows/release.yml')) $full
+Assert-Impact 'graphify plus product source remains full core closure' (Get-CiImpact -Paths @('docs/ai/graphify/graphify-out/semantic-new.json','core/src/main/java/A.java')) $full
+Assert-Impact 'graphify prefix collision fail closed' (Get-CiImpact -Paths @('docs/ai/graphify-unknown/build.ps1')) $full
+Assert-Impact 'forced graphify remains full' (Get-CiImpact -Paths @('docs/ai/graphify/graphify-out/graph.json') -ForceFull) $full
 Assert-Impact 'empty known diff' (Get-CiImpact -Paths @()) $none
 Assert-Impact 'empty forced' (Get-CiImpact -Paths @() -ForceFull) $full
 Assert-Impact 'null collection' (Get-CiImpact -Paths $null) $none
@@ -137,19 +162,22 @@ function Invoke-FixtureCli([string]$Name,[hashtable]$Spec,$Expected) {
     $actual=Get-Content -LiteralPath $OutputPath -Raw | ConvertFrom-Json
     Assert-Impact "transport:$Name" $actual $Expected
     $outputLines=@(Get-Content -LiteralPath $GithubOutput)
-    if ($outputLines.Count -ne 8 -or @($outputLines | Where-Object { $_ -cmatch 'True|False|\r|\n' }).Count -or
+    if ($outputLines.Count -ne 9 -or @($outputLines | Where-Object { $_ -cmatch 'True|False|\r|\n' }).Count -or
         ($outputLines -join '|') -cne (@($Expected.PSObject.Properties | ForEach-Object { "$($_.Name)=$(if($_.Value -is [bool]){$_.Value.ToString().ToLowerInvariant()}else{$_.Value})" }) -join '|')) { throw "GITHUB_OUTPUT_$Name" }
     if ($Spec.ContainsKey('noGit') -and $script:transportCalls.Count) { throw 'UNEXPECTED_GIT_ON_FORCE' }
 }
 Invoke-FixtureCli 'empty' @{diff=''} $none
 Invoke-FixtureCli 'deleted-doc' @{diff="docs/deleted.md$([char]0)"} $docs
 Invoke-FixtureCli 'desktop-helper' @{diff=".github/scripts/Initialize-CiDesktop.ps1$([char]0)"} $full
-# Actual CLI/NUL parsing и все восемь GitHub outputs: transport остаётся явно mock, не remote PASS.
+# Actual CLI/NUL parsing и все девять GitHub outputs: transport остаётся явно mock, не remote PASS.
 Invoke-FixtureCli 'six-technical-docs' @{diff=(@($technicalDocs) -join [char]0)+[char]0} $docs
 Invoke-FixtureCli 'four-ai-docs' @{diff=(@($aiDocs) -join [char]0)+[char]0} $docs
 Invoke-FixtureCli 'graphify-docs' @{diff=(@($graphifyDocs) -join [char]0)+[char]0} $docs
 Invoke-FixtureCli 'doc-rename-technical-ai' @{diff="docs/design/ui-kit.md$([char]0)docs/ai/LegacyWarning.md$([char]0)"} $docs
-Invoke-FixtureCli 'doc-delete-graphify' @{diff="docs/ai/graphify/graphify-out/cache/deleted-cli-fixture.json$([char]0)"} $docs
+Invoke-FixtureCli 'doc-delete-graphify' @{diff="docs/ai/graphify/graphify-out/cache/deleted-cli-fixture.json$([char]0)"} $none
+Invoke-FixtureCli 'parity-runtime-compile' @{diff="ui-parity/src/test/java/NewTest.java$([char]0)"} $parity
+Invoke-FixtureCli 'independent-auditor' @{diff="repository-doc-audits/src/test/java/RemovedTest.java$([char]0)"} $docs
+Invoke-FixtureCli 'graphify-tools-only' @{diff="docs/ai/graphify/project_graph.py$([char]0)docs/ai/graphify/graphify-out/graph.html$([char]0)"} $none
 Invoke-FixtureCli 'doc-mixed-technical-ai-graphify' @{diff=(@($technicalDocs)+@($aiDocs)+@($graphifyDocs) -join [char]0)+[char]0} $docs
 Invoke-FixtureCli 'rename-both' @{diff="docs/old.md$([char]0)core/src/main/java/New.java$([char]0)"} $full
 Invoke-FixtureCli 'unusual-path' @{diff="web/src/test/resources/русский name.json$([char]0)"} (New-Expected @('docs','ui','e2e') 'web,repository-doc-audits')

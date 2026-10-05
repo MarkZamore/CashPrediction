@@ -2,6 +2,7 @@ package ru.cashprediction.audit;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
@@ -13,6 +14,7 @@ import java.util.Locale;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 /**
  * Проверяет состав и локальную навигацию разделённой документации, не объявляя её факты доказанными.
@@ -30,10 +32,16 @@ final class DeveloperDocumentationTest {
     private static final Pattern SECTION = Pattern.compile("(?m)^## +\\S");
     private static final Pattern RUSSIAN = Pattern.compile("[А-Яа-яЁё]{3,}");
 
+    @TempDir Path isolatedRepository;
+
     /** Каждый из шести обязательных документов содержит структуру, а не пустую заглушку. */
     @Test
     void sixDeveloperDocumentsExistAndHaveStructuredRussianProse() throws IOException {
-        Path root = RepositoryDocuments.root();
+        checkSixDeveloperDocuments(RepositoryDocuments.root());
+    }
+
+    /** Проверяет тот же обязательный технический набор в настоящем корне или изолированной фикстуре. */
+    private static void checkSixDeveloperDocuments(Path root) throws IOException {
         for (String name : DEVELOPER) {
             String text = RepositoryDocuments.read(root, "docs/design/" + name);
             assertTrue(text.startsWith("# "), name);
@@ -60,7 +68,12 @@ final class DeveloperDocumentationTest {
     /** Ссылки поставляемых документов не требуют документов AI или исключённых спецификаций. */
     @Test
     void deliveredDocumentationLinksResolveInsideSourceDelivery() throws IOException {
-        Path root = RepositoryDocuments.root().toAbsolutePath().normalize();
+        checkDeliveredDocumentationLinks(RepositoryDocuments.root());
+    }
+
+    /** Проверяет ссылки тем же аудитором, не требуя корневых README или инструкций агента. */
+    private static void checkDeliveredDocumentationLinks(Path repository) throws IOException {
+        Path root = repository.toAbsolutePath().normalize();
         List<String> failures = new ArrayList<>();
         for (String name : DEVELOPER) {
             Path document = root.resolve("docs/design/" + name);
@@ -87,6 +100,44 @@ final class DeveloperDocumentationTest {
             }
         }
         assertEquals(List.of(), failures);
+    }
+
+    /** Отсутствие корневых документов допустимо; все шесть технических документов остаются обязательными. */
+    @Test
+    void sixTechnicalDocumentsAndTheirLinksWorkWithoutDeletedRootDocuments() throws IOException {
+        String prose = "# Технический документ\n\n## Границы\n"
+                + "Описание ответственности и ограничений.\n".repeat(12)
+                + "\n## Проверка\nДоказательства исполнения проверяются отдельно.\n"
+                + "\n## Навигация\n[Архитектура](architecture.md)\n";
+        for (String name : DEVELOPER) {
+            Path file = isolatedRepository.resolve("docs/design/" + name);
+            Files.createDirectories(file.getParent());
+            Files.writeString(file, prose);
+        }
+        for (String removed : List.of("README.md", "CHANGELOG.md", "CLAUDE.md", "AGENTS.md")) {
+            assertFalse(Files.exists(isolatedRepository.resolve(removed)), removed);
+            assertFalse(deliveryLinkAllowed(removed), removed);
+            assertFalse(deliveryLinkAllowed("core/src/test/resources/nested/" + removed), removed);
+        }
+        checkSixDeveloperDocuments(isolatedRepository);
+        checkDeliveredDocumentationLinks(isolatedRepository);
+        for (String name : DEVELOPER) {
+            Path file = isolatedRepository.resolve("docs/design/" + name);
+            Files.delete(file);
+            try {
+                assertThrows(IOException.class, () -> checkSixDeveloperDocuments(isolatedRepository), name);
+            } finally {
+                Files.writeString(file, prose);
+            }
+        }
+        for (String name : AI) {
+            assertFalse(deliveryLinkAllowed("docs/ai/" + name), name);
+            assertFalse(deliveryLinkAllowed("core/src/main/resources/nested/" + name), name);
+        }
+        // Поставляемая ссылка на уже исключённый файл запрещена даже при его наличии в фикстуре.
+        Files.writeString(isolatedRepository.resolve("README.md"), "fixture - not delivered");
+        Files.writeString(isolatedRepository.resolve("docs/design/linx.md"), prose + "\n[root](../../README.md)\n");
+        assertThrows(AssertionError.class, () -> checkDeliveredDocumentationLinks(isolatedRepository));
     }
 
     /** AI-документы могут ссылаться на репозиторные спецификации, но не на потерянные локальные файлы. */

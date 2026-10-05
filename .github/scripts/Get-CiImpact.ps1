@@ -16,8 +16,9 @@ function Get-CiImpact {
     param([AllowEmptyCollection()][AllowNull()][string[]]$Paths = @(), [switch]$ForceFull)
     $order = @('core','update-tool','ui-fx','ui-swing','web','repository-doc-audits')
     $units = [Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
-    $flags = [ordered]@{compile=$false;docs=$false;unitModules='';ui=$false;e2e=$false;portable=$false;preflight=$false;release=$false}
+    $flags = [ordered]@{compile=$false;docs=$false;unitModules='';compileModules='';ui=$false;e2e=$false;portable=$false;preflight=$false;release=$false}
     $full = [bool]$ForceFull
+    $parityHarness = $false
     foreach ($raw in $Paths) {
         if ($full) { break }
         if ([string]::IsNullOrWhiteSpace($raw) -or $raw -match '[\x00-\x1f\x7f]' -or $raw -ne $raw.Trim()) { $full=$true; break }
@@ -25,12 +26,21 @@ function Get-CiImpact {
         if ($path -match '(^/|:|//|(^|/)\.{1,2}(/|$))') { $full=$true; break }
         # Только явно агентские файлы исключаются; произвольные hidden/Markdown файлы не исключаются.
         if ($path -match '^(\.claude|\.codex|\.agents)(/|$)' -or $path -match '(^|/)(agents|claude)\.md$') { continue }
-        if ($path -eq 'pom.xml' -or $path -match '^[^/]+/pom\.xml$' -or $path -match '^(\.mvn|\.github|dist)(/|$)') { $full=$true; break }
-        if ($path -match '^(docs|licenses|repository-doc-audits)(/|$)' -or
+        if ($path -match '(^|/)pom\.xml$' -or $path -match '^(\.mvn|\.github|dist)(/|$)') { $full=$true; break }
+        # Graphify не читается продуктом; README остаётся целью ссылки обязательного AI-аудита.
+        if ($path -match '^docs/ai/graphify/.+' -and $path -ne 'docs/ai/graphify/readme.md') { continue }
+        # Исходники независимого аудитора компилируются/тестируются выбранным модулем, без product deps.
+        # Неизвестные скрипты или конфигурация модуля не маскируются широкой docs-only веткой.
+        if ($path -match '^repository-doc-audits/src/(main|test)/.+$') { $flags.docs=$true; continue }
+        if ($path -match '^repository-doc-audits(/|$)') { $full=$true; break }
+        # Вне выделенного dev-tool дерева исполняемые/build файлы документации не считаются прозой.
+        if ($path -match '^docs/' -and $path -match '\.(ps1|psm1|psd1|cmd|bat|sh|py|js|mjs|cjs|java|xml|yml|yaml)$') { $full=$true; break }
+        if ($path -match '^(docs|licenses)(/|$)' -or
             $path -match '^(readme(?:\.[^/]+)?|architecture\.md|project_requirements\.md|changelog\.md|license(?:\.[^/]+)?|notice(?:\.[^/]+)?)$') {
             $flags.docs=$true; continue
         }
         if ($path -match '^ui-parity/') {
+            $parityHarness = $true
             $flags.docs=$true; $flags.ui=$true; $flags.e2e=$true; $flags.portable=$true; $flags.preflight=$true; continue
         }
         if ($path -match '^(core|update-tool|ui-fx|ui-swing|web)/src/(main|test)/.+$') {
@@ -57,6 +67,14 @@ function Get-CiImpact {
     }
     if ($flags.docs) { $null=$units.Add('repository-doc-audits') }
     $flags.unitModules=(@($order | Where-Object { $units.Contains($_) }) -join ',')
+    # Smoke использует конечный unit-каталог; реальный parity runner отдельно компилирует профиль ui-parity.
+    # Все jar клиентов должны быть свежими даже при изменении только harness: это runtime-зависимости,
+    # которых нет среди Maven dependencies ui-parity. Не включаем неактивный профиль в default -pl.
+    $compilation = [Collections.Generic.HashSet[string]]::new($units, [StringComparer]::Ordinal)
+    if ($parityHarness) {
+        foreach ($module in @('core','ui-fx','ui-swing','web')) { $null=$compilation.Add($module) }
+    }
+    $flags.compileModules=(@($order | Where-Object { $compilation.Contains($_) }) -join ',')
     [pscustomobject]$flags
 }
 

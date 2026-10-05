@@ -55,6 +55,7 @@ jobs:
           & .github/scripts/Get-CiImpact.ps1 -BaseSha '${{ steps.baseline.outputs.base_sha }}' -ForceFull:$full -GithubOutput $env:GITHUB_OUTPUT
 
       - name: Setup Java
+        if: steps.impact.outputs.compileModules != ''
         uses: actions/setup-java@v5
         with:
           # Та же сборка OpenJDK, что у разработчика: в ней есть папка jmods, нужная jlink.
@@ -69,6 +70,7 @@ jobs:
           & .github/scripts/Initialize-CiDesktop.ps1
 
       - name: Build and test
+        if: steps.impact.outputs.compileModules != ''
         shell: pwsh
         run: |
           # Аудит документов обязателен в исходном reactor, независимо от наличия docs или .git.
@@ -102,8 +104,10 @@ jobs:
             Write-Host "Reconnect identity: process=$processIdentity; newDirectoryOwner=$directoryOwner"
           } finally { Remove-Item -LiteralPath $identityProbe }
           $modules = '${{ steps.impact.outputs.unitModules }}'
-          # Один reactor-install компилирует production и tests, но не запускает полный unit-набор.
-          & mvn -B -ntp -DskipTests install
+          $compileModules = '${{ steps.impact.outputs.compileModules }}'
+          # Свежая компиляция только затронутых модулей и их reactor-зависимостей.
+          # Docs-only выбирает независимый repository-doc-audits, а не все клиенты.
+          & mvn -B -ntp -pl $compileModules -am -DskipTests install
           if ($LASTEXITCODE -ne 0) { throw 'Compilation failed.' }
           if ($modules -ne '') {
             if ($fullChecks) {

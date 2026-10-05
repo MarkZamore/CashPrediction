@@ -127,7 +127,10 @@ function Test-CiSmokeContract {
         Assert-Smoke ($plan.arguments -contains '-Dsurefire.failIfNoSpecifiedTests=true' -and
             $plan.arguments -notcontains '-DskipTests' -and $plan.arguments[-1] -ceq 'test') 'selected tests must execute and empty selection cannot pass'
         Assert-Smoke ($plan.tests -notmatch 'Robot|PortableBootstrap|PowerShellHelperTest|ParityTest|CrashRestore') 'no named heavy class in automatic selector'
-        foreach($modules in @('','unknown','core,core','CORE','core,CORE','core,','core, web')) {
+        $docsPlan=& $ScriptUnderTest -Modules 'repository-doc-audits' -Repository $Repository -PlanOnly
+        Assert-Smoke (($docsPlan.arguments -join '|') -ceq '-B|-ntp|-pl|repository-doc-audits|-Dtest=DeveloperDocumentationTest,NoDashesInDocumentsTest,RepositoryDocumentsTest,ServiceBoundaryContractsTest,UiSpecCopyTest|-Dsurefire.failIfNoSpecifiedTests=true|test' -and
+            -not $docsPlan.executed -and $global:CpCiSmokeFixture.calls.Count -eq 0) 'docs-only and parity smoke use exact docs tests, no clients or Robot'
+        foreach($modules in @('','unknown','ui-parity','core,core','CORE','core,CORE','core,','core, web')) {
             $before=$global:CpCiSmokeFixture.calls.Count;$failure=$null
             try{& $ScriptUnderTest -Modules $modules -Repository $Repository|Out-Null}catch{$failure=$_.Exception.Message}
             $rejected=$failure -like 'CI_SMOKE_MODULE:*' -or $failure -ceq 'CI_SMOKE_EMPTY_MODULES'
@@ -205,10 +208,21 @@ function Test-CiEarlyPlatformPreflight {
                 $start=$run.IndexOf($marker,[StringComparison]::Ordinal)
                 Assert-Ci ($start -ge 0) "$workflow/$name actual build suffix"
                 $suffix=$run.Substring($start).Replace('& .github/scripts/Invoke-CiSmoke.ps1','& Invoke-SmokeFixture')
+                $moduleCases=if ($release) {
+                    @(@{units='core,update-tool,ui-fx,ui-swing,web,repository-doc-audits';compile='core,update-tool,ui-fx,ui-swing,web,repository-doc-audits'})
+                } else {
+                    @(@{units='core,web';compile='core,web'},
+                      @{units='repository-doc-audits';compile='repository-doc-audits'},
+                      @{units='repository-doc-audits';compile='core,ui-fx,ui-swing,web,repository-doc-audits'},
+                      @{units='';compile='core,ui-fx,ui-swing,web'})
+                }
+                foreach ($moduleCase in $moduleCases) {
+                $modules=$moduleCase.units; $compileModules=$moduleCase.compile
                 foreach ($full in $false,$true) {
                     foreach ($failure in '','compile','tests') {
-                        $modules=if ($release) { 'core,update-tool,ui-fx,ui-swing,web,repository-doc-audits' } else { 'core,web' }
+                        if ($modules -ceq '' -and $failure -ceq 'tests') { continue }
                         $actual=$suffix.Replace('${{ steps.impact.outputs.unitModules }}',$modules).Replace('${{ github.sha }}',('2'*40))
+                        $actual=$actual.Replace('${{ steps.impact.outputs.compileModules }}',$compileModules)
                         $actual=$actual.Replace('${{ github.event_name }}','workflow_dispatch').Replace('${{ inputs.full_checks }}',$full.ToString().ToLowerInvariant())
                         $tokens=$null; $errors=$null
                         $null=[Management.Automation.Language.Parser]::ParseInput($actual,[ref]$tokens,[ref]$errors)
@@ -230,10 +244,18 @@ function Test-CiEarlyPlatformPreflight {
                                 try { & ([scriptblock]::Create($actual)) } catch { $state.error=$_.Exception.Message }
                             }
                         } finally { $env:RELEASE_NUMBER=$oldRelease }
-                        $expected=if ($failure -ceq 'compile') { 1 } elseif ($release -and -not $failure) { 3 } else { 2 }
+                        $expected=if ($failure -ceq 'compile' -or $modules -ceq '') { 1 } elseif ($release -and -not $failure) { 3 } else { 2 }
                         Assert-Ci ($state.calls.Count -eq $expected) "$workflow/$name/$full/$failure stops after failed operation"
                         Assert-Ci ($state.calls[0].argv -contains '-DskipTests' -and $state.calls[0].argv[-1] -ceq 'install') 'compile first, no automatic full tests'
-                        if ($failure -cne 'compile') {
+                        if ($release) {
+                            Assert-Ci (($state.calls[0].argv -join '|') -ceq ('-B|-ntp|-Dapp.release=42|-Dapp.commit='+('2'*40)+'|-DskipTests|install')) 'new binary retains full reactor install and exact release identity'
+                            if (-not $failure) {
+                                Assert-Ci (($state.calls[2].argv -join '|') -ceq ('-B|-ntp|-Dapp.release=42|-Dapp.commit='+('2'*40)+'|-Pdist|-pl|dist|package')) 'new binary rebuilt with same identity, never reused'
+                            }
+                        } else {
+                            Assert-Ci (($state.calls[0].argv -join '|') -ceq "-B|-ntp|-pl|$compileModules|-am|-DskipTests|install") "$workflow/$name bounded compile exact compileModules and dependencies [$compileModules]"
+                        }
+                        if ($failure -cne 'compile' -and $modules -cne '') {
                             $test=$state.calls[1]
                             Assert-Ci ($test.kind -ceq $(if ($full) { 'mvn' } else { 'smoke' })) 'manual full versus automatic smoke'
                             Assert-Ci ($test.argv -notcontains '-DskipTests') 'selected tests never globally skipped'
@@ -245,8 +267,9 @@ function Test-CiEarlyPlatformPreflight {
                         }
                         Assert-Ci ($env:MAVEN_ARGS -ceq '-Dprior=preserved') 'MAVEN_ARGS restored on success and failure'
                         Assert-Ci (($null -ne $state.error) -eq [bool]$failure) 'failure is not swallowed'
-                        $observations.Add([ordered]@{workflow=$workflow;step=$name;full=$full;failure=$failure;calls=@($state.calls.ToArray());error=$state.error})
+                        $observations.Add([ordered]@{workflow=$workflow;step=$name;unitModules=$modules;compileModules=$compileModules;full=$full;failure=$failure;calls=@($state.calls.ToArray());error=$state.error})
                     }
+                }
                 }
             }
         }
@@ -255,7 +278,25 @@ function Test-CiEarlyPlatformPreflight {
 }
 $earlyPlatform=@(Test-CiEarlyPlatformPreflight)
 # Новый закрытый контракт использует те же функции, что полный набор ниже, без baseline/desktop повторов.
+# Проверяет реальную AST-связь API callsites -> bounded wrapper -> Invoke-Gh, не обращаясь к сети.
+function Test-CiBaselineTransportWiring {
+    $tokens=$null; $errors=$null
+    $baselineAst=[Management.Automation.Language.Parser]::ParseFile((Join-Path $Repository '.github/scripts/Resolve-CiBaseline.ps1'),[ref]$tokens,[ref]$errors)
+    if ($errors.Count) { return $false }
+    $wrapper=@($baselineAst.FindAll({param($node) $node -is [Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -ceq 'Invoke-CiBaselineApi'},$true))
+    if ($wrapper.Count -ne 1) { return $false }
+    $commands=@($baselineAst.FindAll({param($node) $node -is [Management.Automation.Language.CommandAst]},$true))
+    $gh=@($commands | Where-Object { $_.GetCommandName() -ieq 'gh' })
+    $retry=@($commands | Where-Object { $_.GetCommandName() -ceq 'Invoke-Gh' })
+    $api=@($commands | Where-Object { $_.GetCommandName() -ceq 'Invoke-CiBaselineApi' })
+    return $gh.Count -eq 0 -and $retry.Count -eq 1 -and
+        $retry[0].Extent.StartOffset -gt $wrapper[0].Body.Extent.StartOffset -and
+        $retry[0].Extent.EndOffset -lt $wrapper[0].Body.Extent.EndOffset -and
+        $retry[0].Extent.Text -ceq 'Invoke-Gh @arguments' -and $api.Count -eq 4 -and
+        @($api | Where-Object { $_.CommandElements.Count -lt 2 -or $_.CommandElements[1].Extent.Text -cne 'api' }).Count -eq 0
+}
 function Test-CiLightweightGates {
+    Assert-Ci (Test-CiBaselineTransportWiring) 'baseline API sites use bounded wrapper and actual Invoke-Gh transport, no bypass'
     $tokens=$null; $errors=$null
     $ast=[Management.Automation.Language.Parser]::ParseFile($PSCommandPath,[ref]$tokens,[ref]$errors)
     Assert-Ci ($errors.Count -eq 0) 'validator permanent PS syntax'
@@ -264,11 +305,57 @@ function Test-CiLightweightGates {
         Assert-Ci ($definition.Count -eq 1) "actual predicate $name"
         . ([scriptblock]::Create($definition[0].Extent.Text))
     }
-    $impact=[pscustomobject]@{ui=$true;e2e=$true;portable=$true;release=$true}
+    $impact=[pscustomobject]@{ui=$true;e2e=$true;portable=$true;release=$true;unitModules='core,update-tool,ui-fx,ui-swing,web,repository-doc-audits';compileModules='core,update-tool,ui-fx,ui-swing,web,repository-doc-audits'}
+    # Настоящий planner задаёт docs consumer; пустой/agent-only diff не получает Java или compile.
+    . (Join-Path $Repository '.github/scripts/Get-CiImpact.ps1')
+    $emptyImpact=Get-CiImpact -Paths @()
+    $agentImpact=Get-CiImpact -Paths @('.codex/fixture.json')
+    $docsImpact=Get-CiImpact -Paths @('docs/design/architecture.md')
+    Assert-Ci ($docsImpact.unitModules -ceq 'repository-doc-audits' -and $docsImpact.compileModules -ceq 'repository-doc-audits' -and -not $docsImpact.release) 'actual docs planner selects only docs reactor, not publication'
+    Assert-Ci ($emptyImpact.unitModules -ceq '' -and $agentImpact.unitModules -ceq '' -and $emptyImpact.compileModules -ceq '' -and $agentImpact.compileModules -ceq '') 'actual empty and agent-only planner select no compile/test modules'
+    $parityImpact=Get-CiImpact -Paths @('ui-parity/src/test/java/Fixture.java')
+    $parityCompile=@($parityImpact.compileModules -split ',')
+    $parityExpected=@('core','ui-fx','ui-swing','web','repository-doc-audits')
+    Assert-Ci ($parityCompile.Count -eq 5 -and @($parityExpected | Where-Object { $_ -cnotin $parityCompile }).Count -eq 0 -and
+        $parityCompile -cnotcontains 'ui-parity' -and $parityImpact.unitModules -ceq 'repository-doc-audits' -and -not $parityImpact.release) 'actual parity diff compiles five active dependency modules, never inactive ui-parity; smoke stays docs-only'
+    $webTestImpact=Get-CiImpact -Paths @('web/src/test/java/Fixture.java')
+    Assert-Ci ($webTestImpact.compileModules -ceq 'web,repository-doc-audits' -and
+        $webTestImpact.unitModules -ceq 'web,repository-doc-audits' -and $webTestImpact.ui -and $webTestImpact.e2e -and
+        -not $webTestImpact.release) 'actual web test diff retains UI/E2E impact without unrelated FX/Swing compilation; core supplied by -am'
+    $forcedImpact=Get-CiImpact -Paths @('web/src/test/java/Fixture.java') -ForceFull
+    Assert-Ci ($forcedImpact.compileModules -ceq $impact.compileModules -and $forcedImpact.unitModules -ceq $impact.unitModules -and
+        $forcedImpact.release -and $forcedImpact.ui -and $forcedImpact.e2e -and $forcedImpact.portable) 'explicit forced full keeps all active compile/test modules and release/full gates'
     foreach ($workflow in 'ci','release') {
         $source=Get-Content (Join-Path $Repository ".github/workflows/$workflow.yml") -Raw
         Assert-Ci ($source -match '(?s)full_checks:.*?type: boolean.*?default: false') "$workflow opt-in default false"
         $steps=Read-CiSteps (Join-Path $Repository ".github/workflows/$workflow.yml")
+        $java=Get-CiStep $steps 'Setup Java'
+        $bounded=Get-CiStep $steps $(if ($workflow -ceq 'ci') { 'Build and test' } else { 'Non-release affected tests' })
+        foreach ($event in 'push','pull_request','workflow_dispatch') {
+            foreach ($full in $false,$true) {
+                foreach ($none in $emptyImpact,$agentImpact) {
+                    Assert-Ci (-not (Test-CiStepEnabled $java $none $event $full)) "$workflow/$event/$full no empty-diff Java"
+                    Assert-Ci (-not (Test-CiStepEnabled $bounded $none $event $full)) "$workflow/$event/$full no empty-diff compile"
+                }
+                Assert-Ci (Test-CiStepEnabled $java $docsImpact $event $full) "$workflow/$event/$full docs retain Java"
+                Assert-Ci (Test-CiStepEnabled $bounded $docsImpact $event $full) "$workflow/$event/$full docs retain bounded compile and tests"
+            }
+        }
+        $selected=[pscustomobject]@{unitModules='web,repository-doc-audits';compileModules='web,repository-doc-audits';release=$false}
+        Assert-Ci (Test-CiStepEnabled $java $selected 'push' $false) "$workflow selected source retains Java"
+        Assert-Ci (Test-CiStepEnabled $bounded $selected 'push' $false) "$workflow selected source retains compile"
+        $compileWithoutUnits=[pscustomobject]@{unitModules='';compileModules='core,ui-fx,ui-swing,web';release=$false}
+        Assert-Ci (Test-CiStepEnabled $java $compileWithoutUnits 'push' $false) "$workflow compile-only selection retains Java"
+        Assert-Ci (Test-CiStepEnabled $bounded $compileWithoutUnits 'push' $false) "$workflow compile-only selection is not skipped by unitModules"
+        Assert-Ci (Test-CiStepEnabled $bounded $parityImpact 'push' $false) "$workflow actual parity diff retains compile"
+        $unitsWithoutCompile=[pscustomobject]@{unitModules='repository-doc-audits';compileModules='';release=$false}
+        Assert-Ci (-not (Test-CiStepEnabled $java $unitsWithoutCompile 'push' $false)) "$workflow Java uses compileModules, not unitModules"
+        Assert-Ci (-not (Test-CiStepEnabled $bounded $unitsWithoutCompile 'push' $false)) "$workflow build uses compileModules, not unitModules"
+        # Удаление if и compile-only predicate являются небезопасными, хотя markers остаются.
+        $unguarded=[pscustomobject]@{body=$java.body -replace '(?m)^        if: [^\r\n]+',''}
+        Assert-Ci (Test-CiStepEnabled $unguarded $emptyImpact 'push' $false) 'negative unconditional Java mutant caught by empty-diff assertion'
+        $compileOnly=[pscustomobject]@{body=$bounded.body -replace '(?m)^        if: [^\r\n]+',"        if: steps.impact.outputs.compile == 'true'"}
+        Assert-Ci (-not (Test-CiStepEnabled $compileOnly $docsImpact 'push' $false)) 'negative compile-only mutant would unsafely skip docs audit'
         foreach ($name in 'Actual UI gates (S4, blocking)','Actual recovery gates (S4, blocking)','Complete UI and E2E profile lifecycles') {
             $step=Get-CiStep $steps $name
             foreach ($event in 'push','pull_request','workflow_dispatch') {
@@ -279,15 +366,28 @@ function Test-CiLightweightGates {
             Assert-Ci (Test-CiStepEnabled $missing $impact 'push' $false) 'negative missing if violates automatic-heavy contract'
         }
         Assert-Ci ((Get-CiStep $steps 'Complete UI and E2E profile lifecycles').body.Contains('-pl ui-parity verify')) 'profile no duplicate default reactor'
+        if ($workflow -ceq 'ci') {
+            # Ручная portable-проверка без публикации живёт в ci.yml; release dispatch принудительно full.
+            foreach ($path in 'core/src/test/resources/ui-json/scenarios/read.json','core/src/test/resources/ui-scenarios/read.json','ui-parity/src/test/java/ChangedTest.java') {
+                $manualImpact=Get-CiImpact -Paths @($path)
+                Assert-Ci (-not $manualImpact.release) "$path manual CI test-only does not publish"
+                Assert-Ci (Test-CiStepEnabled (Get-CiStep $steps 'Portable build') $manualImpact 'workflow_dispatch' $true) "$path manual CI rebuilds fresh nonrelease portable image"
+                Assert-Ci (Test-CiStepEnabled (Get-CiStep $steps 'Verify portable build') $manualImpact 'workflow_dispatch' $true) "$path manual CI verifies nonrelease portable image"
+            }
+        }
     }
     $releaseSteps=Read-CiSteps (Join-Path $Repository '.github/workflows/release.yml')
     foreach ($name in 'Prepare','Build and test','Verify portable build','Prepare S7 update payloads','S7 release acceptance gate','Verify release Git and embedded AppInfo','Publish latest release') {
         $step=Get-CiStep $releaseSteps $name
         Assert-Ci (Test-CiStepEnabled $step $impact 'push' $false) "automatic release retains $name"
-        $docs=[pscustomobject]@{ui=$false;e2e=$false;portable=$false;release=$false}
+        $docs=$docsImpact
         Assert-Ci (-not (Test-CiStepEnabled $step $docs 'push' $false)) "docs do not publish/$name"
     }
     Assert-Ci (Test-CiStepEnabled (Get-CiStep $releaseSteps 'Non-release affected tests') $docs 'push' $false) 'docs still audited'
+    $releaseWithoutUnits=[pscustomobject]@{unitModules='';compileModules='';release=$true}
+    Assert-Ci (Test-CiStepEnabled (Get-CiStep $releaseSteps 'Setup Java') $releaseWithoutUnits 'push' $false) 'new binary always gets Java even if unit selection empty'
+    Assert-Ci (Test-CiStepEnabled (Get-CiStep $releaseSteps 'Build and test') $releaseWithoutUnits 'push' $false) 'new binary always gets full identity rebuild'
+    Assert-Ci (-not (Test-CiStepEnabled (Get-CiStep $releaseSteps 'Non-release affected tests') $impact 'push' $false)) 'new binary never also enters bounded nonrelease compile'
     $approval=(Get-CiStep $releaseSteps 'S7 release acceptance gate').body
     Assert-Ci (Test-CiApprovalRefusal $approval '') 'missing approval denied'
     Assert-Ci (Test-CiApprovalRefusal $approval ('1'*40)) 'foreign approval denied'
@@ -477,7 +577,7 @@ foreach ($path in 'core/src/test/resources/ui-json/scenarios/read.json','core/sr
         }
     }
     Assert-CiAudit (-not $impact.release) "$path test-only no publication"
-    Assert-CiAudit (Test-CiStepEnabled (Get-CiStep $releaseSteps 'Non-release portable test image') $impact) "$path fresh non-release portable build"
+    Assert-CiAudit (Test-CiStepEnabled (Get-CiStep $ciSteps 'Portable build') $impact) "$path manual ci.yml fresh non-release portable build"
 }
 foreach ($client in 'ui-fx','ui-swing','web') {
     $impact=Get-CiImpact -Paths @("$client/src/test/java/ChangedTest.java")
@@ -721,8 +821,8 @@ foreach ($case in 'int64-valid','metadata-network','metadata-invalid-json','meta
         Assert-CiAudit ($result.forceFull -and -not $result.baseSha) "Release $case type/bound must fail closed"
     }
 }
-# Все GitHub command callsites baseline имеют Invoke-Gh; bare gh не разрешается fixture транспортом.
-Assert-CiAudit ($baselineSource -notmatch '(?m)^\s*(?:&\s+)?gh\s+' -and $baselineSource.Contains('Invoke-Gh api')) 'baseline Invoke-Gh only'
+# API callsites идут через bounded wrapper, а тот сохраняет Invoke-Gh; bare gh запрещён.
+Assert-CiAudit (Test-CiBaselineTransportWiring) 'baseline bounded API wrapper uses Invoke-Gh only'
 foreach ($path in $inputPaths) {
     Assert-CiAudit ((Get-FileHash -LiteralPath (Join-Path $Repository $path)).Hash -ceq $inputHashes[$path]) "input stable during fixture: $path"
 }

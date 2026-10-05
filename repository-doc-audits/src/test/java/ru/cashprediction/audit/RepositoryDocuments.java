@@ -10,9 +10,9 @@ import java.util.regex.Pattern;
 
 /** Читает строго обязательные документы репозитория и сохраняет прежние правила поиска символов. */
 final class RepositoryDocuments {
-    /** Пять документов, которые намеренно не входят в доставку исходников. */
+    /** Четыре спецификации, которые намеренно не входят в доставку исходников. */
     static final List<String> DOCUMENTS = List.of("docs/ui-spec.md", "docs/design/ui-spec-v2.md",
-            "docs/FORMAT.md", "docs/ui-protocol.md", "README.md");
+            "docs/FORMAT.md", "docs/ui-protocol.md");
 
     /** Любая прежняя форма длинного или среднего тире, включая escape и HTML-сущности. */
     private static final Pattern DASH = Pattern.compile("[" + (char) 0x2013 + (char) 0x2014 + "]"

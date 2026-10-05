@@ -1,9 +1,11 @@
 package ru.cashprediction.audit;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import org.junit.jupiter.api.Test;
@@ -13,12 +15,35 @@ import org.junit.jupiter.api.io.TempDir;
 final class RepositoryDocumentsTest {
     @TempDir Path emptyRepository;
 
-    /** Каждый из пяти обязательных файлов при отсутствии вызывает ошибку. */
+    /** Каждый обязательный файл при отсутствии вызывает ошибку. */
     @Test
     void missingDocumentsAreErrors() {
         for (String document : RepositoryDocuments.DOCUMENTS) {
             assertThrows(IOException.class, () -> RepositoryDocuments.read(emptyRepository, document), document);
         }
+    }
+
+    /** Удалённые корневые документы не требуются при чтении четырёх действующих спецификаций. */
+    @Test
+    void requiredSpecificationsRemainReadableWithoutDeletedRootDocuments() throws IOException {
+        assertEquals(List.of("docs/ui-spec.md", "docs/design/ui-spec-v2.md",
+                "docs/FORMAT.md", "docs/ui-protocol.md"), RepositoryDocuments.DOCUMENTS);
+        for (String document : RepositoryDocuments.DOCUMENTS) {
+            Path file = emptyRepository.resolve(document);
+            Files.createDirectories(file.getParent());
+            Files.writeString(file, "# Specification\nUse hyphen-minus - only.\n");
+        }
+        for (String removed : List.of("README.md", "CHANGELOG.md", "CLAUDE.md", "AGENTS.md")) {
+            assertFalse(Files.exists(emptyRepository.resolve(removed)), removed);
+        }
+        for (String document : RepositoryDocuments.DOCUMENTS) {
+            String text = RepositoryDocuments.read(emptyRepository, document);
+            assertEquals(List.of(), RepositoryDocuments.dashes(document, text));
+            assertEquals(List.of(), RepositoryDocuments.minuses(document, text));
+        }
+        Path missing = emptyRepository.resolve("docs/FORMAT.md");
+        Files.delete(missing);
+        assertThrows(IOException.class, () -> RepositoryDocuments.read(emptyRepository, "docs/FORMAT.md"));
     }
 
     /** Поиск сохраняет символы, повторные u, регистр и ведущие нули HTML-сущностей. */

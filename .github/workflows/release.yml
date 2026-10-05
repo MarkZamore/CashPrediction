@@ -42,6 +42,8 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          # Ручной запуск этого workflow - явная пересборка релиза; проверки без
+          # публикации запускаются вручную через ci.yml, а не отдельную ветку здесь.
           $full = '${{ github.event_name }}' -eq 'workflow_dispatch'
           & .github/scripts/Resolve-CiBaseline.ps1 -Mode Release -ForceFull:$full -GithubOutput $env:GITHUB_OUTPUT
 
@@ -57,6 +59,7 @@ jobs:
           & .github/scripts/Get-CiImpact.ps1 -BaseSha '${{ steps.baseline.outputs.base_sha }}' -ForceFull:$full -GithubOutput $env:GITHUB_OUTPUT
 
       - name: Setup Java
+        if: steps.impact.outputs.release == 'true' || steps.impact.outputs.compileModules != ''
         uses: actions/setup-java@v5
         with:
           # Сборка Microsoft содержит jmods, из которых jlink собирает встроенную Java.
@@ -75,20 +78,17 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'RELEASE_GIT_COUNT_FAILED' }
           if ($releaseNumber -lt 1) { throw "Не удалось определить число коммитов." }
 
-          # История изменений ведётся вручную. Сборку без записи о своей версии не публикуем:
-          # проверка стоит первой, чтобы забытая запись стоила секунды, а не всей сборки.
-          $changelog = Get-Content -LiteralPath (Join-Path $env:GITHUB_WORKSPACE 'CHANGELOG.md') -Raw -Encoding UTF8
-          $pattern = '(?ms)^## {0}\s*\r?\n\s*\r?\n?- (?<line>[^\r\n]+)' -f $releaseNumber
-          $match = [regex]::Match($changelog, $pattern)
-          if (-not $match.Success) {
-            throw ("В CHANGELOG.md нет записи для версии $releaseNumber. " +
-                   "Добавьте сверху раздел '## $releaseNumber' с одной строкой '- ...' о том, что изменилось, и отправьте снова.")
+          # Отдельного CHANGELOG нет: описание версии берётся из истории Git.
+          $releaseNote = [string](git log -1 --format=%s HEAD)
+          if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($releaseNote)) {
+            throw 'RELEASE_GIT_NOTE_FAILED'
           }
+          $releaseNote = $releaseNote.Trim()
 
           "RELEASE_NUMBER=$releaseNumber" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-          "RELEASE_NOTE=$($match.Groups['line'].Value.Trim())" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "RELEASE_NOTE=$releaseNote" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           # ${releaseNumber} в фигурных скобках: иначе двоеточие после имени PowerShell читает как диск.
-          Write-Host "Версия ${releaseNumber}: $($match.Groups['line'].Value.Trim())"
+          Write-Host "Версия ${releaseNumber}: $releaseNote"
 
       - name: Prepare interactive desktop
         if: steps.impact.outputs.release == 'true' || (github.event_name == 'workflow_dispatch' && inputs.full_checks == true && (steps.impact.outputs.ui == 'true' || steps.impact.outputs.e2e == 'true' || steps.impact.outputs.portable == 'true'))
@@ -146,12 +146,14 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "Портативная сборка не собралась." }
 
       - name: Non-release affected tests
-        if: steps.impact.outputs.release != 'true'
+        if: steps.impact.outputs.release != 'true' && steps.impact.outputs.compileModules != ''
         shell: pwsh
         run: |
           $modules = '${{ steps.impact.outputs.unitModules }}'
+          $compileModules = '${{ steps.impact.outputs.compileModules }}'
           $fullChecks = '${{ github.event_name }}' -eq 'workflow_dispatch' -and '${{ inputs.full_checks }}' -eq 'true'
-          & mvn -B -ntp -DskipTests install
+          # Не компилируем неизменённые независимые клиенты при docs/test-only diff.
+          & mvn -B -ntp -pl $compileModules -am -DskipTests install
           if ($LASTEXITCODE -ne 0) { throw 'Compilation failed.' }
           if ($modules -ne '') {
             if ($fullChecks) {
@@ -162,14 +164,6 @@ jobs:
               if ($LASTEXITCODE -ne 0) { throw 'Critical smoke tests failed.' }
             }
           }
-
-      - name: Non-release portable test image
-        if: github.event_name == 'workflow_dispatch' && inputs.full_checks == true && steps.impact.outputs.release != 'true' && steps.impact.outputs.portable == 'true'
-        shell: pwsh
-        run: |
-          # Test-only изменения не публикуют релиз, но проверяют свежий portable image.
-          & mvn -B -ntp -Pdist -pl dist package
-          if ($LASTEXITCODE -ne 0) { throw 'Portable test build failed.' }
 
       - name: Actual UI gates (S4, blocking)
         if: github.event_name == 'workflow_dispatch' && inputs.full_checks == true && (steps.impact.outputs.release == 'true' || steps.impact.outputs.ui == 'true')

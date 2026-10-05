@@ -12,6 +12,19 @@ param(
     [switch]$ForceFull
 )
 
+# Baseline является оптимизацией: после трёх попыток используем full checks, не release retry-лестницу.
+function Invoke-CiBaselineApi {
+    $arguments = $args
+    $saved = Get-Variable -Name GhRetryDelays -Scope Script -ErrorAction SilentlyContinue
+    $previousDelays = if ($null -ne $saved) { $saved.Value } else { $null }
+    $script:GhRetryDelays = @(1, 3)
+    try { Invoke-Gh @arguments }
+    finally {
+        if ($null -ne $saved) { $script:GhRetryDelays = $previousDelays }
+        else { Remove-Variable -Name GhRetryDelays -Scope Script -ErrorAction SilentlyContinue }
+    }
+}
+
 # Проверяет локальную identity и достижимость без fetch или изменения checkout.
 function Test-CiBaselineAncestor {
     param([string]$Directory, [string]$Candidate, [string]$Head)
@@ -27,8 +40,9 @@ function Find-CiSuccessfulBaseline {
     param([string]$Directory, [string]$Repo, [string]$BranchName, [string]$Head, [string]$Workflow)
     $encodedBranch = [Uri]::EscapeDataString($BranchName)
     $encodedWorkflow = [Uri]::EscapeDataString($Workflow)
+    $seen = [Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
     for ($page = 1; $page -le 3; $page++) {
-        $response = @(Invoke-Gh api "repos/$Repo/actions/workflows/$encodedWorkflow/runs?branch=$encodedBranch&event=push&status=success&per_page=100&page=$page")
+        $response = @(Invoke-CiBaselineApi api "repos/$Repo/actions/workflows/$encodedWorkflow/runs?branch=$encodedBranch&event=push&status=success&per_page=100&page=$page")
         if ($LASTEXITCODE -ne 0) { throw 'CI_BASE_API_FAILED' }
         $runResponse = $response -join "`n" | ConvertFrom-Json -NoEnumerate
         if ($null -eq $runResponse -or $runResponse.GetType().FullName -cne 'System.Management.Automation.PSCustomObject') { throw 'CI_BASE_API_SCHEMA' }
@@ -44,6 +58,8 @@ function Find-CiSuccessfulBaseline {
             if ($run.status -cne 'completed' -or $run.conclusion -cne 'success' -or
                 $run.event -cne 'push' -or $run.head_branch -cne $BranchName -or
                 [string]$run.id -ceq $env:GITHUB_RUN_ID -or $run.head_sha -ceq $Head) { continue }
+            # Повторные reruns одного commit не требуют повторного Git reachability proof.
+            if (-not $seen.Add($run.head_sha)) { continue }
             if (Test-CiBaselineAncestor $Directory $run.head_sha $Head) { return [string]$run.head_sha }
         }
         if (@($runs).Count -lt 100) { break }
@@ -54,7 +70,7 @@ function Find-CiSuccessfulBaseline {
 # Релиз сравнивается с опубликованным latest, а не с docs-only успешным workflow без публикации.
 function Find-CiPublishedBaseline {
     param([string]$Directory, [string]$Repo, [string]$Head)
-    $response = @(Invoke-Gh api "repos/$Repo/releases/tags/latest")
+    $response = @(Invoke-CiBaselineApi api "repos/$Repo/releases/tags/latest")
     if ($LASTEXITCODE -ne 0) { throw 'CI_RELEASE_BASE_API_FAILED' }
     $release = $response -join "`n" | ConvertFrom-Json -NoEnumerate
     if ($null -eq $release -or $release.GetType().FullName -cne 'System.Management.Automation.PSCustomObject') { throw 'CI_RELEASE_BASE_API_SCHEMA' }
@@ -76,7 +92,7 @@ function Find-CiPublishedBaseline {
     if ($LASTEXITCODE -ne 0) { throw 'CI_RELEASE_BASE_TAG_MISSING' }
     $candidate = "$commit".Trim()
     # GitHub tag и checkout могут разойтись во время конкурентной публикации: безопасно пересобираем.
-    $tagResponse = @(Invoke-Gh api "repos/$Repo/commits/latest")
+    $tagResponse = @(Invoke-CiBaselineApi api "repos/$Repo/commits/latest")
     $tagIdentity = $tagResponse -join "`n" | ConvertFrom-Json -NoEnumerate
     if ($LASTEXITCODE -ne 0 -or $null -eq $tagIdentity -or
         $tagIdentity.GetType().FullName -cne 'System.Management.Automation.PSCustomObject' -or
@@ -93,7 +109,7 @@ function Find-CiPublishedBaseline {
         $pointer.size -le 0 -or $pointer.size -gt 65536 -or $archive.size -le 0) {
         throw 'CI_RELEASE_BASE_POINTER_SCHEMA'
     }
-    $metadataResponse = @(Invoke-Gh api "repos/$Repo/releases/assets/$($pointer.id)" -H 'Accept: application/octet-stream')
+    $metadataResponse = @(Invoke-CiBaselineApi api "repos/$Repo/releases/assets/$($pointer.id)" -H 'Accept: application/octet-stream')
     if ($LASTEXITCODE -ne 0) { throw 'CI_RELEASE_BASE_POINTER_API_FAILED' }
     $metadataText = $metadataResponse -join "`n"
     if ([Text.Encoding]::UTF8.GetByteCount($metadataText) -gt 65536) { throw 'CI_RELEASE_BASE_POINTER_TOO_LARGE' }
@@ -111,6 +127,16 @@ function Find-CiPublishedBaseline {
         ($metadata.sizeBytes -isnot [long] -and $metadata.sizeBytes -isnot [int]) -or
         $metadata.sizeBytes -ne $archive.size -or $metadata.sha256 -cnotmatch '^[0-9a-f]{64}$') {
         throw 'CI_RELEASE_BASE_POINTER_IDENTITY'
+    }
+    # Legacy API может не возвращать digest; наличие несовпавшего digest нельзя игнорировать.
+    # Это сравнение опубликованных метаданных, не скачивание/проверка bytes runtime.
+    $digestProperty = $archive.PSObject.Properties['digest']
+    $publishedDigest = if ($null -ne $digestProperty) { $digestProperty.Value } else { $null }
+    if ($null -ne $publishedDigest -and
+        ($publishedDigest -isnot [string] -or
+         $publishedDigest -cnotmatch '^sha256:[0-9a-f]{64}$' -or
+         $publishedDigest -cne "sha256:$($metadata.sha256)")) {
+        throw 'CI_RELEASE_BASE_ARCHIVE_DIGEST_MISMATCH'
     }
     return $candidate
 }
@@ -132,6 +158,7 @@ if ($MyInvocation.InvocationName -ne '.') {
                 else { Find-CiSuccessfulBaseline $Repository $GithubRepository $Branch $HeadSha $WorkflowFile }
             if (-not $base) { throw 'CI_BASE_NO_SUCCESSFUL_ANCESTOR' }
         } catch {
+            $base = ''
             $fallback = $true
             Write-Warning "Full checks required: $($_.Exception.Message)"
         }
