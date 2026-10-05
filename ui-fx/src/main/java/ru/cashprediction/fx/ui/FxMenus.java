@@ -1,12 +1,10 @@
 package ru.cashprediction.fx.ui;
 
 import java.util.*;
-import javafx.animation.PauseTransition;
 import javafx.scene.Node;
 import javafx.scene.control.*;
 import javafx.scene.input.*;
 import javafx.scene.layout.VBox;
-import javafx.util.Duration;
 import ru.cashprediction.core.app.UiIntents;
 import ru.cashprediction.core.ui.command.*;
 import ru.cashprediction.core.ui.menu.*;
@@ -124,9 +122,8 @@ public final class FxMenus {
                 spinner.setEditable(true); spinner.setPrefWidth(n.fieldWidthPx()); FxStyles.id(spinner, n.id());
                 FxIcons.skin(spinner);
                 spinner.getValueFactory().setConverter(new javafx.util.converter.LongStringConverter());
-                PauseTransition delay = new PauseTransition(Duration.millis(n.applyDelayMs()));
-                delay.setOnFinished(e -> intents.spinnerCommit(n.id(), spinner.getValue()));
-                spinner.valueProperty().addListener((o, a, b) -> delay.playFromStart());
+                // Общий ToolsFlow уже применяет debounce: вторая задержка клиента удваивает ожидание.
+                spinner.valueProperty().addListener((o, a, b) -> intents.spinnerCommit(n.id(), b));
                 spinner.getEditor().setOnAction(e -> { try { spinner.getValueFactory().setValue(Long.parseLong(spinner.getEditor().getText())); } catch (NumberFormatException ignored) { } });
                 // JavaFX: CustomMenuItem → Swing: JPanel с JLabel и JSpinner → Web: input[type=number]
                 item = probe.created(new CustomMenuItem(new VBox(4, new Label(n.label()), spinner), false));

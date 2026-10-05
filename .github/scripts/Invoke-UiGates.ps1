@@ -82,6 +82,8 @@ try {
     Invoke-ActualTest 'DirectoryChooserSpecificationTest' 4 ''
     Invoke-ActualTest 'DirectoryChooserProbeTest' 4 '' @() 'ui-parity' 'DirectoryChooserProbeTest#scriptUsesActualFolderCommandAndCancellation+doneCannotHideFailedOrMissingSteps+directoryEvidenceRejectsMissingZeroNegativeAndInjectedMetadata+directoryIdentityCannotBeRelabelled'
     Invoke-ActualTest 'FxInputFocusTest' 1 'completedFillProducesRealBlurBeforeReturning' @('-Dfx.focusProof=true') 'ui-fx'
+    # У spinner нет второго клиентского debounce поверх общего ToolsFlow.
+    Invoke-ActualTest 'FxMenuSpinnerCommitTest' 1 'editorActionReachesIntentWithoutClientDebounce' @('-Dfx.spinnerCommitProof=true') 'ui-fx'
     # Реальное наведение не должно смешиваться с искусственным событием над другой строкой меню.
     Invoke-ActualTest 'FxMenuHoverTest' 1 'movingFromPngToSaveShowsOnlySaveTooltip' @('-Dfx.menuHoverProof=true') 'ui-fx'
     # Реальные состояния ячейки и radio skin, цвета/размеры PNG: не только семантические дампы.
